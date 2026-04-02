@@ -1,0 +1,58 @@
+"""Toolchain registrations for SONiC build system."""
+
+package(default_visibility = ["//visibility:public"])
+
+load("@toolchains_llvm//toolchain:rules.bzl", "clang_cc_toolchain_config")
+
+# ── Toolchain type for Debian package building ────────────────────────────────
+# Actions tagged with this toolchain run inside the sonic-slave container.
+toolchain_type(name = "sonic_slave_toolchain_type")
+
+# ── sonic-slave-bullseye toolchain ────────────────────────────────────────────
+# Container image for building Debian packages on Bullseye.
+# Pin digest with: crane digest us-docker.pkg.dev/PROJECT_ID/sonic/sonic-slave-bullseye:latest
+# TODO(migration): Replace placeholder digest with actual pinned value.
+_SONIC_SLAVE_BULLSEYE_DIGEST = "sha256:PLACEHOLDER_PIN_DIGEST_BEFORE_USE"
+
+toolchain(
+    name = "sonic_slave_bullseye",
+    exec_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    target_compatible_with = [
+        "@platforms//os:linux",
+    ],
+    toolchain = ":sonic_slave_bullseye_info",
+    toolchain_type = ":sonic_slave_toolchain_type",
+)
+
+# Container image reference for use in build actions.
+# Actions can retrieve this via ctx.toolchains["//toolchains:sonic_slave_toolchain_type"].
+filegroup(
+    name = "sonic_slave_bullseye_info",
+    srcs = [],
+    # Container image URI injected at action time via execution_requirements.
+)
+
+# ── sonic-slave-bookworm toolchain ────────────────────────────────────────────
+# TODO(migration): Add bookworm toolchain when bookworm packages are migrated.
+_SONIC_SLAVE_BOOKWORM_DIGEST = "sha256:PLACEHOLDER_PIN_DIGEST_BEFORE_USE"
+
+toolchain(
+    name = "sonic_slave_bookworm",
+    exec_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    target_compatible_with = [
+        "@platforms//os:linux",
+    ],
+    toolchain = ":sonic_slave_bookworm_info",
+    toolchain_type = ":sonic_slave_toolchain_type",
+)
+
+filegroup(
+    name = "sonic_slave_bookworm_info",
+    srcs = [],
+)

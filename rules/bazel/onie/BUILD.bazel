@@ -1,0 +1,3 @@
+"""ONIE installer image rules — public API."""
+
+exports_files(["onie.bzl"])

@@ -1,0 +1,3 @@
+"""Python wheel rules — public API."""
+
+exports_files(["wheel.bzl"])

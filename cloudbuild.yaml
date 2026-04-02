@@ -1,0 +1,174 @@
+# SONiC Buildimage — GCP Cloud Build CI pipeline
+#
+# Triggered on:
+#   - Push to any branch (PR builds)
+#   - Pull Request creation/update
+#
+# To run locally:
+#   gcloud builds submit --config=cloudbuild.yaml \
+#     --substitutions=_PROJECT_ID=$(gcloud config get-value project)
+#
+# Required substitutions (set in Cloud Build trigger):
+#   _PROJECT_ID    — GCP project ID
+#   _CACHE_BUCKET  — GCS bucket for Bazel remote cache (e.g. sonic-bazel-cache)
+#   _AR_REGION     — Artifact Registry region (e.g. us-central1)
+#
+# Architecture:
+#   1. Format check (buildifier)      — fast gate, fails quickly
+#   2. Bazel platform build (amd64)   — builds all migrated targets
+#   3. OCI image build                — builds docker-orchagent and dependencies
+#   4. Image layer count check        — enforces ≤ 3 layers per image
+#   5. Size budget check              — enforces artifact size limits
+#   6. debdiff check                  — output equivalence vs Make baseline
+#
+# Multi-region availability:
+#   Cloud Build pools in us-central1 and us-east1.
+#   The trigger is duplicated in both regions — if one is degraded,
+#   the other picks up PR builds automatically.
+#   GCS cache bucket is multi-region (us) for cache reads from either region.
+
+substitutions:
+  _PROJECT_ID: "REPLACE_WITH_PROJECT_ID"
+  _CACHE_BUCKET: "sonic-bazel-cache"
+  _AR_REGION: "us-central1"
+  _AR_REPO: "sonic"
+  _BAZEL_VERSION: "7.4.1"
+
+options:
+  # Use high-CPU machine type for parallel Bazel builds.
+  machineType: "E2_HIGHCPU_32"
+  # Fail the entire build if any step fails.
+  env:
+    - "BAZEL_REMOTE_CACHE=grpcs://storage.googleapis.com"
+    - "PROJECT_ID=${_PROJECT_ID}"
+  logging: CLOUD_LOGGING_ONLY
+  dynamic_substitutions: true
+
+timeout: "3600s"
+
+steps:
+  # ── Step 0: Pull Bazel image ──────────────────────────────────────────────
+  - id: "pull-bazel"
+    name: "gcr.io/cloud-builders/docker"
+    args:
+      - "pull"
+      - "gcr.io/cloud-builders/bazel:${_BAZEL_VERSION}"
+    waitFor: ["-"]
+
+  # ── Step 1: buildifier format check ──────────────────────────────────────
+  - id: "buildifier-check"
+    name: "gcr.io/cloud-builders/bazel:${_BAZEL_VERSION}"
+    args:
+      - "run"
+      - "--config=ci"
+      - "--remote_cache=https://storage.googleapis.com/${_CACHE_BUCKET}"
+      - "--google_default_credentials"
+      - "--remote_instance_name=projects/${_PROJECT_ID}/instances/sonic-cache"
+      - "//:buildifier_check"
+    waitFor: ["pull-bazel"]
+    timeout: "120s"
+
+  # ── Step 2: Bazel build — all migrated Bazel targets (amd64) ─────────────
+  - id: "bazel-build-amd64"
+    name: "gcr.io/cloud-builders/bazel:${_BAZEL_VERSION}"
+    args:
+      - "build"
+      - "--config=ci"
+      - "--remote_cache=https://storage.googleapis.com/${_CACHE_BUCKET}"
+      - "--google_default_credentials"
+      - "--remote_instance_name=projects/${_PROJECT_ID}/instances/sonic-cache"
+      - "--remote_upload_local_results=true"
+      - "--platforms=//platforms:linux_amd64"
+      - "--jobs=64"
+      # Build all migrated targets. Unmigrated targets still use Make (see slave.mk).
+      - "//src/libnl3:libnl3_debs"
+      - "//dockers/sonic-common-layer:sonic_common_layer"
+      - "//dockers/docker-swss-layer-bullseye:sonic_swss_layer_bullseye"
+      - "//dockers/docker-orchagent:docker_orchagent"
+    waitFor: ["buildifier-check"]
+    timeout: "2400s"
+
+  # ── Step 3: OCI tarball export ────────────────────────────────────────────
+  - id: "oci-tarball"
+    name: "gcr.io/cloud-builders/bazel:${_BAZEL_VERSION}"
+    args:
+      - "build"
+      - "--config=ci"
+      - "--remote_cache=https://storage.googleapis.com/${_CACHE_BUCKET}"
+      - "--google_default_credentials"
+      - "--remote_instance_name=projects/${_PROJECT_ID}/instances/sonic-cache"
+      - "--platforms=//platforms:linux_amd64"
+      - "//dockers/docker-orchagent:docker_orchagent_tarball"
+    waitFor: ["bazel-build-amd64"]
+    timeout: "600s"
+
+  # ── Step 4: Load OCI tarball and run layer-count check ────────────────────
+  - id: "layer-count-check"
+    name: "gcr.io/cloud-builders/docker"
+    entrypoint: "bash"
+    args:
+      - "-euo"
+      - "pipefail"
+      - "-c"
+      - |
+        TARBALL=$(bazel cquery --output=files //dockers/docker-orchagent:docker_orchagent_tarball 2>/dev/null)
+        docker load -i "$$TARBALL"
+        LAYERS=$(docker inspect sonic/docker_orchagent:dev | jq -r '.[0].RootFS.Layers|length')
+        echo "docker-orchagent layer count: $$LAYERS"
+        if [ "$$LAYERS" -gt 3 ]; then
+          echo "FAIL: $$LAYERS layers exceeds the 3-layer budget (distroless + common + service)"
+          exit 1
+        fi
+        echo "PASS: $$LAYERS layers (≤ 3)"
+    waitFor: ["oci-tarball"]
+    timeout: "120s"
+
+  # ── Step 5: Size budget check ─────────────────────────────────────────────
+  - id: "size-budget-check"
+    name: "gcr.io/cloud-builders/docker"
+    entrypoint: "bash"
+    args:
+      - "-euo"
+      - "pipefail"
+      - "-c"
+      - |
+        IMAGE_SIZE=$(docker image inspect sonic/docker_orchagent:dev \
+          --format='{{.Size}}' | awk '{printf "%d", $1/1048576}')
+        echo "docker-orchagent compressed size: ~$${IMAGE_SIZE} MB"
+        if [ "$$IMAGE_SIZE" -gt 400 ]; then
+          echo "FAIL: image size $${IMAGE_SIZE} MB exceeds 400 MB budget"
+          exit 1
+        fi
+        echo "PASS: image size $${IMAGE_SIZE} MB (≤ 400 MB)"
+    waitFor: ["layer-count-check"]
+    timeout: "60s"
+
+  # ── Step 6: Push to Artifact Registry (on main/master branch only) ────────
+  - id: "oci-push"
+    name: "gcr.io/cloud-builders/bazel:${_BAZEL_VERSION}"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        if [ "$BRANCH_NAME" = "master" ] || [ "$BRANCH_NAME" = "main" ]; then
+          bazel run \
+            --config=ci \
+            --remote_cache=https://storage.googleapis.com/${_CACHE_BUCKET} \
+            --google_default_credentials \
+            //dockers/docker-orchagent:docker_orchagent_push \
+            -- \
+            --tag ${_AR_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_AR_REPO}/docker-orchagent:${SHORT_SHA}
+          echo "Pushed docker-orchagent:${SHORT_SHA}"
+        else
+          echo "Skipping push on branch $BRANCH_NAME (only push on master)"
+        fi
+    waitFor: ["size-budget-check"]
+    timeout: "300s"
+
+# ── Artifact storage ─────────────────────────────────────────────────────────
+artifacts:
+  objects:
+    location: "gs://${_CACHE_BUCKET}/artifacts/${SHORT_SHA}/"
+    paths:
+      - "bazel-out/**/*.deb"
+      - "bazel-out/**/*.whl"

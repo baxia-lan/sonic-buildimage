@@ -1,0 +1,154 @@
+"""Platform and architecture constraint definitions for SONiC."""
+
+package(default_visibility = ["//visibility:public"])
+
+# ── Architecture constraints ──────────────────────────────────────────────────
+constraint_setting(name = "sonic_arch")
+
+constraint_value(
+    name = "amd64",
+    constraint_setting = ":sonic_arch",
+)
+
+constraint_value(
+    name = "arm64",
+    constraint_setting = ":sonic_arch",
+)
+
+constraint_value(
+    name = "armhf",
+    constraint_setting = ":sonic_arch",
+)
+
+# ── Platform constraints ──────────────────────────────────────────────────────
+constraint_setting(name = "sonic_platform")
+
+constraint_value(
+    name = "broadcom",
+    constraint_setting = ":sonic_platform",
+)
+
+constraint_value(
+    name = "mellanox",
+    constraint_setting = ":sonic_platform",
+)
+
+constraint_value(
+    name = "vs",
+    constraint_setting = ":sonic_platform",
+)
+
+constraint_value(
+    name = "barefoot",
+    constraint_setting = ":sonic_platform",
+)
+
+constraint_value(
+    name = "marvell",
+    constraint_setting = ":sonic_platform",
+)
+
+constraint_value(
+    name = "innovium",
+    constraint_setting = ":sonic_platform",
+)
+
+constraint_value(
+    name = "nephos",
+    constraint_setting = ":sonic_platform",
+)
+
+constraint_value(
+    name = "generic",
+    constraint_setting = ":sonic_platform",
+)
+
+# ── Build distro constraints ──────────────────────────────────────────────────
+constraint_setting(name = "sonic_distro")
+
+constraint_value(
+    name = "bullseye",
+    constraint_setting = ":sonic_distro",
+)
+
+constraint_value(
+    name = "bookworm",
+    constraint_setting = ":sonic_distro",
+)
+
+constraint_value(
+    name = "trixie",
+    constraint_setting = ":sonic_distro",
+)
+
+# ── Platform targets ──────────────────────────────────────────────────────────
+# These combine OS + architecture for use with --platforms flag.
+
+platform(
+    name = "linux_amd64",
+    constraint_values = [
+        ":amd64",
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+platform(
+    name = "linux_arm64",
+    constraint_values = [
+        ":arm64",
+        "@platforms//os:linux",
+        "@platforms//cpu:aarch64",
+    ],
+)
+
+platform(
+    name = "linux_armhf",
+    constraint_values = [
+        ":armhf",
+        "@platforms//os:linux",
+        "@platforms//cpu:arm",
+    ],
+)
+
+# ── Platform-specific build configs ──────────────────────────────────────────
+# Used in select() expressions across the repo.
+config_setting(
+    name = "is_amd64",
+    constraint_values = [":amd64"],
+)
+
+config_setting(
+    name = "is_arm64",
+    constraint_values = [":arm64"],
+)
+
+config_setting(
+    name = "is_armhf",
+    constraint_values = [":armhf"],
+)
+
+config_setting(
+    name = "is_broadcom",
+    constraint_values = [":broadcom"],
+)
+
+config_setting(
+    name = "is_mellanox",
+    constraint_values = [":mellanox"],
+)
+
+config_setting(
+    name = "is_vs",
+    constraint_values = [":vs"],
+)
+
+config_setting(
+    name = "is_bullseye",
+    constraint_values = [":bullseye"],
+)
+
+config_setting(
+    name = "is_bookworm",
+    constraint_values = [":bookworm"],
+)

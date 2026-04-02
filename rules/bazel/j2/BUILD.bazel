@@ -1,0 +1,3 @@
+"""Jinja2 build-time rendering rules — public API."""
+
+exports_files(["j2.bzl"])

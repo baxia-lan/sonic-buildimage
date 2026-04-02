@@ -1,0 +1,3 @@
+"""Debian package building rules — public API."""
+
+exports_files(["deb.bzl"])

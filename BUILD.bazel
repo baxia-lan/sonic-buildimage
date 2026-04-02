@@ -1,0 +1,18 @@
+"""Root BUILD file — exposes repo-wide targets."""
+
+load("@buildifier_prebuilt//:rules.bzl", "buildifier", "buildifier_test")
+
+# ── buildifier ────────────────────────────────────────────────────────────────
+# Format all BUILD/bzl files:  bazel run //:buildifier
+buildifier(
+    name = "buildifier",
+    lint_mode = "warn",
+    mode = "fix",
+)
+
+# Lint check for CI: bazel run //:buildifier_check
+buildifier(
+    name = "buildifier_check",
+    lint_mode = "warn",
+    mode = "check",
+)

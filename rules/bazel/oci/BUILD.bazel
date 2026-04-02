@@ -1,0 +1,3 @@
+"""OCI image rules — public API."""
+
+exports_files(["oci.bzl"])

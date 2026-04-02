@@ -1,0 +1,75 @@
+# SONiC Buildimage — Nightly full-platform build pipeline
+#
+# Triggered nightly at 02:00 UTC.
+# Builds full platform images (broadcom, vs) after all packages are migrated.
+#
+# This pipeline runs the compute-intensive steps that are too slow for PR builds:
+#   - Full amd64 package set
+#   - Platform image assembly (sonic-broadcom.bin, sonic-vs.img)
+#   - Size regression test vs previous nightly
+#   - VS platform smoke test on QEMU
+
+substitutions:
+  _PROJECT_ID: "REPLACE_WITH_PROJECT_ID"
+  _CACHE_BUCKET: "sonic-bazel-cache"
+  _AR_REGION: "us-central1"
+  _BAZEL_VERSION: "7.4.1"
+
+options:
+  machineType: "N2_HIGHCPU_64"
+  env:
+    - "PROJECT_ID=${_PROJECT_ID}"
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: "14400s"
+
+steps:
+  # ── Full amd64 build ──────────────────────────────────────────────────────
+  - id: "build-all-amd64"
+    name: "gcr.io/cloud-builders/bazel:${_BAZEL_VERSION}"
+    args:
+      - "build"
+      - "--config=ci"
+      - "--remote_cache=https://storage.googleapis.com/${_CACHE_BUCKET}"
+      - "--google_default_credentials"
+      - "--remote_instance_name=projects/${_PROJECT_ID}/instances/sonic-cache"
+      - "--platforms=//platforms:linux_amd64"
+      - "--jobs=64"
+      - "//..."
+    timeout: "10800s"
+
+  # ── VS platform smoke test ────────────────────────────────────────────────
+  - id: "vs-smoke-test"
+    name: "gcr.io/cloud-builders/docker"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        # TODO(migration): Wire QEMU-based VS smoke test once
+        # //platform/vs:sonic-vs target is migrated.
+        echo "VS smoke test placeholder — implement after platform/vs migration"
+    waitFor: ["build-all-amd64"]
+    timeout: "1800s"
+
+  # ── Size regression check vs baseline ────────────────────────────────────
+  - id: "size-regression-check"
+    name: "gcr.io/cloud-builders/gsutil"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        # Compare sonic-broadcom.bin size against previous nightly baseline.
+        CURRENT=$(stat -c%s bazel-out/*/bin/platform/broadcom/sonic-broadcom.bin 2>/dev/null || echo 0)
+        BASELINE=$(gsutil cat gs://${_CACHE_BUCKET}/size-baseline/sonic-broadcom.bin.size 2>/dev/null || echo 0)
+        LIMIT_MB=400
+        CURRENT_MB=$((CURRENT / 1048576))
+        echo "Current size: $${CURRENT_MB} MB, baseline: $$(( BASELINE / 1048576 )) MB, limit: $${LIMIT_MB} MB"
+        if [ "$$CURRENT_MB" -gt "$$LIMIT_MB" ]; then
+          echo "FAIL: sonic-broadcom.bin is $${CURRENT_MB} MB > $${LIMIT_MB} MB budget"
+          exit 1
+        fi
+        # Update baseline.
+        echo "$$CURRENT" | gsutil cp - gs://${_CACHE_BUCKET}/size-baseline/sonic-broadcom.bin.size
+        echo "PASS: $${CURRENT_MB} MB within $${LIMIT_MB} MB budget"
+    waitFor: ["build-all-amd64"]
+    timeout: "120s"

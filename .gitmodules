@@ -1,149 +1,195 @@
+	branch = claude
 [submodule "sonic-swss-common"]
 	path = src/sonic-swss-common
-	url = https://github.com/sonic-net/sonic-swss-common
+	url = https://github.com/baxia-lan/sonic-swss-common
+	branch = claude
 [submodule "sonic-linux-kernel"]
 	path = src/sonic-linux-kernel
-	url = https://github.com/sonic-net/sonic-linux-kernel
+	url = https://github.com/baxia-lan/sonic-linux-kernel
+	branch = claude
 [submodule "sonic-sairedis"]
 	path = src/sonic-sairedis
-	url = https://github.com/sonic-net/sonic-sairedis
+	url = https://github.com/baxia-lan/sonic-sairedis
+	branch = claude
 [submodule "sonic-swss"]
 	path = src/sonic-swss
-	url = https://github.com/sonic-net/sonic-swss
+	url = https://github.com/baxia-lan/sonic-swss
+	branch = claude
 [submodule "src/p4c-bm/p4c-bm"]
 	path = platform/p4/p4c-bm/p4c-bm
-	url = https://github.com/krambn/p4c-bm
+	url = https://github.com/baxia-lan/p4c-bm
+	branch = claude
 [submodule "src/p4-hlir/p4-hlir"]
 	path = platform/p4/p4-hlir/p4-hlir
-	url = https://github.com/p4lang/p4-hlir
+	url = https://github.com/baxia-lan/p4-hlir
+	branch = claude
 [submodule "sonic-dbsyncd"]
 	path = src/sonic-dbsyncd
-	url = https://github.com/sonic-net/sonic-dbsyncd
+	url = https://github.com/baxia-lan/sonic-dbsyncd
+	branch = claude
 [submodule "src/sonic-py-swsssdk"]
 	path = src/sonic-py-swsssdk
-	url = https://github.com/sonic-net/sonic-py-swsssdk.git
+	url = https://github.com/baxia-lan/sonic-py-swsssdk
+	branch = claude
 [submodule "src/sonic-snmpagent"]
 	path = src/sonic-snmpagent
-	url = https://github.com/sonic-net/sonic-snmpagent
+	url = https://github.com/baxia-lan/sonic-snmpagent
+	branch = claude
 [submodule "src/ptf"]
 	path = src/ptf
-	url = https://github.com/p4lang/ptf.git
+	url = https://github.com/baxia-lan/ptf
+	branch = claude
 [submodule "src/sonic-utilities"]
 	path = src/sonic-utilities
-	url = https://github.com/sonic-net/sonic-utilities
+	url = https://github.com/baxia-lan/sonic-utilities
+	branch = claude
 [submodule "platform/broadcom/sonic-platform-modules-arista"]
 	path = platform/broadcom/sonic-platform-modules-arista
-	url = https://github.com/aristanetworks/sonic
+	url = https://github.com/baxia-lan/sonic-1
+	branch = claude
 [submodule "src/sonic-platform-common"]
 	path = src/sonic-platform-common
-	url = https://github.com/sonic-net/sonic-platform-common
+	url = https://github.com/baxia-lan/sonic-platform-common
+	branch = claude
 [submodule "src/sonic-platform-daemons"]
 	path = src/sonic-platform-daemons
-	url = https://github.com/sonic-net/sonic-platform-daemons
+	url = https://github.com/baxia-lan/sonic-platform-daemons
+	branch = claude
 [submodule "src/sonic-platform-pde"]
 	path = src/sonic-platform-pde
-	url = https://github.com/sonic-net/sonic-platform-pdk-pde
+	url = https://github.com/baxia-lan/sonic-platform-pdk-pde
+	branch = claude
 [submodule "src/sonic-frr/frr"]
 	path = src/sonic-frr/frr
-	url = https://github.com/FRRouting/frr.git
+	url = https://github.com/baxia-lan/frr
+	branch = claude
 [submodule "platform/p4/p4-hlir/p4-hlir-v1.1"]
 	path = platform/p4/p4-hlir/p4-hlir-v1.1
-	url = https://github.com/p4lang/p4-hlir.git
+	url = https://github.com/baxia-lan/p4-hlir
+	branch = claude
 [submodule "platform/p4/SAI-P4-BM"]
 	path = platform/p4/SAI-P4-BM
-	url = https://github.com/Mellanox/SAI-P4-BM.git
+	url = https://github.com/baxia-lan/SAI-P4-BM
+	branch = claude
 [submodule "platform/barefoot/sonic-platform-modules-arista"]
 	path = platform/barefoot/sonic-platform-modules-arista
-	url = https://github.com/aristanetworks/sonic
+	url = https://github.com/baxia-lan/sonic-1
+	branch = claude
 [submodule "platform/mellanox/hw-management/hw-mgmt"]
 	path = platform/mellanox/hw-management/hw-mgmt
-	url = https://github.com/Mellanox/hw-mgmt
+	url = https://github.com/baxia-lan/hw-mgmt
 [submodule "src/redis-dump-load"]
 	path = src/redis-dump-load
 	url = https://github.com/p/redis-dump-load.git
+	branch = claude
 [submodule "src/scapy"]
 	path = src/scapy
-	url = https://github.com/secdev/scapy.git
+	url = https://github.com/baxia-lan/scapy
+	branch = claude
 [submodule "src/sonic-mgmt-framework"]
 	path = src/sonic-mgmt-framework
-	url = https://github.com/sonic-net/sonic-mgmt-framework
+	url = https://github.com/baxia-lan/sonic-mgmt-framework
+	branch = claude
 [submodule "src/sonic-ztp"]
 	path = src/sonic-ztp
-	url = https://github.com/sonic-net/sonic-ztp
+	url = https://github.com/baxia-lan/sonic-ztp
 [submodule "src/sonic-restapi"]
 	path = src/sonic-restapi
-	url = https://github.com/sonic-net/sonic-restapi.git
-	branch = master
+	url = https://github.com/baxia-lan/sonic-restapi
+	branch = claude
+	branch = claude
 [submodule "src/sonic-mgmt-common"]
 	path = src/sonic-mgmt-common
-	url = https://github.com/sonic-net/sonic-mgmt-common.git
+	url = https://github.com/baxia-lan/sonic-mgmt-common
+	branch = claude
 [submodule "src/wpasupplicant/sonic-wpa-supplicant"]
 	path = src/wpasupplicant/sonic-wpa-supplicant
-	url = https://github.com/sonic-net/sonic-wpa-supplicant.git
+	url = https://github.com/baxia-lan/sonic-wpa-supplicant
 [submodule "platform/broadcom/saibcm-modules-dnx"]
 	path = platform/broadcom/saibcm-modules-dnx
-	url = https://github.com/sonic-net/saibcm-modules.git
-	branch =  sdk-6.5.22-gpl-dnx
+	url = https://github.com/baxia-lan/saibcm-modules
+	branch =  claude
+	branch = claude
 [submodule "platform/broadcom/sonic-platform-modules-nokia"]
 	path = platform/broadcom/sonic-platform-modules-nokia
-	url = https://github.com/nokia/sonic-platform.git
+	url = https://github.com/baxia-lan/sonic-platform
+	branch = claude
 [submodule "src/linkmgrd"]
 	path = src/linkmgrd
-	url = https://github.com/sonic-net/sonic-linkmgrd.git
+	url = https://github.com/baxia-lan/sonic-linkmgrd
+	branch = claude
 [submodule "src/sonic-p4rt/sonic-pins"]
 	path = src/sonic-p4rt/sonic-pins
-	url = https://github.com/sonic-net/sonic-pins.git
+	url = https://github.com/baxia-lan/sonic-pins
+	branch = claude
 [submodule "src/ptf-py3"]
 	path = src/ptf-py3
-	url = https://github.com/p4lang/ptf.git
+	url = https://github.com/baxia-lan/ptf
+	branch = claude
 [submodule "src/dhcprelay"]
 	path = src/dhcprelay
-	url = https://github.com/sonic-net/sonic-dhcp-relay.git
+	url = https://github.com/baxia-lan/sonic-dhcp-relay
+	branch = claude
 [submodule "src/sonic-host-services"]
 	path = src/sonic-host-services
-	url = https://github.com/sonic-net/sonic-host-services
+	url = https://github.com/baxia-lan/sonic-host-services
+	branch = claude
 [submodule "src/sonic-gnmi"]
 	path = src/sonic-gnmi
-	url = https://github.com/sonic-net/sonic-gnmi.git
+	url = https://github.com/baxia-lan/sonic-gnmi
+	branch = claude
 [submodule "src/sonic-bmp"]
 	path = src/sonic-bmp
-	url = https://github.com/sonic-net/sonic-bmp.git
+	url = https://github.com/baxia-lan/sonic-bmp
+	branch = claude
 [submodule "src/sonic-genl-packet"]
 	path = src/sonic-genl-packet
-	url = https://github.com/sonic-net/sonic-genl-packet
+	url = https://github.com/baxia-lan/sonic-genl-packet
+	branch = claude
 [submodule "src/dhcpmon"]
 	path = src/dhcpmon
-	url = https://github.com/sonic-net/sonic-dhcpmon.git
+	url = https://github.com/baxia-lan/sonic-dhcpmon
+	branch = claude
 [submodule "src/sonic-dash-api"]
 	path = src/sonic-dash-api
-	url = https://github.com/sonic-net/sonic-dash-api.git
+	url = https://github.com/baxia-lan/sonic-dash-api
+	branch = claude
 [submodule "src/sonic-dash-ha"]
 	path = src/sonic-dash-ha
-	url = https://github.com/sonic-net/sonic-dash-ha
+	url = https://github.com/baxia-lan/sonic-dash-ha
+	branch = claude
 [submodule "src/sonic-stp"]
 	path = src/sonic-stp
-	url = https://github.com/sonic-net/sonic-stp
+	url = https://github.com/baxia-lan/sonic-stp
+	branch = claude
 [submodule "platform/marvell-teralynx/sonic-platform-marvell-teralynx"]
 	path = platform/marvell-teralynx/sonic-platform-marvell-teralynx
-	url = https://github.com/Marvell-switching/sonic-platform-marvell.git
+	url = https://github.com/baxia-lan/sonic-platform-marvell
+	branch = claude
 [submodule "platform/vpp"]
 	path = platform/vpp
-	url = https://github.com/sonic-net/sonic-platform-vpp.git
+	url = https://github.com/baxia-lan/sonic-platform-vpp
+	branch = claude
 [submodule "platform/marvell-prestera/mrvl-prestera"]
 	path = platform/marvell-prestera/mrvl-prestera
-	url = https://github.com/Marvell-switching/mrvl-prestera.git
+	url = https://github.com/baxia-lan/mrvl-prestera
+	branch = claude
 [submodule "platform/marvell-prestera/sonic-platform-marvell"]
 	path = platform/marvell-prestera/sonic-platform-marvell
-	url = https://github.com/Marvell-switching/sonic-platform-arm64.git
+	url = https://github.com/baxia-lan/sonic-platform-arm64
+	branch = claude
 [submodule "src/sonic-sysmgr/gnoi"]
 	path = src/sonic-sysmgr/gnoi
-	url = https://github.com/openconfig/gnoi
+	url = https://github.com/baxia-lan/gnoi
+	branch = claude
 [submodule "platform/marvell-teralynx/mrvl-teralynx"]
 	path = platform/marvell-teralynx/mrvl-teralynx
-	url = https://github.com/Marvell-switching/mrvl-teralynx.git
+	url = https://github.com/baxia-lan/mrvl-teralynx
+	branch = claude
 [submodule "src/supervisor"]
 	path = src/supervisor
-	url = https://github.com/Supervisor/supervisor
+	url = https://github.com/baxia-lan/supervisor
+	branch = claude
 [submodule "platform/alpinevs"]
 	path = platform/alpinevs
-	url = https://github.com/sonic-net/sonic-alpine/
+	url = https://github.com/baxia-lan/sonic-alpine
