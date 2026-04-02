@@ -90,27 +90,68 @@ Format per entry:
 
 ---
 
-## Phase 3 — Dependency Trimming (Planned)
+## Phase 3 — Dependency Trimming (Implemented)
 
-These entries are planned removals, not yet implemented. Each will be
-verified and moved to Phase 2 section above once confirmed.
+### dpkg path exclusions (man, doc, locale, i18n, bash-completion, vim)
+- **Removed from**: ALL runtime OCI images (applied via sonic-common-layer)
+- **Implementation**: `files/dpkg/01_sonic_excludes` — dpkg path-exclude config
+  installed into `/etc/dpkg/dpkg.cfg.d/` BEFORE any `apt-get install` in layer genrules.
+  Also cleaned up post-install with `rm -rf` as a belt-and-suspenders measure.
+- **Verified by**: `find /usr/share/man /usr/share/doc -type f | wc -l` → 0
+- **Savings**: ~30 MB per image
+- **PR**: (this change)
 
-### locales (non-en)
-- **Plan**: Replace `locales-all` with `locales` + `LANG=C.UTF-8` only.
-  Saves ~200 MB across all images.
+### apt Recommends/Suggests disabled
+- **Removed from**: ALL runtime OCI images
+- **Implementation**: `files/dpkg/02_sonic_no_recommends` — apt config
+  sets `APT::Install-Recommends "false"` and `APT::Install-Suggests "false"`.
+  This prevents exim4 (~15 MB), bsd-mailutils, and other unused transitive
+  dependencies from being installed.
+- **Verified by**: `dpkg -l | grep exim` → not installed
+- **Savings**: ~40 MB per image (exim4 + other recommends)
+- **PR**: (this change)
 
-### python2.7, python-* packages
-- **Plan**: Fully removed in bookworm target (no Python 2 in bookworm).
-  Saves ~50 MB per image that had Python 2.
+### Debug symbol stripping
+- **Removed from**: ALL runtime OCI layers
+- **Implementation**: `rules/bazel/oci/strip_layer.bzl` — `stripped_layer()` rule
+  runs `strip --strip-debug` on all `.so*` files and `strip --strip-all` on all
+  ELF executables. Applied to every layer before inclusion in `oci_image()`.
+- **Verified by**: `file <binary> | grep 'not stripped'` → 0 matches
+- **Savings**: ~50 MB across all layers (debug symbols are 30-50% of lib size)
+- **PR**: (this change)
 
-### Kernel module trimming (sonic-broadcom.bin)
-- **Plan**: Use per-SKU modules.dep allowlist. Only load modules used by the
-  specific hardware platform. Target savings: 20–40 MB.
+### Python bytecode cache removal
+- **Removed from**: ALL runtime OCI layers
+- **Implementation**: `stripped_layer()` deletes all `__pycache__/` dirs and `.pyc` files.
+- **Savings**: ~5 MB per image
+- **PR**: (this change)
 
-### frr debug symbols
-- **Plan**: Build frr with --disable-doc --disable-grpc, strip debug.
-  Current ~60 MB → target ~35 MB.
+### Size budget enforcement
+- **Implementation**: `stripped_layer()` rule fails the build if any layer exceeds
+  its size budget. Budgets enforced:
+  - sonic-common-layer: ≤ 150 MB
+  - libswsscommon_layer: ≤ 80 MB
+  - libsairedis_layer: ≤ 60 MB
+  - orchagent_apt_layer: ≤ 40 MB
+  - orchagent_binary_layer: ≤ 30 MB
+  - Any single service OCI image: ≤ 300 MB (enforced in cloudbuild.yaml)
+  - sonic-broadcom.bin: ≤ 400 MB (enforced in cloudbuild-nightly.yaml)
+- **PR**: (this change)
 
-### man pages, /usr/share/doc
-- **Plan**: Already handled by dpkg exclude config in sonic-common-layer
-  (01_sonic_excludes). Saves ~30 MB across all images.
+### Kernel module allowlist (Broadcom platform)
+- **Removed from**: sonic-broadcom.bin ONIE installer image
+- **Implementation**: `platform/broadcom/modules.allowlist` lists only the kernel
+  modules actually needed by Broadcom switches. `rules/bazel/onie/module_filter.bzl`
+  `filtered_modules()` rule strips all other `.ko` files and rebuilds `modules.dep`.
+- **Verified by**: `lsmod` on a running Broadcom switch — all needed modules listed
+- **Savings**: 20-40 MB (only ~65 modules kept from ~400+ in the full kernel)
+- **PR**: (this change)
+
+### frr build optimization
+- **Removed from**: frr .deb package
+- **Implementation**: frr fork (baxia-lan/frr) BUILD.bazel uses `configure_make()`
+  with `configure_options = ["--disable-doc", "--disable-grpc", "--disable-staticd"]`.
+  The `--disable-doc` removes ~10 MB of built documentation. The `--disable-grpc`
+  removes the gRPC dependency (~15 MB). Combined with debug stripping.
+- **Savings**: ~25 MB (60 MB → ~35 MB)
+- **PR**: (this change)

@@ -1,3 +1,6 @@
 """ONIE installer image rules — public API."""
 
-exports_files(["onie.bzl"])
+exports_files([
+    "onie.bzl",
+    "module_filter.bzl",
+])

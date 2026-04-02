@@ -1,0 +1,8 @@
+"""dpkg and apt configuration files for SONiC OCI images."""
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "01_sonic_excludes",
+    "02_sonic_no_recommends",
+])

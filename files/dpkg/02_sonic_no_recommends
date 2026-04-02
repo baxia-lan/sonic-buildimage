@@ -1,0 +1,10 @@
+# Do not install Recommends or Suggests.
+# This prevents exim4, bsd-mailutils, and other unnecessary transitive
+# dependencies from being pulled in by rsyslog, cron, etc.
+#
+# Savings: ~40 MB per image (exim4 alone is ~15 MB).
+
+APT::Install-Recommends "false";
+APT::Install-Suggests "false";
+APT::AutoRemove::RecommendsImportant "false";
+APT::AutoRemove::SuggestsImportant "false";

@@ -1,3 +1,6 @@
 """OCI image rules — public API."""
 
-exports_files(["oci.bzl"])
+exports_files([
+    "oci.bzl",
+    "strip_layer.bzl",
+])

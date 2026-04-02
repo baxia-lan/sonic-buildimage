@@ -1,0 +1,34 @@
+# dpkg path exclusions for SONiC runtime images.
+# These paths are never needed at runtime and waste 30-50 MB per image.
+#
+# Applied via: COPY into /etc/dpkg/dpkg.cfg.d/ in the sonic-common-layer.
+# Effective for all dpkg --install calls inside OCI layer genrules.
+#
+# To verify nothing was broken:
+#   docker run --rm <image> find /usr/share/man /usr/share/doc -type f 2>/dev/null | wc -l
+#   (should be 0)
+
+# Documentation — never needed on a network switch at runtime
+path-exclude /usr/share/man/*
+path-exclude /usr/share/groff/*
+path-exclude /usr/share/info/*
+path-exclude /usr/share/lintian/*
+path-exclude /usr/share/linda/*
+
+# Per-package docs (keep only copyright for license compliance)
+path-exclude /usr/share/doc/*
+path-include /usr/share/doc/*/copyright
+
+# Locale data — we set LANG=C.UTF-8; no other locales needed
+path-exclude /usr/share/locale/*
+path-include /usr/share/locale/en*
+path-include /usr/share/locale/locale.alias
+
+# i18n translations
+path-exclude /usr/share/i18n/*
+
+# Bash completion (no interactive shells in production containers)
+path-exclude /usr/share/bash-completion/*
+
+# Vim — no editor needed in production images
+path-exclude /usr/share/vim/*

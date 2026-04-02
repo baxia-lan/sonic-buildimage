@@ -1,0 +1,77 @@
+# Kernel module allowlist for Broadcom platform (sonic-broadcom.bin)
+#
+# Phase 3: Only modules in this list are included in the ONIE installer image.
+# All other kernel modules are stripped, saving 20-40 MB.
+#
+# To add a module: verify it's needed by lsmod on a running Broadcom switch,
+# then add it here and document why.
+#
+# Format: one module name per line (without .ko suffix)
+
+# ── Core networking ──────────────────────────────────────────────────────────
+bridge
+8021q
+bonding
+team
+team_mode_loadbalance
+vxlan
+ip_gre
+ip6_gre
+ipip
+ip6_tunnel
+geneve
+nf_conntrack
+nf_nat
+nf_tables
+iptable_filter
+iptable_nat
+ip6table_filter
+ip6table_nat
+
+# ── Broadcom switching ASIC drivers ─────────────────────────────────────────
+linux_memory
+linux_kernel_bde
+linux_user_bde
+linux_bcm_knet
+linux_knet_cb
+
+# ── I2C / hardware access (required for platform API) ───────────────────────
+i2c_dev
+i2c_mux
+i2c_mux_pca954x
+i2c_ismt
+i2c_i801
+at24
+optoe
+lm75
+lm90
+pmbus_core
+pmbus
+tmp401
+max6620
+max6697
+
+# ── IPMI (BMC communication) ────────────────────────────────────────────────
+ipmi_devintf
+ipmi_si
+ipmi_ssif
+ipmi_msghandler
+
+# ── Storage (needed for ONIE installer) ─────────────────────────────────────
+ahci
+sd_mod
+ext4
+squashfs
+overlay
+
+# ── USB (for console/debug) ─────────────────────────────────────────────────
+ehci_pci
+xhci_pci
+usbhid
+
+# ── Misc ─────────────────────────────────────────────────────────────────────
+coretemp
+jc42
+eeprom
+gpio_ich
+lpc_ich

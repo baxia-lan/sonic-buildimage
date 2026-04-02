@@ -33,6 +33,7 @@ The config-engine j2 rendering that was done at container start is now:
 load("@rules_oci//oci:defs.bzl", "oci_image", "oci_tarball")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 load("//rules/bazel/oci:oci.bzl", "sonic_oci_image", "sonic_oci_layer")
+load("//rules/bazel/oci:strip_layer.bzl", "stripped_layer")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -87,7 +88,10 @@ pkg_tar(
 # deterministic (SOURCE_DATE_EPOCH=0, sorted file list).
 genrule(
     name = "common_apt_layer",
-    srcs = [],
+    srcs = [
+        "//files/dpkg:01_sonic_excludes",
+        "//files/dpkg:02_sonic_no_recommends",
+    ],
     outs = ["common_apt_layer.tar"],
     cmd = """
 set -euo pipefail
@@ -97,9 +101,16 @@ set -euo pipefail
 ROOTFS=$$(mktemp -d)
 trap 'rm -rf "$$ROOTFS"' EXIT
 
+# Install dpkg path exclusions BEFORE installing any packages.
+# This prevents man pages, docs, locales from being written at all.
+mkdir -p $$ROOTFS/etc/dpkg/dpkg.cfg.d $$ROOTFS/etc/apt/apt.conf.d
+cp $(location //files/dpkg:01_sonic_excludes) $$ROOTFS/etc/dpkg/dpkg.cfg.d/01_sonic_excludes
+cp $(location //files/dpkg:02_sonic_no_recommends) $$ROOTFS/etc/apt/apt.conf.d/02_no_recommends
+
 apt-get -y -o Dir::Cache=$$ROOTFS/var/cache/apt \\
            -o Dir::State=$$ROOTFS/var/lib/apt \\
            -o APT::Get::AllowUnauthenticated=true \\
+           -o DPkg::options::=--root=$$ROOTFS \\
   install --no-install-recommends \\
     iproute2 \\
     net-tools \\
@@ -115,6 +126,13 @@ apt-get -y -o Dir::Cache=$$ROOTFS/var/cache/apt \\
     jq \\
     -o Dir::Cache::archives=$$ROOTFS/debs
 
+# NOT installed (Phase 3 removals):
+#   perl          — only needed by dpkg postinst; no dpkg at runtime
+#   vim-tiny      — debug tool, not needed in production
+#   python3-pip   — packages installed at build time, not runtime
+#   exim4         — was pulled in as rsyslog Recommends; blocked by no-recommends
+#   curl/wget     — not needed at runtime; health checks use Python
+
 # Install supervisord from pip into the rootfs.
 pip3 install --no-cache-dir --target $$ROOTFS/usr/local/lib/python3/dist-packages \\
     supervisor==4.2.1 \\
@@ -122,6 +140,19 @@ pip3 install --no-cache-dir --target $$ROOTFS/usr/local/lib/python3/dist-package
 
 # Create supervisord state dirs.
 mkdir -p $$ROOTFS/var/log/supervisor $$ROOTFS/etc/supervisor/conf.d
+
+# Phase 3: strip debug symbols from all shared libraries
+find "$$ROOTFS" -name '*.so*' -type f -exec strip --strip-debug {} \\; 2>/dev/null || true
+
+# Phase 3: clean up documentation that dpkg excludes may have missed
+rm -rf $$ROOTFS/usr/share/man $$ROOTFS/usr/share/doc $$ROOTFS/usr/share/info \\
+       $$ROOTFS/usr/share/locale $$ROOTFS/usr/share/i18n \\
+       $$ROOTFS/usr/share/groff $$ROOTFS/usr/share/lintian \\
+       $$ROOTFS/usr/share/bash-completion \\
+       $$ROOTFS/var/cache/man 2>/dev/null || true
+
+# Phase 3: remove Python bytecode caches
+find "$$ROOTFS" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 
 # Create deterministic tar (SOURCE_DATE_EPOCH=0, sorted).
 SOURCE_DATE_EPOCH=0 tar \\
@@ -145,12 +176,20 @@ SOURCE_DATE_EPOCH=0 tar \\
     },
 )
 
+# ── Phase 3: Size budget enforcement ──────────────────────────────────────────
+# sonic-common-layer must be ≤ 150 MB (see CLAUDE.md).
+stripped_layer(
+    name = "common_apt_layer_stripped",
+    src = ":common_apt_layer",
+    size_budget_mb = 150,
+)
+
 # ── sonic-common-layer OCI image ──────────────────────────────────────────────
 sonic_oci_image(
     name = "sonic_common_layer",
     base = "@distroless_base_debian12",
     tars = [
-        ":common_apt_layer",
+        ":common_apt_layer_stripped",
         ":supervisord_skel_layer",
         ":rsyslog_layer",
         ":dpkg_excludes_layer",

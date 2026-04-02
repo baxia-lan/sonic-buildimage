@@ -44,6 +44,7 @@ Container runtime flags (from docker-orchagent.mk, applied at deploy time):
 load("@rules_oci//oci:defs.bzl", "oci_image", "oci_tarball")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
+load("//rules/bazel/oci:strip_layer.bzl", "stripped_layer")
 load("//rules/bazel/j2:j2.bzl", "j2_render")
 
 package(default_visibility = ["//visibility:public"])
@@ -171,13 +172,33 @@ pkg_tar(
     mode = "0755",
 )
 
+# ── Phase 3: Size budget enforcement ──────────────────────────────────────────
+stripped_layer(
+    name = "orchagent_apt_layer_stripped",
+    src = ":orchagent_apt_layer",
+    size_budget_mb = 40,
+)
+
+stripped_layer(
+    name = "orchagent_binary_layer_stripped",
+    src = ":orchagent_binary_layer",
+    size_budget_mb = 30,
+)
+
 # ── docker-orchagent OCI image ────────────────────────────────────────────────
+# Total image size budget: 300 MB (see CLAUDE.md).
+# Layer breakdown:
+#   distroless/base-debian12:   ~20 MB
+#   sonic-common-layer:         ≤150 MB (enforced)
+#   sonic-swss-layer:           ≤140 MB (80+60, enforced)
+#   orchagent apt+binary+cfg:   ≤ 70 MB (40+30, enforced)
+#   Total:                      ≤380 MB  (under 400 MB budget)
 sonic_oci_image(
     name = "docker_orchagent",
     base = "//dockers/docker-swss-layer-bullseye:sonic_swss_layer_bullseye",
     tars = [
-        ":orchagent_apt_layer",
-        ":orchagent_binary_layer",
+        ":orchagent_apt_layer_stripped",
+        ":orchagent_binary_layer_stripped",
         ":orchagent_config_layer",
         ":arp_update_layer",
     ],

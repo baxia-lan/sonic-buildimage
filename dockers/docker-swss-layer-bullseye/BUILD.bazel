@@ -32,6 +32,7 @@ Explicitly NOT included (removed vs old docker-swss-layer):
 load("@rules_oci//oci:defs.bzl", "oci_image", "oci_tarball")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 load("//rules/bazel/oci:oci.bzl", "sonic_oci_image", "sonic_oci_layer")
+load("//rules/bazel/oci:strip_layer.bzl", "stripped_layer")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -119,13 +120,27 @@ SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \\
     },
 )
 
+# ── Phase 3: Size budget enforcement ──────────────────────────────────────────
+# Each sub-layer is stripped and size-checked individually.
+stripped_layer(
+    name = "libswsscommon_layer_stripped",
+    src = ":libswsscommon_layer",
+    size_budget_mb = 80,
+)
+
+stripped_layer(
+    name = "libsairedis_layer_stripped",
+    src = ":libsairedis_layer",
+    size_budget_mb = 60,
+)
+
 # ── sonic-swss-layer-bullseye OCI image ───────────────────────────────────────
 sonic_oci_image(
     name = "sonic_swss_layer_bullseye",
     base = "//dockers/sonic-common-layer:sonic_common_layer",
     tars = [
-        ":libswsscommon_layer",
-        ":libsairedis_layer",
+        ":libswsscommon_layer_stripped",
+        ":libsairedis_layer_stripped",
         ":iputils_layer",
     ],
     labels = {
