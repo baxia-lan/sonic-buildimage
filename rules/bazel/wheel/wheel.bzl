@@ -66,6 +66,7 @@ def sonic_wheel(
             "//platforms:is_amd64": "linux_x86_64",
             "//platforms:is_arm64": "linux_aarch64",
             "//platforms:is_armhf": "linux_armv7l",
+            "//conditions:default": "linux_x86_64",
         }),
         visibility = visibility,
     )

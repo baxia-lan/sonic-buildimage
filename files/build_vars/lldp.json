@@ -1,0 +1,4 @@
+{
+    "CONTAINER_NAME": "lldp",
+    "ENABLE_ASAN": "n"
+}

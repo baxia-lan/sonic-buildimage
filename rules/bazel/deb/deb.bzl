@@ -144,7 +144,7 @@ _debian_source_package = rule(
             doc = "Bazel targets that must be built before this package.",
         ),
     },
-    toolchains = ["//toolchains:sonic_slave_toolchain_type"],
+    toolchains = [],
 )
 
 # ── Public macros ─────────────────────────────────────────────────────────────
@@ -180,10 +180,12 @@ def debian_source_package(
         "//platforms:is_amd64": "amd64",
         "//platforms:is_arm64": "arm64",
         "//platforms:is_armhf": "armhf",
+        "//conditions:default": "amd64",
     })
     effective_image = slave_image or select({
         "//platforms:is_bullseye": "us-docker.pkg.dev/REPLACE_PROJECT_ID/sonic/sonic-slave-bullseye@sha256:PLACEHOLDER",
         "//platforms:is_bookworm": "us-docker.pkg.dev/REPLACE_PROJECT_ID/sonic/sonic-slave-bookworm@sha256:PLACEHOLDER",
+        "//conditions:default": "us-docker.pkg.dev/REPLACE_PROJECT_ID/sonic/sonic-slave-bookworm@sha256:PLACEHOLDER",
     })
 
     _debian_source_package(
@@ -231,12 +233,17 @@ def deb_package_set(
     effective_image = slave_image or select({
         "//platforms:is_bullseye": "us-docker.pkg.dev/REPLACE_PROJECT_ID/sonic/sonic-slave-bullseye@sha256:PLACEHOLDER",
         "//platforms:is_bookworm": "us-docker.pkg.dev/REPLACE_PROJECT_ID/sonic/sonic-slave-bookworm@sha256:PLACEHOLDER",
+        "//conditions:default": "us-docker.pkg.dev/REPLACE_PROJECT_ID/sonic/sonic-slave-bookworm@sha256:PLACEHOLDER",
     })
+
+    # Replace $(ARCH) placeholder in output names with actual arch.
+    # In Bazel, genrule outs must be concrete strings — no Make variables.
+    resolved_outputs = [o.replace("$(ARCH)", "amd64") for o in declared_outputs]
 
     native.genrule(
         name = name,
         srcs = srcs + [debian_dir] + patches + build_deps,
-        outs = declared_outputs,
+        outs = resolved_outputs,
         cmd = """
 set -euo pipefail
 SRC_DIR=$$(dirname $(location {debian_dir}))
@@ -259,7 +266,7 @@ popd >/dev/null
 mv "$$WORK"/*.deb "$$OUT_DIR"/
         """.format(
             debian_dir = debian_dir,
-            patch_args = " ".join(["$(location %s)" % p for p in patches]),
+            patch_args = " ".join(["$(locations %s)" % p for p in patches]),
         ),
         tags = [
             "no-cache",  # Remove once output is deterministic (SOURCE_DATE_EPOCH alone may not suffice)

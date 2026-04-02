@@ -46,7 +46,7 @@ stripped_layer(
 
 sonic_oci_image(
     name = "docker_basic_router",
-    base = "//dockers/sonic-common-layer:sonic_common_layer_bullseye",
+    base = "//dockers/sonic-common-layer:sonic_common_layer",
     tars = [
         ":basic_router_config_layer_stripped",
     ],

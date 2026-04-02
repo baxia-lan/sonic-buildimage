@@ -1,0 +1,4 @@
+{
+    "CONTAINER_NAME": "fpm-frr",
+    "ENABLE_ASAN": "n"
+}

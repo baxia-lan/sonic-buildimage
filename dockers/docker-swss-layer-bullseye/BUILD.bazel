@@ -45,8 +45,8 @@ package(default_visibility = ["//visibility:public"])
 genrule(
     name = "libswsscommon_layer",
     srcs = [
-        "//src/sonic-swss-common:libswsscommon_deb",
-        "//src/sonic-swss-common:python3_swsscommon_deb",
+        "//src/sonic-swss-common:swss_common",
+        "//src/sonic-swss-common:python3_swsscommon",
     ],
     outs = ["libswsscommon_layer.tar"],
     cmd = """
@@ -70,8 +70,8 @@ SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \\
 genrule(
     name = "libsairedis_layer",
     srcs = [
-        "//src/sonic-sairedis:libsairedis_deb",
-        "//src/sonic-sairedis:libsaimetadata_deb",
+        "//src/sonic-sairedis:sairedis",
+        "//src/sonic-sairedis:saimetadata",
     ],
     outs = ["libsairedis_layer.tar"],
     cmd = """

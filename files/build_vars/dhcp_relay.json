@@ -1,0 +1,4 @@
+{
+    "CONTAINER_NAME": "dhcp-relay",
+    "ENABLE_ASAN": "n"
+}

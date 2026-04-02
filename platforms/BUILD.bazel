@@ -152,3 +152,8 @@ config_setting(
     name = "is_bookworm",
     constraint_values = [":bookworm"],
 )
+
+config_setting(
+    name = "is_trixie",
+    constraint_values = [":trixie"],
+)

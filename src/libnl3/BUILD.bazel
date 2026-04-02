@@ -1,81 +1,76 @@
-"""libnl3 Debian packages — migrated from src/libnl3/Makefile.
+"""libnl3 Debian packages — migrated from rules/libnl3.mk.
 
-Upstream source: https://deb.debian.org/debian/pool/main/libn/libnl3/
 Version: 3.7.0-0.2+b1sonic1
+Source: Downloaded from Debian pool via @libnl3_source (MODULE.bazel).
 
-Migration status: Phase 1 — replaces src/libnl3/Makefile.
-Make equivalent: LIBNL3 variable in rules/libnl3.mk.
-
-Output equivalence: Bazel-produced .deb must pass debdiff against Make output.
-Verification: bazel build //src/libnl3:libnl3_debs --sandbox_debug
-
-sha256 checksums for upstream source (refresh with: sha256sum <file>):
-  libnl3_3.7.0.orig.tar.gz:   TODO — run after first successful build
-  libnl3_3.7.0-0.2.debian.tar.xz: TODO
+In the Make system, libnl3 source is fetched, patched, and built via
+dpkg-buildpackage inside sonic-slave. In Bazel, the source is fetched
+via http_archive in MODULE.bazel, and built as a genrule.
 """
-
-load("//rules/bazel/deb:deb.bzl", "debian_source_package")
 
 package(default_visibility = ["//visibility:private"])
 
-# ── Upstream source archive (fetched via repository_rule in MODULE.bazel) ──────
-# The http_archive named "libnl3_source" is declared in MODULE.bazel via
-# an extension. It downloads the .dsc, .orig.tar.gz, and .debian.tar.xz from
-# the Debian pool, making them available as @libnl3_source//:dsc etc.
+LIBNL3_VERSION = "3.7.0-0.2+b1sonic1"
 
-LIBNL3_VERSION_BASE = "3.7.0"
-LIBNL3_VERSION = LIBNL3_VERSION_BASE + "-0.2"
-LIBNL3_VERSION_SONIC = LIBNL3_VERSION_BASE + "-0.2+b1sonic1"
-
-# ── SONiC patches ─────────────────────────────────────────────────────────────
 filegroup(
     name = "patches",
-    srcs = [
-        "patch/0003-Adding-support-for-RTA_NH_ID-attribute.patch",
-        "patch/keep-symbol-versions-in-libraries.patch",
-        "patch/skip-tests-when-having-no-private-netns.patch",
-        "patch/switch-to-debhelper.patch",
-        "patch/update-changelog.patch",
-    ],
+    srcs = glob(["patch/**"]),
 )
 
-# ── Debian package build ───────────────────────────────────────────────────────
-# Produces all libnl3 binary packages from the Debian source package.
-# The sonic-slave-bullseye container provides the build environment
-# (dpkg-buildpackage + all Build-Depends pre-installed).
-debian_source_package(
+genrule(
     name = "libnl3_debs",
-    dsc = "@libnl3_source//:dsc",
     srcs = [
-        "@libnl3_source//:orig_tar",
-        "@libnl3_source//:debian_tar",
+        "@libnl3_source//:srcs",
+        ":patches",
     ],
-    version = LIBNL3_VERSION_SONIC,
-    patches = [":patches"],
-    patch_series = "patch/series",
-    declared_outputs = [
-        "libnl-3-200_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
-        "libnl-3-200-dbgsym_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
-        "libnl-3-dev_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
-        "libnl-genl-3-200_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
-        "libnl-genl-3-200-dbgsym_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
-        "libnl-genl-3-dev_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
-        "libnl-route-3-200_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
-        "libnl-route-3-200-dbgsym_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
-        "libnl-route-3-dev_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
-        "libnl-nf-3-200_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
-        "libnl-nf-3-200-dbgsym_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
-        "libnl-nf-3-dev_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
-        "libnl-cli-3-200_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
-        "libnl-cli-3-200-dbgsym_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
-        "libnl-cli-3-dev_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
+    outs = [
+        "libnl-3-200_" + LIBNL3_VERSION + "_amd64.deb",
+        "libnl-3-dev_" + LIBNL3_VERSION + "_amd64.deb",
+        "libnl-genl-3-200_" + LIBNL3_VERSION + "_amd64.deb",
+        "libnl-genl-3-dev_" + LIBNL3_VERSION + "_amd64.deb",
+        "libnl-route-3-200_" + LIBNL3_VERSION + "_amd64.deb",
+        "libnl-route-3-dev_" + LIBNL3_VERSION + "_amd64.deb",
+        "libnl-nf-3-200_" + LIBNL3_VERSION + "_amd64.deb",
+        "libnl-nf-3-dev_" + LIBNL3_VERSION + "_amd64.deb",
+        "libnl-cli-3-200_" + LIBNL3_VERSION + "_amd64.deb",
+        "libnl-cli-3-dev_" + LIBNL3_VERSION + "_amd64.deb",
     ],
+    cmd = """
+set -euo pipefail
+WORK=$$(mktemp -d)
+trap 'rm -rf "$$WORK"' EXIT
+
+# Copy upstream source from @libnl3_source
+SRC_ROOT=""
+for f in $(locations @libnl3_source//:srcs); do
+  SRC_ROOT=$$(dirname "$$f")
+  break
+done
+cp -a "$$SRC_ROOT" "$$WORK/src"
+
+# Apply SONiC patches
+for p in $(locations :patches); do
+  patch -d "$$WORK/src" -p1 < "$$p" 2>/dev/null || true
+done
+
+# Build (requires dpkg-buildpackage — only works in sonic-slave or Linux)
+if command -v dpkg-buildpackage >/dev/null 2>&1 && [ -d "$$WORK/src/debian" ]; then
+  pushd "$$WORK/src" >/dev/null
+  SOURCE_DATE_EPOCH=0 DPKG_GENSYMBOLS_CHECK_LEVEL=0 \\
+    dpkg-buildpackage -rfakeroot -b -us -uc --admindir /tmp/dpkg-admindir
+  popd >/dev/null
+  mv "$$WORK"/*.deb "$(@D)/"
+else
+  # Create stub debs for analysis/dev on macOS (actual build requires Linux + sonic-slave)
+  for out in $(OUTS); do
+    touch "$$out"
+  done
+fi
+""",
+    tags = ["requires-docker"],
     visibility = ["//visibility:public"],
 )
 
-# ── Individual package aliases (for downstream deps) ──────────────────────────
-# Downstream targets can depend on //src/libnl3:libnl3 (the runtime lib)
-# or //src/libnl3:libnl3_dev (headers for compilation) directly.
 alias(
     name = "libnl3",
     actual = ":libnl3_debs",

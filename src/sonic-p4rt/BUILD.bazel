@@ -1,0 +1,34 @@
+"""sonic-p4rt — P4Runtime support for SONiC.
+
+sonic-pins (the submodule at sonic-p4rt/sonic-pins) uses Bazel natively.
+When the submodule is checked out, depend on its targets directly.
+This BUILD file provides a stub target for when sonic-pins isn't initialized.
+"""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+deb_package_set(
+    name = "sonic_p4rt_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+            "sonic-pins/**",
+        ],
+    ),
+    debian_dir = "debian",
+    version = "1.0.0",
+    declared_outputs = [
+        "sonic-p4rt_1.0.0_$(ARCH).deb",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "sonic_p4rt",
+    actual = ":sonic_p4rt_debs",
+    visibility = ["//visibility:public"],
+)

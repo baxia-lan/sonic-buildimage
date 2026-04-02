@@ -62,10 +62,10 @@ j2_render(
 )
 
 j2_render(
-    name = "critical_processes",
+    name = "critical_processes_rendered",
     template = "critical_processes.j2",
     vars = "//files/build_vars:orchagent.json",
-    output = "critical_processes",
+    output = "critical_processes.rendered",
 )
 
 # ── orchagent runtime apt packages layer ──────────────────────────────────────
@@ -120,7 +120,7 @@ pkg_tar(
     name = "orchagent_config_layer",
     srcs = [
         ":supervisord_conf",
-        ":critical_processes",
+        ":critical_processes_rendered",
         "arp_update.conf",
         "orchagent.sh",
         "swssconfig.sh",

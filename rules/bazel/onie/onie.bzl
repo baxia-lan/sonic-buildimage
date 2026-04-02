@@ -68,7 +68,7 @@ onie_image = rule(
         ),
         "installer_script": attr.label(
             allow_single_file = [".sh"],
-            default = "//installer:onie_installer_header.sh",
+            default = "//installer:install.sh",
             doc = "ONIE installer shell script header.",
         ),
         "platform": attr.string(

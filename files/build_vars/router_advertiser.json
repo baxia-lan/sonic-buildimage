@@ -1,0 +1,4 @@
+{
+    "CONTAINER_NAME": "router-advertiser",
+    "ENABLE_ASAN": "n"
+}

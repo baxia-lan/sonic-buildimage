@@ -1,0 +1,4 @@
+{
+    "CONTAINER_NAME": "platform-monitor",
+    "ENABLE_ASAN": "n"
+}
