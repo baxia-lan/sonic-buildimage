@@ -38,7 +38,9 @@ genrule(
     name = "review_archive",
     srcs = [
         "//dockers/docker-orchagent:review_srcs",
+        "//files:build_templates/arp_update_vars.j2",
         "//files:scripts/arp_update",
+        "//src:scapy_review_srcs",
     ],
     outs = ["docker-orchagent.gz"],
     cmd = """

@@ -1,0 +1,15 @@
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "scapy_review_srcs",
+    srcs = glob([
+        "scapy/LICENSE",
+        "scapy/MANIFEST.in",
+        "scapy/README",
+        "scapy/README.md",
+        "scapy/doc/scapy.1",
+        "scapy/scapy/**",
+        "scapy/setup.cfg",
+        "scapy/setup.py",
+    ]),
+)

@@ -1,4 +1,7 @@
 exports_files(
-    ["scripts/arp_update"],
+    [
+        "build_templates/arp_update_vars.j2",
+        "scripts/arp_update",
+    ],
     visibility = ["//visibility:public"],
 )

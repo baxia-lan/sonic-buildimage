@@ -82,6 +82,7 @@ trap cleanup EXIT
 mkdir -p \
     "${context_dir}/orchagent" \
     "${context_dir}/files" \
+    "${context_dir}/scapy" \
     "${context_dir}/review"
 
 copy_input() {
@@ -101,6 +102,17 @@ copy_input() {
         */files/scripts/arp_update|files/scripts/arp_update)
             dest="${context_dir}/files/arp_update"
             ;;
+        */files/build_templates/arp_update_vars.j2|files/build_templates/arp_update_vars.j2)
+            dest="${context_dir}/files/arp_update_vars.j2"
+            ;;
+        */src/scapy/*)
+            rel="${src#*/src/scapy/}"
+            dest="${context_dir}/scapy/${rel}"
+            ;;
+        src/scapy/*)
+            rel="${src#src/scapy/}"
+            dest="${context_dir}/scapy/${rel}"
+            ;;
         *)
             echo "Unsupported review input: ${src}" >&2
             exit 1
@@ -114,6 +126,10 @@ copy_input() {
 for src in "${srcs[@]}"; do
     copy_input "${src}"
 done
+
+if [[ -f "${context_dir}/scapy/setup.py" && ! -f "${context_dir}/scapy/scapy/VERSION" ]]; then
+    printf '0.0.dev0\n' > "${context_dir}/scapy/scapy/VERSION"
+fi
 
 cat > "${context_dir}/review/docker-init.sh" <<'EOF'
 #!/usr/bin/env bash
@@ -133,7 +149,7 @@ cat > "${context_dir}/review/MIGRATION_STAGE.txt" <<'EOF'
 docker-orchagent review image
 
 - Built by Bazel as a concrete docker archive (.gz)
-- Carries orchagent scripts, templates, and core runtime packages
+- Carries orchagent scripts, templates, local scapy install, and core runtime packages
 - Does not yet include full SWSS/SAI runtime parity or config-engine rendering
 - Intended for image layout and dependency review before full hermetic migration
 EOF
@@ -169,6 +185,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \\
 
 COPY orchagent /opt/sonic/docker-orchagent-src
 COPY files/arp_update /usr/bin/arp_update
+COPY files/arp_update_vars.j2 /usr/share/sonic/templates/arp_update_vars.j2
+COPY scapy /opt/sonic/scapy-src
 COPY review/docker-init.sh /usr/bin/docker-init.sh
 COPY review/MIGRATION_STAGE.txt /opt/sonic/review/MIGRATION_STAGE.txt
 
@@ -181,6 +199,7 @@ RUN mkdir -p \\
     /usr/share/sonic/templates \\
     /var/log/swss \\
     /zmq_swss \\
+ && python3 -m pip install --break-system-packages --no-cache-dir /opt/sonic/scapy-src \\
  && cp /opt/sonic/docker-orchagent-src/arp_update.conf /usr/share/sonic/templates/ \\
  && cp /opt/sonic/docker-orchagent-src/ndppd.conf /usr/share/sonic/templates/ \\
  && cp /opt/sonic/docker-orchagent-src/tunnel_packet_handler.conf /usr/share/sonic/templates/ \\
@@ -191,6 +210,7 @@ RUN mkdir -p \\
  && cp /opt/sonic/docker-orchagent-src/buffermgrd.sh /usr/bin/ \\
  && cp /opt/sonic/docker-orchagent-src/base_image_files/swssloglevel /usr/bin/swssloglevel \\
  && find /opt/sonic/docker-orchagent-src -maxdepth 1 -name '*.j2' -exec cp {} /usr/share/sonic/templates/ \; \\
+ && rm -rf /opt/sonic/scapy-src \\
  && chmod +x \\
     /usr/bin/arp_update \\
     /usr/bin/buffermgrd.sh \\
@@ -212,5 +232,17 @@ DOCKER_BUILDKIT=1 docker buildx build \
     --tag "${image_tag}" \
     "${context_dir}"
 
+flat_tag="${image_tag}-flat"
+container_id="$(docker create "${image_tag}")"
+trap 'docker rm -f "${container_id}" >/dev/null 2>&1 || true; docker image rm -f "${flat_tag}" >/dev/null 2>&1 || true; cleanup' EXIT
+
+docker export "${container_id}" | docker import \
+    --platform "${platform}" \
+    -c 'ENTRYPOINT ["/usr/bin/docker-init.sh"]' \
+    -c 'ENV DEBIAN_FRONTEND=noninteractive' \
+    -c "LABEL org.opencontainers.image.title=${image_name}" \
+    -c 'LABEL com.sonic.migration.stage=phase1_review_archive_flattened' \
+    - "${flat_tag}" >/dev/null
+
 mkdir -p "$(dirname "${output}")"
-docker save "${image_tag}" | gzip -n -c > "${output}"
+docker save "${flat_tag}" | gzip -n -c > "${output}"

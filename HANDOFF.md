@@ -10,6 +10,7 @@ This path produces a real Docker archive:
 - Bazel target: `//images/oci/docker-orchagent:review_archive`
 - legacy export: `//images/oci/docker-orchagent:target_tree`
 - exported file: `target/docker-orchagent.gz`
+- current review image shape: single-layer `linux/amd64`
 
 This is a concrete artifact for review. It is not the final hermetic SONiC
 runtime image yet.
@@ -56,8 +57,12 @@ Outputs:
 - the archive passed `gzip -t`
 - the archive could be loaded with `docker load -i`
 - the loaded image could be run locally
+- the flattened image now reports `1` rootfs layer
+- the flattened image now preserves `amd64` architecture metadata
 - the container contains `/usr/bin/orchagent.sh`
 - the container contains `/usr/share/sonic/templates/arp_update.conf`
+- the container contains `/usr/share/sonic/templates/arp_update_vars.j2`
+- the container imports `scapy`
 
 ## Known Gaps
 

@@ -14,6 +14,8 @@ This is intentionally a Phase 1 review artifact:
 - it is a real Docker archive produced by Bazel
 - it can be loaded and run with Docker
 - it carries the current `docker-orchagent` scripts and templates
+- it now includes `arp_update_vars.j2` and a local `scapy` install
+- it is flattened to a single image layer for review of phase 2 layer reduction
 - it is not yet the final hermetic SONiC runtime image
 
 ## How To Build
@@ -50,9 +52,18 @@ docker run --rm --entrypoint /bin/sh <loaded-image-tag> -c \
   'test -x /usr/bin/orchagent.sh && test -f /usr/share/sonic/templates/arp_update.conf'
 ```
 
+Check the flattened image metadata:
+
+```bash
+docker inspect <loaded-image-tag> --format \
+  '{{len .RootFS.Layers}} layers {{.Architecture}} {{json .Config.Entrypoint}}'
+```
+
 ## Current Limitations
 
 - The concrete review builder still uses Docker Buildx locally
 - The review Dockerfile still installs packages with `apt-get` and `pip`
+- `scapy` is installed from local source through a review-only overlay because the
+  upstream submodule archive version placeholder is not directly pip-installable
 - Full SWSS/SAI/config-engine runtime parity is not complete yet
 - This target is marked `manual` because it is a review path, not the final CI-default image builder

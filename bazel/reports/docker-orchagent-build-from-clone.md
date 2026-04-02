@@ -8,6 +8,13 @@ It produces a real Docker archive and exports it to a legacy-compatible `target/
 path. It is intended for review and migration validation, not yet final runtime
 parity.
 
+The current review artifact is:
+
+- flattened to a single image layer
+- marked as `linux/amd64`
+- populated with `docker-orchagent` scripts, templates, `arp_update_vars.j2`,
+  and a local `scapy` install
+
 ## Prerequisites
 
 - Git
@@ -66,6 +73,13 @@ Run a quick file check:
 ```bash
 docker run --rm --entrypoint /bin/sh <loaded-image-tag> -c \
   'test -x /usr/bin/orchagent.sh && test -f /usr/share/sonic/templates/arp_update.conf'
+```
+
+Check layer count and platform:
+
+```bash
+docker inspect <loaded-image-tag> --format \
+  '{{len .RootFS.Layers}} layers {{.Architecture}} {{json .Config.Entrypoint}}'
 ```
 
 ## Current Limitations
