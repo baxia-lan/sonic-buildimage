@@ -1,0 +1,13 @@
+load("//bazel/sonic/private:sources.bzl", "sonic_source_manifest")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_source_manifest(
+    name = "source",
+    source_path = "src/sonic-dash-api",
+    source_kind = "submodule",
+    upstream_repo = "sonic-net/sonic-dash-api",
+    notes = [
+        "The protobuf-backed DASH API source is shared by multiple crates and package surfaces.",
+    ],
+)

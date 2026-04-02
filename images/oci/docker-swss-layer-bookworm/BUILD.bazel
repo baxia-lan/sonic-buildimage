@@ -1,0 +1,20 @@
+load("//bazel/sonic:defs.bzl", "sonic_oci_image")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_oci_image(
+    name = "image",
+    legacy_artifact = "docker-swss-layer-bookworm.gz",
+    legacy_dockerfile = "dockers/docker-swss-layer-bookworm/Dockerfile.j2",
+    source_makefiles = ["rules/docker-swss-layer-bookworm.mk"],
+    base = "//images/oci/docker-base-bookworm:image",
+    runtime_deps = ["//packages/deb/swss:deb"],
+    metadata = {
+        "distro": "bookworm",
+        "legacy_name": "DOCKER_SWSS_LAYER_BOOKWORM",
+        "migration_role": "internal_swss_fragment",
+    },
+    notes = [
+        "This fragment now hangs directly from docker-base-bookworm so final service images can compose internal fragments instead of inheriting a long Docker chain.",
+    ],
+)

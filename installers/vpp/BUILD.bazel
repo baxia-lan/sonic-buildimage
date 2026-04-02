@@ -1,0 +1,32 @@
+load("//bazel/sonic:defs.bzl", "sonic_export_to_target_tree")
+load("//installers:data.bzl", "VPP_KVM", "VPP_ONIE", "VPP_RAW")
+load("//installers:defs.bzl", "sonic_installer_variant")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_installer_variant(
+    name = "onie",
+    platform = "//platforms/vpp:platform",
+    data = VPP_ONIE,
+)
+
+sonic_installer_variant(
+    name = "raw",
+    platform = "//platforms/vpp:platform",
+    data = VPP_RAW,
+)
+
+sonic_installer_variant(
+    name = "kvm",
+    platform = "//platforms/vpp:platform",
+    data = VPP_KVM,
+)
+
+sonic_export_to_target_tree(
+    name = "target_tree",
+    exports = {
+        ":kvm_lock": "target/installers/sonic-vpp.img.gz.lock.json",
+        ":onie_lock": "target/installers/sonic-vpp.bin.lock.json",
+        ":raw_lock": "target/installers/sonic-vpp.raw.lock.json",
+    },
+)

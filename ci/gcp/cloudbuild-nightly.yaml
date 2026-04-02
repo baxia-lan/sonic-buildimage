@@ -1,0 +1,38 @@
+timeout: 21600s
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  pool:
+    name: projects/$PROJECT_ID/locations/us-central1/workerPools/${_PRIMARY_POOL}
+
+substitutions:
+  _PRIMARY_POOL: sonic-primary
+  _NIGHTLY_LABELS: //bazel/... //tools/... //sources/... //packages/... //images/... //platforms/... //installers/...
+
+steps:
+  - name: gcr.io/cloud-builders/git
+    entrypoint: bash
+    args:
+      - -lc
+      - git submodule update --init --recursive
+
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -lc
+      - ./tools/ci/collect_artifact_inventory.py --out-dir out/bazel-migration/nightly
+
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    env:
+      - USE_BAZEL_VERSION=8.5.0
+      - SONIC_NIGHTLY_TEST_LABELS=
+    args:
+      - -lc
+      - ./tools/ci/run_nightly_matrix.sh ${_NIGHTLY_LABELS}
+
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -lc
+      - ./tools/ci/verify_no_egress.sh

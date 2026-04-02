@@ -1,0 +1,26 @@
+load("//bazel/sonic:defs.bzl", "sonic_oci_image")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_oci_image(
+    name = "image",
+    legacy_artifact = "docker-base-bullseye.gz",
+    legacy_dockerfile = "dockers/docker-base-bullseye/Dockerfile.j2",
+    source_makefiles = ["rules/docker-base-bullseye.mk"],
+    legacy_deps = [
+        "SOCAT",
+        "FIPS_OPENSSL_LIBSSL",
+        "FIPS_OPENSSL_LIBSSL_DEV",
+        "FIPS_OPENSSL",
+        "SYMCRYPT_OPENSSL",
+        "FIPS_KRB5",
+    ],
+    metadata = {
+        "distro": "bullseye",
+        "legacy_name": "DOCKER_BASE_BULLSEYE",
+        "migration_role": "migration_input",
+    },
+    notes = [
+        "Bullseye remains a migration input, not a long-term first-class Bazel distro target.",
+    ],
+)

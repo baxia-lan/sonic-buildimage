@@ -1,0 +1,18 @@
+load("//bazel/sonic:defs.bzl", "sonic_export_to_target_tree")
+load("//installers:data.bzl", "NOKIA_VS_ONIE")
+load("//installers:defs.bzl", "sonic_installer_variant")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_installer_variant(
+    name = "onie",
+    platform = "//platforms/nokia-vs:platform",
+    data = NOKIA_VS_ONIE,
+)
+
+sonic_export_to_target_tree(
+    name = "target_tree",
+    exports = {
+        ":onie_lock": "target/installers/sonic-nokia-vs.installer.lock.json",
+    },
+)

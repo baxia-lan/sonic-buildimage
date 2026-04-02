@@ -1,0 +1,13 @@
+load("//bazel/sonic/private:sources.bzl", "sonic_source_manifest")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_source_manifest(
+    name = "source",
+    source_path = "src/sonic-config-engine",
+    source_kind = "workspace_dir",
+    upstream_repo = "sonic-net/sonic-buildimage",
+    notes = [
+        "This source currently lives inside the parent repository and is migrated in-place.",
+    ],
+)

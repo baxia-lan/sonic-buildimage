@@ -1,0 +1,32 @@
+load("//bazel/sonic:defs.bzl", "sonic_export_to_target_tree")
+load("//installers:data.bzl", "ALPINEVS_KVM", "ALPINEVS_ONIE", "ALPINEVS_RAW")
+load("//installers:defs.bzl", "sonic_installer_variant")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_installer_variant(
+    name = "onie",
+    platform = "//platforms/alpinevs:platform",
+    data = ALPINEVS_ONIE,
+)
+
+sonic_installer_variant(
+    name = "raw",
+    platform = "//platforms/alpinevs:platform",
+    data = ALPINEVS_RAW,
+)
+
+sonic_installer_variant(
+    name = "kvm",
+    platform = "//platforms/alpinevs:platform",
+    data = ALPINEVS_KVM,
+)
+
+sonic_export_to_target_tree(
+    name = "target_tree",
+    exports = {
+        ":kvm_lock": "target/installers/sonic-alpinevs.img.gz.lock.json",
+        ":onie_lock": "target/installers/sonic-alpinevs.bin.lock.json",
+        ":raw_lock": "target/installers/sonic-alpinevs.raw.lock.json",
+    },
+)

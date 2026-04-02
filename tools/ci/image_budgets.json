@@ -1,0 +1,23 @@
+{
+  "//images/oci/docker-config-engine-bookworm:image": {
+    "max_composition_depth": 5,
+    "max_duplicate_dependency_mentions": 6,
+    "max_estimated_layer_count": 12,
+    "max_network_install_ops": 6,
+    "max_transitive_runtime_artifact_count": 8
+  },
+  "//images/oci/docker-orchagent:image": {
+    "max_composition_depth": 6,
+    "max_duplicate_dependency_mentions": 9,
+    "max_estimated_layer_count": 14,
+    "max_network_install_ops": 5,
+    "max_transitive_runtime_artifact_count": 14
+  },
+  "//images/oci/docker-swss-layer-bookworm:image": {
+    "max_composition_depth": 5,
+    "max_duplicate_dependency_mentions": 1,
+    "max_estimated_layer_count": 7,
+    "max_network_install_ops": 2,
+    "max_transitive_runtime_artifact_count": 7
+  }
+}

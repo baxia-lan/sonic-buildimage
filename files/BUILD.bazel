@@ -1,0 +1,4 @@
+exports_files(
+    ["scripts/arp_update"],
+    visibility = ["//visibility:public"],
+)

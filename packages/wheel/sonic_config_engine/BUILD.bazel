@@ -1,0 +1,30 @@
+load("//bazel/sonic:defs.bzl", "sonic_py_wheel")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_py_wheel(
+    name = "wheel",
+    legacy_artifact = "sonic_config_engine-1.0-py3-none-any.whl",
+    source_path = "src/sonic-config-engine",
+    source_makefiles = ["rules/sonic-config.mk"],
+    sources = ["//sources/sonic-config-engine:source"],
+    wheel_deps = [
+        "//packages/wheel/sonic_yang_mgmt:wheel",
+        "//packages/wheel/sonic_yang_models:wheel",
+    ],
+    legacy_deps = [
+        "SONIC_PY_COMMON_PY3",
+        "LIBYANG",
+        "LIBYANG_CPP",
+        "LIBYANG_PY3",
+        "PYTHON3_SWSSCOMMON",
+    ],
+    metadata = {
+        "legacy_name": "SONIC_CONFIG_ENGINE_PY3",
+        "migration_wave": "orchagent_chain",
+        "python_version": "3",
+    },
+    notes = [
+        "The legacy Make graph also defines a Python 2 wheel variant gated by ENABLE_PY2_MODULES.",
+    ],
+)

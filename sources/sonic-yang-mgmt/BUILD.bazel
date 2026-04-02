@@ -1,0 +1,10 @@
+load("//bazel/sonic/private:sources.bzl", "sonic_source_manifest")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_source_manifest(
+    name = "source",
+    source_path = "src/sonic-yang-mgmt",
+    source_kind = "workspace_dir",
+    upstream_repo = "sonic-net/sonic-buildimage",
+)

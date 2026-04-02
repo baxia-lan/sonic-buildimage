@@ -1,0 +1,27 @@
+load("//bazel/sonic:defs.bzl", "sonic_oci_image")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_oci_image(
+    name = "image",
+    legacy_artifact = "docker-base-bookworm.gz",
+    legacy_dockerfile = "dockers/docker-base-bookworm/Dockerfile.j2",
+    source_makefiles = ["rules/docker-base-bookworm.mk"],
+    legacy_deps = [
+        "SOCAT",
+        "FIPS_OPENSSL_LIBSSL",
+        "FIPS_OPENSSL_LIBSSL_DEV",
+        "FIPS_OPENSSL",
+        "SYMCRYPT_OPENSSL",
+        "FIPS_KRB5",
+    ],
+    legacy_wheel_deps = ["SUPERVISOR"],
+    metadata = {
+        "distro": "bookworm",
+        "legacy_name": "DOCKER_BASE_BOOKWORM",
+        "migration_role": "internal_runtime_base",
+    },
+    notes = [
+        "This is an internal migration fragment, not a long-term public release artifact.",
+    ],
+)

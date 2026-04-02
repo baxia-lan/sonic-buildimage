@@ -1,0 +1,24 @@
+load("//bazel/sonic:defs.bzl", "sonic_deb_package")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_deb_package(
+    name = "deb",
+    legacy_artifact = "sonic-eventd_1.0.0-0_$(CONFIGURED_ARCH).deb",
+    source_path = "src/sonic-eventd",
+    source_makefiles = [
+        "rules/eventd.mk",
+        "rules/eventd.dep",
+    ],
+    sources = ["//sources/sonic-eventd:source"],
+    deps = ["//packages/deb/libswsscommon:deb"],
+    runtime_deps = ["//packages/deb/libswsscommon:deb"],
+    metadata = {
+        "cache_mode": "GIT_CONTENT_SHA",
+        "legacy_name": "SONIC_EVENTD",
+        "migration_wave": "orchagent_chain",
+    },
+    notes = [
+        "Legacy Make also derives sonic-rsyslog-plugin from the same source package.",
+    ],
+)

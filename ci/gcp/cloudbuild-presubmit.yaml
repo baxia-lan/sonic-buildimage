@@ -1,0 +1,38 @@
+timeout: 7200s
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  pool:
+    name: projects/$PROJECT_ID/locations/us-central1/workerPools/${_PRIMARY_POOL}
+
+substitutions:
+  _PRIMARY_POOL: sonic-primary
+  _AFFECTED_LABELS: //bazel/... //tools/... //sources/... //packages/... //images/... //platforms/... //installers/...
+
+steps:
+  - name: gcr.io/cloud-builders/git
+    entrypoint: bash
+    args:
+      - -lc
+      - git submodule update --init --recursive
+
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -lc
+      - ./tools/ci/collect_artifact_inventory.py --out-dir out/bazel-migration/presubmit
+
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    env:
+      - USE_BAZEL_VERSION=8.5.0
+      - SONIC_BUILD_LABELS=${_AFFECTED_LABELS}
+    args:
+      - -lc
+      - ./tools/ci/run_affected_targets.sh ${_AFFECTED_LABELS}
+
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -lc
+      - ./tools/ci/verify_no_egress.sh

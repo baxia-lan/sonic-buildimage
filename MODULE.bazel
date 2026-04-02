@@ -1,0 +1,18 @@
+module(
+    name = "sonic_buildimage",
+    repo_name = "sonic_buildimage",
+    version = "0.1.0",
+    compatibility_level = 1,
+)
+
+bazel_dep(name = "bazel_skylib", version = "1.9.0")
+bazel_dep(name = "platforms", version = "1.0.0")
+bazel_dep(name = "rules_pkg", version = "1.2.0")
+bazel_dep(name = "rules_python", version = "1.9.0")
+bazel_dep(name = "rules_go", version = "0.60.0")
+bazel_dep(name = "rules_distroless", version = "0.6.2")
+bazel_dep(name = "rules_img", version = "0.3.5")
+
+# Additional toolchain and repository extension setup is added incrementally as
+# specific package groups migrate. Non-BCR repositories must be introduced
+# through the shared helpers under bazel/repositories/.

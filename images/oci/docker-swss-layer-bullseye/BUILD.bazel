@@ -1,0 +1,20 @@
+load("//bazel/sonic:defs.bzl", "sonic_oci_image")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_oci_image(
+    name = "image",
+    legacy_artifact = "docker-swss-layer-bullseye.gz",
+    legacy_dockerfile = "dockers/docker-swss-layer-bullseye/Dockerfile.j2",
+    source_makefiles = ["rules/docker-swss-layer-bullseye.mk"],
+    base = "//images/oci/docker-base-bullseye:image",
+    runtime_deps = ["//packages/deb/swss:deb"],
+    metadata = {
+        "distro": "bullseye",
+        "legacy_name": "DOCKER_SWSS_LAYER_BULLSEYE",
+        "migration_role": "migration_input",
+    },
+    notes = [
+        "Bullseye remains a migration input, but the manifest now models swss-layer as a base-rooted runtime fragment rather than a hard image inheritance step.",
+    ],
+)

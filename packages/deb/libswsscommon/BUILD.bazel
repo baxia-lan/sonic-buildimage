@@ -1,0 +1,47 @@
+load("//bazel/sonic:defs.bzl", "sonic_deb_package")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_deb_package(
+    name = "deb",
+    legacy_artifact = "libswsscommon_1.0.0_$(CONFIGURED_ARCH).deb",
+    source_path = "src/sonic-swss-common",
+    source_makefiles = [
+        "rules/swss-common.mk",
+        "rules/swss-common.dep",
+    ],
+    sources = ["//sources/sonic-swss-common:source"],
+    submodule_paths = ["src/sonic-swss-common"],
+    legacy_deps = [
+        "LIBNL3_DEV",
+        "LIBNL_GENL3_DEV",
+        "LIBNL_ROUTE3_DEV",
+        "LIBNL_NF3_DEV",
+        "LIBNL_CLI_DEV",
+        "LIBYANG_DEV",
+        "LIBYANG",
+        "LIBYANG_CPP",
+        "LIBYANG_PY3",
+    ],
+    legacy_runtime_deps = [
+        "LIBNL3",
+        "LIBNL_GENL3",
+        "LIBNL_ROUTE3",
+        "LIBNL_NF3",
+        "LIBNL_CLI",
+        "LIBYANG",
+    ],
+    wheel_deps = [
+        "//packages/wheel/sonic_yang_mgmt:wheel",
+        "//packages/wheel/sonic_yang_models:wheel",
+    ],
+    metadata = {
+        "cache_mode": "GIT_CONTENT_SHA",
+        "legacy_name": "LIBSWSSCOMMON",
+        "migration_wave": "orchagent_chain",
+    },
+    notes = [
+        "Legacy Make also derives python3-swsscommon and sonic-db-cli from this source package.",
+        "This source lives in a submodule and remains overlay-managed during the Bazel migration.",
+    ],
+)

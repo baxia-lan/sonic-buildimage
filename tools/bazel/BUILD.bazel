@@ -1,0 +1,16 @@
+exports_files(
+    ["bazelw"],
+    visibility = ["//visibility:public"],
+)
+
+sh_binary(
+    name = "build_review_docker_archive",
+    srcs = ["build_review_docker_archive.sh"],
+    visibility = ["//visibility:public"],
+)
+
+sh_binary(
+    name = "export_target_tree",
+    srcs = ["export_target_tree.sh"],
+    visibility = ["//visibility:public"],
+)

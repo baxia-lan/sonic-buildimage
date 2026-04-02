@@ -1,0 +1,9 @@
+load("//installers:data.bzl", "ASPEED_PLATFORM")
+load("//platforms:defs.bzl", "sonic_platform_manifest")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_platform_manifest(
+    name = "platform",
+    data = ASPEED_PLATFORM,
+)

@@ -1,0 +1,48 @@
+load("//bazel/sonic:defs.bzl", "sonic_oci_image")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_oci_image(
+    name = "image",
+    legacy_artifact = "docker-config-engine-bookworm.gz",
+    legacy_dockerfile = "dockers/docker-config-engine-bookworm/Dockerfile.j2",
+    source_makefiles = ["rules/docker-config-engine-bookworm.mk"],
+    base = "//images/oci/docker-base-bookworm:image",
+    runtime_deps = [
+        "//packages/deb/libswsscommon:deb",
+        "//packages/deb/sonic-db-cli:deb",
+        "//packages/deb/sonic-eventd:deb",
+    ],
+    legacy_runtime_deps = [
+        "LIBYANG",
+        "LIBYANG_CPP",
+        "LIBYANG_PY3",
+        "PYTHON3_SWSSCOMMON",
+        "SONIC_SUPERVISORD_UTILITIES_RS",
+    ],
+    wheel_deps = [
+        "//packages/wheel/sonic_yang_mgmt:wheel",
+        "//packages/wheel/sonic_yang_models:wheel",
+        "//packages/wheel/sonic_containercfgd:wheel",
+        "//packages/wheel/sonic_config_engine:wheel",
+    ],
+    legacy_wheel_deps = [
+        "SONIC_PY_COMMON_PY3",
+        "SONIC_SUPERVISORD_UTILITIES",
+    ],
+    files = [
+        "SWSS_VARS_TEMPLATE",
+        "RSYSLOG_PLUGIN_CONF_J2",
+        "SONIC_CTRMGRD_CONTAINER_SCRIPT",
+        "SONIC_CTRMGRD_HEALTH_PROBE",
+        "SONIC_CTRMGRD_STARTUP_SCRIPT",
+    ],
+    metadata = {
+        "distro": "bookworm",
+        "legacy_name": "DOCKER_CONFIG_ENGINE_BOOKWORM",
+        "migration_role": "internal_config_fragment",
+    },
+    notes = [
+        "This fragment still reflects legacy pip and apt behavior from dockers/docker-config-engine-bookworm/Dockerfile.j2 and is manifest-owned first.",
+    ],
+)

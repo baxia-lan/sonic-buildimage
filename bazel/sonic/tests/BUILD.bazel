@@ -1,0 +1,17 @@
+load("//bazel/sonic:defs.bzl", "sonic_export_to_target_tree")
+
+exports_files(["sample.txt"])
+
+sonic_export_to_target_tree(
+    name = "exported_target_tree",
+    exports = {
+        ":sample.txt": "target/example/sample.txt",
+    },
+)
+
+genrule(
+    name = "export_verifier",
+    srcs = [":exported_target_tree"],
+    outs = ["export_verifier.txt"],
+    cmd = "test -f $(location :exported_target_tree)/target/example/sample.txt && echo ok > $@",
+)

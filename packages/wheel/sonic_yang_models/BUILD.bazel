@@ -1,0 +1,20 @@
+load("//bazel/sonic:defs.bzl", "sonic_py_wheel")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_py_wheel(
+    name = "wheel",
+    legacy_artifact = "sonic_yang_models-1.0-py3-none-any.whl",
+    source_path = "src/sonic-yang-models",
+    source_makefiles = ["rules/sonic-yang-models-py3.mk"],
+    sources = ["//sources/sonic-yang-models:source"],
+    legacy_deps = [
+        "LIBYANG3",
+        "LIBYANG3_PY3",
+    ],
+    metadata = {
+        "legacy_name": "SONIC_YANG_MODELS_PY3",
+        "migration_wave": "orchagent_chain",
+        "python_version": "3",
+    },
+)

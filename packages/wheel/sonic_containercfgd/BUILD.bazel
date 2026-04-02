@@ -1,0 +1,25 @@
+load("//bazel/sonic:defs.bzl", "sonic_py_wheel")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_py_wheel(
+    name = "wheel",
+    legacy_artifact = "sonic_containercfgd-1.0-py3-none-any.whl",
+    source_path = "src/sonic-containercfgd",
+    source_makefiles = [
+        "rules/sonic-containercfgd.mk",
+        "rules/sonic-containercfgd.dep",
+    ],
+    sources = ["//sources/sonic-containercfgd:source"],
+    legacy_deps = [
+        "SONIC_PY_COMMON_PY3",
+        "LIBSWSSCOMMON",
+        "PYTHON3_SWSSCOMMON",
+    ],
+    metadata = {
+        "cache_mode": "GIT_CONTENT_SHA",
+        "legacy_name": "SONIC_CONTAINERCFGD",
+        "migration_wave": "orchagent_chain",
+        "python_version": "3",
+    },
+)

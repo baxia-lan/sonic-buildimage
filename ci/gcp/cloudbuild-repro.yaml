@@ -1,0 +1,25 @@
+timeout: 14400s
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  pool:
+    name: projects/$PROJECT_ID/locations/us-east1/workerPools/${_SECONDARY_POOL}
+
+substitutions:
+  _SECONDARY_POOL: sonic-secondary
+  _REPRO_LABELS: //bazel/... //tools/... //sources/... //packages/... //images/... //platforms/... //installers/...
+
+steps:
+  - name: gcr.io/cloud-builders/git
+    entrypoint: bash
+    args:
+      - -lc
+      - git submodule update --init --recursive
+
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    env:
+      - USE_BAZEL_VERSION=8.5.0
+    args:
+      - -lc
+      - ./tools/ci/run_repro_check.sh ${_REPRO_LABELS}

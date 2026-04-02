@@ -1,0 +1,24 @@
+# SONiC Bazel defaults
+
+startup --output_user_root=.cache/bazel/output-user-root
+
+common --enable_bzlmod
+common --announce_rc
+common --repository_cache=.cache/bazel/repository
+common --disk_cache=.cache/bazel/disk
+common --lockfile_mode=update
+common --registry=https://bcr.bazel.build
+
+build --keep_going
+build --show_result=20
+build --verbose_failures
+build --remote_download_toplevel
+
+build:hermetic --incompatible_strict_action_env
+build:ci --config=hermetic
+build:ci --lockfile_mode=error
+
+test --test_output=errors
+test:hermetic --incompatible_strict_action_env
+test:ci --config=hermetic
+test:ci --lockfile_mode=error

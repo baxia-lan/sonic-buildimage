@@ -1,0 +1,12 @@
+load("//bazel/sonic/private:sources.bzl", "sonic_source_manifest")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_source_manifest(
+    name = "source",
+    source_path = "dockers/docker-orchagent",
+    source_kind = "workspace_dir",
+    notes = [
+        "Workspace-owned docker-orchagent image definition and runtime template set.",
+    ],
+)

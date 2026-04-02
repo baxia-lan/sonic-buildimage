@@ -1,0 +1,14 @@
+exports_files([
+    "collect_image_metrics.py",
+    "collect_artifact_inventory.py",
+    "collect_installer_catalog.py",
+    "collect_source_catalog.py",
+    "image_budgets.json",
+    "run_affected_targets.sh",
+    "run_image_metrics_check.sh",
+    "run_installer_catalog_check.sh",
+    "run_nightly_matrix.sh",
+    "run_repro_check.sh",
+    "run_source_catalog_check.sh",
+    "verify_no_egress.sh",
+])

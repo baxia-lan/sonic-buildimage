@@ -1,0 +1,32 @@
+load("//bazel/sonic:defs.bzl", "sonic_export_to_target_tree")
+load("//installers:data.bzl", "BROADCOM_ABOOT", "BROADCOM_ONIE", "BROADCOM_RAW")
+load("//installers:defs.bzl", "sonic_installer_variant")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_installer_variant(
+    name = "onie",
+    platform = "//platforms/broadcom:platform",
+    data = BROADCOM_ONIE,
+)
+
+sonic_installer_variant(
+    name = "raw",
+    platform = "//platforms/broadcom:platform",
+    data = BROADCOM_RAW,
+)
+
+sonic_installer_variant(
+    name = "aboot",
+    platform = "//platforms/broadcom:platform",
+    data = BROADCOM_ABOOT,
+)
+
+sonic_export_to_target_tree(
+    name = "target_tree",
+    exports = {
+        ":aboot_lock": "target/installers/sonic-aboot-broadcom.swi.lock.json",
+        ":onie_lock": "target/installers/sonic-broadcom.bin.lock.json",
+        ":raw_lock": "target/installers/sonic-broadcom.raw.lock.json",
+    },
+)

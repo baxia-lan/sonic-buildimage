@@ -1,0 +1,41 @@
+load("//bazel/sonic:defs.bzl", "sonic_oci_image")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_oci_image(
+    name = "image",
+    legacy_artifact = "docker-config-engine-bullseye.gz",
+    legacy_dockerfile = "dockers/docker-config-engine-bullseye/Dockerfile.j2",
+    source_makefiles = ["rules/docker-config-engine-bullseye.mk"],
+    base = "//images/oci/docker-base-bullseye:image",
+    runtime_deps = [
+        "//packages/deb/libswsscommon:deb",
+        "//packages/deb/sonic-db-cli:deb",
+        "//packages/deb/sonic-eventd:deb",
+    ],
+    legacy_runtime_deps = [
+        "LIBYANG",
+        "LIBYANG_CPP",
+        "LIBYANG_PY3",
+        "PYTHON3_SWSSCOMMON",
+    ],
+    wheel_deps = [
+        "//packages/wheel/sonic_yang_mgmt:wheel",
+        "//packages/wheel/sonic_yang_models:wheel",
+        "//packages/wheel/sonic_containercfgd:wheel",
+        "//packages/wheel/sonic_config_engine:wheel",
+    ],
+    legacy_wheel_deps = ["SONIC_PY_COMMON_PY3"],
+    files = [
+        "SWSS_VARS_TEMPLATE",
+        "RSYSLOG_PLUGIN_CONF_J2",
+        "SONIC_CTRMGRD_CONTAINER_SCRIPT",
+        "SONIC_CTRMGRD_HEALTH_PROBE",
+        "SONIC_CTRMGRD_STARTUP_SCRIPT",
+    ],
+    metadata = {
+        "distro": "bullseye",
+        "legacy_name": "DOCKER_CONFIG_ENGINE_BULLSEYE",
+        "migration_role": "migration_input",
+    },
+)

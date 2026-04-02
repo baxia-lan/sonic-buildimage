@@ -1,0 +1,25 @@
+load("//bazel/sonic:defs.bzl", "sonic_export_to_target_tree")
+load("//installers:data.bzl", "GENERIC_ABOOT", "GENERIC_ONIE")
+load("//installers:defs.bzl", "sonic_installer_variant")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_installer_variant(
+    name = "onie",
+    platform = "//platforms/generic:platform",
+    data = GENERIC_ONIE,
+)
+
+sonic_installer_variant(
+    name = "aboot",
+    platform = "//platforms/generic:platform",
+    data = GENERIC_ABOOT,
+)
+
+sonic_export_to_target_tree(
+    name = "target_tree",
+    exports = {
+        ":aboot_lock": "target/installers/sonic-aboot-generic.swi.lock.json",
+        ":onie_lock": "target/installers/sonic-generic.bin.lock.json",
+    },
+)

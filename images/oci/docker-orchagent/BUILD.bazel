@@ -1,0 +1,63 @@
+load("//bazel/sonic:defs.bzl", "sonic_export_to_target_tree", "sonic_oci_image")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_oci_image(
+    name = "image",
+    legacy_artifact = "docker-orchagent.gz",
+    legacy_dockerfile = "dockers/docker-orchagent/Dockerfile.j2",
+    source_makefiles = ["rules/docker-orchagent.mk"],
+    base = "//images/oci/docker-base-bookworm:image",
+    fragments = [
+        "//images/oci/docker-config-engine-bookworm:image",
+        "//images/oci/docker-swss-layer-bookworm:image",
+    ],
+    runtime_deps = [],
+    wheel_deps = ["//packages/wheel/scapy:wheel"],
+    files = [
+        "ARP_UPDATE_SCRIPT",
+        "ARP_UPDATE_VARS_TEMPLATE",
+    ],
+    sources = [
+        "//sources/docker-orchagent:source",
+        "//sources/sonic-swss:source",
+    ],
+    metadata = {
+        "container_name": "swss",
+        "legacy_name": "DOCKER_ORCHAGENT",
+        "migration_role": "public_service_image",
+        "package_name": "swss",
+    },
+    notes = [
+        "The Bazel migration graph now models docker-orchagent as base rootfs plus internal fragments instead of inheriting docker-swss-layer as the base image.",
+        "The Dockerfile still performs ad hoc package installation steps and remains non-hermetic until the concrete Bazel image rule replaces it.",
+    ],
+)
+
+genrule(
+    name = "review_archive",
+    srcs = [
+        "//dockers/docker-orchagent:review_srcs",
+        "//files:scripts/arp_update",
+    ],
+    outs = ["docker-orchagent.gz"],
+    cmd = """
+exec "$(location //tools/bazel:build_review_docker_archive)" \
+  --mode docker_orchagent_review \
+  --output "$@" \
+  --image-name docker-orchagent \
+  --platform linux/amd64 \
+  --base-image debian:bookworm-slim \
+  $(SRCS)
+""",
+    tags = ["local", "manual", "no-sandbox"],
+    tools = ["//tools/bazel:build_review_docker_archive"],
+)
+
+sonic_export_to_target_tree(
+    name = "target_tree",
+    exports = {
+        ":review_archive": "target/docker-orchagent.gz",
+    },
+    tags = ["manual"],
+)

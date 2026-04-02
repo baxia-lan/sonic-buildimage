@@ -1,0 +1,21 @@
+load("//bazel/sonic:defs.bzl", "sonic_py_wheel")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_py_wheel(
+    name = "wheel",
+    legacy_artifact = "scapy-2.4.5-py2.py3-none-any.whl",
+    source_path = "src/scapy",
+    source_makefiles = [
+        "rules/scapy.mk",
+        "rules/scapy.dep",
+    ],
+    sources = ["//sources/scapy:source"],
+    submodule_paths = ["src/scapy"],
+    metadata = {
+        "cache_mode": "GIT_CONTENT_SHA",
+        "legacy_name": "SCAPY",
+        "migration_wave": "orchagent_chain",
+        "python_version": "3",
+    },
+)

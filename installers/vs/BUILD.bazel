@@ -1,0 +1,32 @@
+load("//bazel/sonic:defs.bzl", "sonic_export_to_target_tree")
+load("//installers:data.bzl", "VS_KVM", "VS_ONIE", "VS_RAW")
+load("//installers:defs.bzl", "sonic_installer_variant")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_installer_variant(
+    name = "onie",
+    platform = "//platforms/vs:platform",
+    data = VS_ONIE,
+)
+
+sonic_installer_variant(
+    name = "raw",
+    platform = "//platforms/vs:platform",
+    data = VS_RAW,
+)
+
+sonic_installer_variant(
+    name = "kvm",
+    platform = "//platforms/vs:platform",
+    data = VS_KVM,
+)
+
+sonic_export_to_target_tree(
+    name = "target_tree",
+    exports = {
+        ":kvm_lock": "target/installers/sonic-vs.img.gz.lock.json",
+        ":onie_lock": "target/installers/sonic-vs.bin.lock.json",
+        ":raw_lock": "target/installers/sonic-vs.raw.lock.json",
+    },
+)

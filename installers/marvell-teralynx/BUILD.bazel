@@ -1,0 +1,18 @@
+load("//bazel/sonic:defs.bzl", "sonic_export_to_target_tree")
+load("//installers:data.bzl", "MRVL_TERALYNX_ONIE")
+load("//installers:defs.bzl", "sonic_installer_variant")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_installer_variant(
+    name = "onie",
+    platform = "//platforms/marvell-teralynx:platform",
+    data = MRVL_TERALYNX_ONIE,
+)
+
+sonic_export_to_target_tree(
+    name = "target_tree",
+    exports = {
+        ":onie_lock": "target/installers/sonic-marvell-teralynx.bin.lock.json",
+    },
+)

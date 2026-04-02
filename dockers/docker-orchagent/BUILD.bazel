@@ -1,0 +1,6 @@
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "review_srcs",
+    srcs = glob(["**"], exclude = ["BUILD.bazel"]),
+)

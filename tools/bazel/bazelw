@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+bazelisk_root="${SONIC_BAZELISK_ROOT:-${repo_root}/.cache/bazelisk}"
+bazelisk_bin="${BAZELISK_BIN:-${bazelisk_root}/bazelisk}"
+bazel_version="${USE_BAZEL_VERSION:-$(<"${repo_root}/.bazelversion")}"
+bazelisk_version="${SONIC_BAZELISK_VERSION:-v1.25.0}"
+
+if command -v bazel >/dev/null 2>&1; then
+    exec env USE_BAZEL_VERSION="${bazel_version}" bazel "$@"
+fi
+
+mkdir -p "${bazelisk_root}"
+
+if [[ ! -x "${bazelisk_bin}" ]]; then
+    case "$(uname -sm)" in
+        "Darwin arm64")
+            bazelisk_url="https://github.com/bazelbuild/bazelisk/releases/download/${bazelisk_version}/bazelisk-darwin-arm64"
+            ;;
+        "Darwin x86_64")
+            bazelisk_url="https://github.com/bazelbuild/bazelisk/releases/download/${bazelisk_version}/bazelisk-darwin-amd64"
+            ;;
+        "Linux x86_64")
+            bazelisk_url="https://github.com/bazelbuild/bazelisk/releases/download/${bazelisk_version}/bazelisk-linux-amd64"
+            ;;
+        "Linux aarch64"|"Linux arm64")
+            bazelisk_url="https://github.com/bazelbuild/bazelisk/releases/download/${bazelisk_version}/bazelisk-linux-arm64"
+            ;;
+        *)
+            echo "Unsupported host platform for bazelw: $(uname -sm)" >&2
+            exit 1
+            ;;
+    esac
+
+    curl -L "${bazelisk_url}" -o "${bazelisk_bin}"
+    chmod +x "${bazelisk_bin}"
+fi
+
+exec env USE_BAZEL_VERSION="${bazel_version}" "${bazelisk_bin}" "$@"
