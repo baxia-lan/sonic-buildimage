@@ -78,6 +78,7 @@
 [submodule "platform/mellanox/hw-management/hw-mgmt"]
 	path = platform/mellanox/hw-management/hw-mgmt
 	url = https://github.com/baxia-lan/hw-mgmt
+	branch = claude
 [submodule "src/redis-dump-load"]
 	path = src/redis-dump-load
 	url = https://github.com/p/redis-dump-load.git
@@ -93,6 +94,7 @@
 [submodule "src/sonic-ztp"]
 	path = src/sonic-ztp
 	url = https://github.com/baxia-lan/sonic-ztp
+	branch = claude
 [submodule "src/sonic-restapi"]
 	path = src/sonic-restapi
 	url = https://github.com/baxia-lan/sonic-restapi
@@ -105,6 +107,7 @@
 [submodule "src/wpasupplicant/sonic-wpa-supplicant"]
 	path = src/wpasupplicant/sonic-wpa-supplicant
 	url = https://github.com/baxia-lan/sonic-wpa-supplicant
+	branch = claude
 [submodule "platform/broadcom/saibcm-modules-dnx"]
 	path = platform/broadcom/saibcm-modules-dnx
 	url = https://github.com/baxia-lan/saibcm-modules
@@ -193,3 +196,4 @@
 [submodule "platform/alpinevs"]
 	path = platform/alpinevs
 	url = https://github.com/baxia-lan/sonic-alpine
+	branch = claude
