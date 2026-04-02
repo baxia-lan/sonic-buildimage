@@ -1,0 +1,15 @@
+"""ONIE installer scripts."""
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "install.sh",
+    "sharch_body.sh",
+    "default_platform.conf",
+])
+
+alias(
+    name = "onie_installer_header",
+    actual = ":install.sh",
+    visibility = ["//visibility:public"],
+)

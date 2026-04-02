@@ -1,0 +1,5 @@
+"""SONiC helper scripts shared by multiple service containers."""
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["arp_update"])

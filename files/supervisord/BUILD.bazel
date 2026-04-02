@@ -1,0 +1,8 @@
+"""Supervisord configuration files for SONiC containers."""
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "base.conf",
+    "supervisord_env.conf",
+])

@@ -2,8 +2,6 @@
 
 package(default_visibility = ["//visibility:public"])
 
-load("@toolchains_llvm//toolchain:rules.bzl", "clang_cc_toolchain_config")
-
 # ── Toolchain type for Debian package building ────────────────────────────────
 # Actions tagged with this toolchain run inside the sonic-slave container.
 toolchain_type(name = "sonic_slave_toolchain_type")

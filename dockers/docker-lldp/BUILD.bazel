@@ -1,0 +1,139 @@
+"""docker-lldp — SONiC LLDP service container.
+
+Phase 2: collapsed to sonic-common-layer base.
+Provides lldpd and python3-swsscommon for database sync.
+"""
+
+load("@rules_oci//oci:defs.bzl", "oci_image")
+load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
+load("//rules/bazel/oci:strip_layer.bzl", "stripped_layer")
+load("//rules/bazel/j2:j2.bzl", "j2_render")
+
+package(default_visibility = ["//visibility:public"])
+
+# ── Jinja2 templates rendered at build time ──────────────────────────────────
+
+j2_render(
+    name = "supervisord_conf",
+    template = "supervisord.conf.j2",
+    vars = "//files/build_vars:lldp.json",
+    output = "supervisord.conf",
+)
+
+j2_render(
+    name = "lldpd_conf",
+    template = "lldpd.conf.j2",
+    vars = "//files/build_vars:lldp.json",
+    output = "lldpd.conf",
+)
+
+j2_render(
+    name = "lldpd_sys_descr_conf",
+    template = "lldpdSysDescr.conf.j2",
+    vars = "//files/build_vars:lldp.json",
+    output = "lldpdSysDescr.conf",
+)
+
+# ── Service debs layer ───────────────────────────────────────────────────────
+
+genrule(
+    name = "lldp_binary_layer",
+    srcs = [
+        "//src/sonic-swss-common:swss_common",
+    ],
+    outs = ["lldp_binary_layer.tar"],
+    cmd = """
+set -euo pipefail
+ROOTFS=$$(mktemp -d)
+trap 'rm -rf "$$ROOTFS"' EXIT
+for deb in $(SRCS); do
+    dpkg-deb -x "$$deb" "$$ROOTFS"
+done
+SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \
+  --owner=0 --group=0 \
+  -C "$$ROOTFS" -cf $(OUTS) .
+""",
+)
+
+# ── Python wheels layer ──────────────────────────────────────────────────────
+
+genrule(
+    name = "lldp_wheels_layer",
+    srcs = [
+        "//src/sonic-dbsyncd:dbsyncd_wheel",
+    ],
+    outs = ["lldp_wheels_layer.tar"],
+    cmd = """
+set -euo pipefail
+ROOTFS=$$(mktemp -d)
+trap 'rm -rf "$$ROOTFS"' EXIT
+pip3 install --no-cache-dir --no-deps --prefix=$$ROOTFS/usr/local $(SRCS)
+SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \
+  --owner=0 --group=0 \
+  -C "$$ROOTFS" -cf $(OUTS) .
+""",
+)
+
+# ── Config + scripts layer ───────────────────────────────────────────────────
+
+pkg_tar(
+    name = "lldp_config_layer",
+    srcs = [
+        ":supervisord_conf",
+        ":lldpd_conf",
+        ":lldpd_sys_descr_conf",
+        "critical_processes",
+        "docker-lldp-init.sh",
+        "lldpd",
+        "lldpmgrd",
+        "start.sh",
+        "waitfor_lldp_ready.sh",
+    ],
+    remap_paths = {
+        "supervisord.conf": "/etc/supervisor/conf.d/supervisord.conf",
+        "critical_processes": "/etc/supervisor/critical_processes",
+        "lldpd.conf": "/etc/lldpd.conf",
+        "lldpdSysDescr.conf": "/etc/lldpdSysDescr.conf",
+        "docker-lldp-init.sh": "/usr/local/bin/docker-lldp-init.sh",
+        "lldpd": "/usr/sbin/lldpd",
+        "lldpmgrd": "/usr/bin/lldpmgrd",
+        "start.sh": "/usr/bin/start.sh",
+        "waitfor_lldp_ready.sh": "/usr/bin/waitfor_lldp_ready.sh",
+    },
+    mode = "0755",
+)
+
+# ── Size budget enforcement ──────────────────────────────────────────────────
+
+stripped_layer(
+    name = "lldp_binary_layer_stripped",
+    src = ":lldp_binary_layer",
+    size_budget_mb = 20,
+)
+
+stripped_layer(
+    name = "lldp_wheels_layer_stripped",
+    src = ":lldp_wheels_layer",
+    size_budget_mb = 15,
+)
+
+# ── docker-lldp OCI image ───────────────────────────────────────────────────
+
+sonic_oci_image(
+    name = "docker_lldp",
+    base = "//dockers/sonic-common-layer:sonic_common_layer",
+    tars = [
+        ":lldp_binary_layer_stripped",
+        ":lldp_wheels_layer_stripped",
+        ":lldp_config_layer",
+    ],
+    env = {
+        "DEBIAN_FRONTEND": "noninteractive",
+    },
+    labels = {
+        "org.opencontainers.image.title": "docker-lldp",
+        "org.opencontainers.image.description": "SONiC LLDP service",
+        "sonic.container.name": "lldp",
+    },
+)

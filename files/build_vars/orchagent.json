@@ -1,0 +1,10 @@
+{
+    "CONTAINER_NAME": "swss",
+    "DAEMON_NAME": "orchagent",
+    "WARM_SHUTDOWN_BEFORE": "syncd",
+    "FAST_SHUTDOWN_BEFORE": "syncd",
+    "ENABLE_ASAN": "n",
+    "INCLUDE_SYSTEM_TELEMETRY": "y",
+    "INCLUDE_RESTAPI": "n",
+    "INCLUDE_NAT": "y"
+}

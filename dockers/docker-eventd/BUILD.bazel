@@ -1,0 +1,85 @@
+"""docker-eventd — SONiC event daemon service container.
+
+Phase 2: collapsed to sonic-common-layer base.
+Minimal image with sonic-utilities wheel and event info JSON configs.
+"""
+
+load("@rules_oci//oci:defs.bzl", "oci_image")
+load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
+load("//rules/bazel/oci:strip_layer.bzl", "stripped_layer")
+
+package(default_visibility = ["//visibility:public"])
+
+# ── Python wheels layer ──────────────────────────────────────────────────────
+
+genrule(
+    name = "eventd_wheels_layer",
+    srcs = [
+        "//src/sonic-utilities:sonic_utilities_wheel",
+    ],
+    outs = ["eventd_wheels_layer.tar"],
+    cmd = """
+set -euo pipefail
+ROOTFS=$$(mktemp -d)
+trap 'rm -rf "$$ROOTFS"' EXIT
+pip3 install --no-cache-dir --no-deps --prefix=$$ROOTFS/usr/local $(SRCS)
+SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \
+  --owner=0 --group=0 \
+  -C "$$ROOTFS" -cf $(OUTS) .
+""",
+)
+
+# ── Config + scripts layer ───────────────────────────────────────────────────
+
+pkg_tar(
+    name = "eventd_config_layer",
+    srcs = [
+        "supervisord.conf",
+        "critical_processes",
+        "start.sh",
+        "bgp_events_info.json",
+        "dhcp_relay_events_info.json",
+        "host_events_info.json",
+        "swss_events_info.json",
+        "syncd_events_info.json",
+    ],
+    remap_paths = {
+        "supervisord.conf": "/etc/supervisor/conf.d/supervisord.conf",
+        "critical_processes": "/etc/supervisor/critical_processes",
+        "start.sh": "/usr/bin/start.sh",
+        "bgp_events_info.json": "/etc/sonic/eventd/bgp_events_info.json",
+        "dhcp_relay_events_info.json": "/etc/sonic/eventd/dhcp_relay_events_info.json",
+        "host_events_info.json": "/etc/sonic/eventd/host_events_info.json",
+        "swss_events_info.json": "/etc/sonic/eventd/swss_events_info.json",
+        "syncd_events_info.json": "/etc/sonic/eventd/syncd_events_info.json",
+    },
+    mode = "0755",
+)
+
+# ── Size budget enforcement ──────────────────────────────────────────────────
+
+stripped_layer(
+    name = "eventd_wheels_layer_stripped",
+    src = ":eventd_wheels_layer",
+    size_budget_mb = 20,
+)
+
+# ── docker-eventd OCI image ─────────────────────────────────────────────────
+
+sonic_oci_image(
+    name = "docker_eventd",
+    base = "//dockers/sonic-common-layer:sonic_common_layer",
+    tars = [
+        ":eventd_wheels_layer_stripped",
+        ":eventd_config_layer",
+    ],
+    env = {
+        "DEBIAN_FRONTEND": "noninteractive",
+    },
+    labels = {
+        "org.opencontainers.image.title": "docker-eventd",
+        "org.opencontainers.image.description": "SONiC event daemon service",
+        "sonic.container.name": "eventd",
+    },
+)

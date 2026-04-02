@@ -16,12 +16,10 @@ def sonic_wheel(
         version,
         python_requires = ">=3.11",
         deps = [],
-        data = [],
-        packages = [],
         entry_points = {},
-        install_requires = [],
-        extras_require = {},
-        description = "",
+        requires = [],
+        extra_requires = {},
+        summary = "",
         homepage = "",
         author = "SONiC",
         author_email = "sonic-dev@example.com",
@@ -35,12 +33,10 @@ def sonic_wheel(
         version:        Package version string.
         python_requires: Python version constraint.
         deps:           py_library deps.
-        data:           Non-Python data files to bundle.
-        packages:       Python package directories to include.
         entry_points:   Console scripts and entry points dict.
-        install_requires: Runtime dependencies (pip package specs).
-        extras_require: Optional dependency groups.
-        description:    Short description.
+        requires:       Runtime dependencies (pip package specs).
+        extra_requires: Optional dependency groups.
+        summary:        Short description.
         homepage:       Project URL.
         author:         Author name.
         author_email:   Author email.
@@ -53,12 +49,10 @@ def sonic_wheel(
         version = version,
         python_requires = python_requires,
         deps = deps,
-        data = data,
-        packages = packages,
         entry_points = entry_points,
-        requires = install_requires,
-        extra_requires = extras_require,
-        summary = description,
+        requires = requires,
+        extra_requires = extra_requires,
+        summary = summary,
         homepage = homepage,
         author = author,
         author_email = author_email,
@@ -67,8 +61,8 @@ def sonic_wheel(
             "Operating System :: POSIX :: Linux",
         ] + classifiers,
         python_tag = "py3",
-        abi_tag = "none",
-        platform_tag = select({
+        abi = "none",
+        platform = select({
             "//platforms:is_amd64": "linux_x86_64",
             "//platforms:is_arm64": "linux_aarch64",
             "//platforms:is_armhf": "linux_armv7l",

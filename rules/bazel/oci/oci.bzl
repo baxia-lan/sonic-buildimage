@@ -16,7 +16,7 @@ The target architecture (Phase 2) is:
 Maximum 3 layers per final image (one distroless base + ≤2 SONiC layers).
 """
 
-load("@rules_oci//oci:defs.bzl", "oci_image", "oci_push", "oci_tarball")
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_load", "oci_push")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 
 # ── sonic_oci_layer ───────────────────────────────────────────────────────────
@@ -106,7 +106,7 @@ def sonic_oci_image(
     )
 
     # Convenience tarball target for local testing: bazel build :name_tarball
-    oci_tarball(
+    oci_load(
         name = name + "_tarball",
         image = name,
         repo_tags = ["sonic/" + name + ":dev"],

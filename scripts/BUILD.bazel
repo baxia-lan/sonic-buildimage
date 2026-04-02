@@ -1,0 +1,8 @@
+"""Build scripts and tools."""
+
+package(default_visibility = ["//visibility:public"])
+
+sh_binary(
+    name = "onie_image_builder",
+    srcs = ["onie_image_builder.sh"],
+)

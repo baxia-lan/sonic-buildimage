@@ -1,0 +1,63 @@
+"""docker-sonic-telemetry — SONiC telemetry service container.
+
+Phase 2: chains on top of docker-sonic-gnmi with minimal additional config.
+This image adds the telemetry-specific entry script and config on top of gNMI.
+"""
+
+load("@rules_oci//oci:defs.bzl", "oci_image")
+load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
+load("//rules/bazel/oci:strip_layer.bzl", "stripped_layer")
+
+package(default_visibility = ["//visibility:public"])
+
+# ── Config + scripts layer ───────────────────────────────────────────────────
+
+pkg_tar(
+    name = "telemetry_config_layer",
+    srcs = [
+        "supervisord.conf",
+        "critical_processes",
+        "dialout.sh",
+        "docker-telemetry-entry.sh",
+        "start.sh",
+        "telemetry.sh",
+        # Runtime-dynamic template:
+        "telemetry_vars.j2",
+    ],
+    remap_paths = {
+        "supervisord.conf": "/etc/supervisor/conf.d/supervisord.conf",
+        "critical_processes": "/etc/supervisor/critical_processes",
+        "dialout.sh": "/usr/bin/dialout.sh",
+        "docker-telemetry-entry.sh": "/usr/local/bin/docker-telemetry-entry.sh",
+        "start.sh": "/usr/bin/start.sh",
+        "telemetry.sh": "/usr/bin/telemetry.sh",
+    },
+    mode = "0755",
+)
+
+# ── Size budget enforcement ──────────────────────────────────────────────────
+
+stripped_layer(
+    name = "telemetry_config_layer_stripped",
+    src = ":telemetry_config_layer",
+    size_budget_mb = 5,
+)
+
+# ── docker-sonic-telemetry OCI image ─────────────────────────────────────────
+
+sonic_oci_image(
+    name = "docker_sonic_telemetry",
+    base = "//dockers/docker-sonic-gnmi:docker_sonic_gnmi",
+    tars = [
+        ":telemetry_config_layer_stripped",
+    ],
+    env = {
+        "DEBIAN_FRONTEND": "noninteractive",
+    },
+    labels = {
+        "org.opencontainers.image.title": "docker-sonic-telemetry",
+        "org.opencontainers.image.description": "SONiC telemetry service",
+        "sonic.container.name": "telemetry",
+    },
+)

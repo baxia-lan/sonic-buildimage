@@ -1,0 +1,17 @@
+"""Build tools and utilities."""
+
+load("@rules_python//python:defs.bzl", "py_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["requirements_lock.txt"])
+
+py_binary(
+    name = "j2cli",
+    srcs = ["j2cli_wrapper.py"],
+    main = "j2cli_wrapper.py",
+    deps = [
+        "@sonic_pip//jinja2",
+        "@sonic_pip//pyyaml",
+    ],
+)

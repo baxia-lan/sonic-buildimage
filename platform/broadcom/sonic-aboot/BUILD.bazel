@@ -1,0 +1,62 @@
+"""Broadcom Aboot platform — sonic-aboot-broadcom.swi.
+
+Aboot (.swi) is the Arista EOS boot format. It wraps the same rootfs as
+the ONIE .bin but uses a different installer header for Arista switches.
+
+Outputs:
+  - :sonic_aboot_broadcom_swi — sonic-aboot-broadcom.swi installer
+"""
+
+load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+
+package(default_visibility = ["//visibility:public"])
+
+# ── Aboot SWI image ──────────────────────────────────────────────────────────
+# The SWI format is a zip file containing:
+#   - rootfs squashfs (same as ONIE)
+#   - kernel + initrd
+#   - Aboot boot0 loader
+#   - manifest file
+genrule(
+    name = "sonic_aboot_broadcom_swi",
+    srcs = [
+        "//platform/broadcom:sonic_broadcom_rootfs",
+        "//src/sonic-linux-kernel:vmlinuz",
+        "//platform/broadcom:broadcom_modules",
+    ],
+    outs = ["sonic-aboot-broadcom.swi"],
+    cmd = """
+set -euo pipefail
+WORK=$$(mktemp -d)
+trap 'rm -rf "$$WORK"' EXIT
+
+# Stage rootfs
+cp $(location //platform/broadcom:sonic_broadcom_rootfs) "$$WORK/fs.squashfs"
+
+# Stage kernel
+cp $(location //src/sonic-linux-kernel:vmlinuz) "$$WORK/kernel"
+
+# Stage platform modules
+cp $(location //platform/broadcom:broadcom_modules) "$$WORK/platform-modules.tar.gz"
+
+# Create Aboot manifest
+cat > "$$WORK/manifest" <<MANIFEST
+image_version: 0.0.0-bazel
+build_date: 1970-01-01T00:00:00+00:00
+platform: x86_64-broadcom_common
+MANIFEST
+
+# Build the SWI zip archive
+cd "$$WORK"
+SOURCE_DATE_EPOCH=0 zip -q -X $(OUTS) \
+  manifest kernel fs.squashfs platform-modules.tar.gz
+
+# Size check (same 400 MB budget as .bin)
+SIZE_MB=$$(( $$(stat -f%z $(OUTS) 2>/dev/null || stat -c%s $(OUTS)) / 1048576 ))
+if [ "$$SIZE_MB" -gt 400 ]; then
+  echo "FAIL: sonic-aboot-broadcom.swi is $${SIZE_MB} MB, exceeds 400 MB budget"
+  exit 1
+fi
+echo "sonic-aboot-broadcom.swi: $${SIZE_MB} MB (budget: 400 MB)"
+""",
+)

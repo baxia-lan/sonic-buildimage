@@ -41,7 +41,7 @@ Container runtime flags (from docker-orchagent.mk, applied at deploy time):
   -v /zmq_swss:/zmq_swss:rw
 """
 
-load("@rules_oci//oci:defs.bzl", "oci_image", "oci_tarball")
+load("@rules_oci//oci:defs.bzl", "oci_image")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
 load("//rules/bazel/oci:strip_layer.bzl", "stripped_layer")
@@ -92,10 +92,6 @@ SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \\
   --owner=0 --group=0 \\
   -C "$$ROOTFS" -cf $(OUTS) .
 """,
-    execution_requirements = {
-        "container-image": "docker://index.docker.io/library/debian@sha256:9a6e7c4b57a7c27d4a09ef94c4f196f3c40fe9ce0eff08e4b4e72b85b7c5fa88",
-        "no-sandbox": "0",
-    },
 )
 
 # ── orchagent binary + swssloglevel layer ─────────────────────────────────────
@@ -117,10 +113,6 @@ SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \\
   --owner=0 --group=0 \\
   -C "$$ROOTFS" -cf $(OUTS) .
 """,
-    execution_requirements = {
-        "container-image": "docker://index.docker.io/library/debian@sha256:9a6e7c4b57a7c27d4a09ef94c4f196f3c40fe9ce0eff08e4b4e72b85b7c5fa88",
-        "no-sandbox": "0",
-    },
 )
 
 # ── orchagent config + scripts layer ─────────────────────────────────────────
@@ -157,11 +149,6 @@ pkg_tar(
         "tunnel_packet_handler.py": "/usr/bin/tunnel_packet_handler.py",
     },
     mode = "0755",
-    mode_map = {
-        "**/*.conf": "0644",
-        "**/*.j2": "0644",
-        "**/*.json": "0644",
-    },
 )
 
 # ── arp_update script layer ───────────────────────────────────────────────────

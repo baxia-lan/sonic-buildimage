@@ -1,0 +1,157 @@
+"""docker-fpm-frr — SONiC FRRouting (BGP/OSPF/IS-IS) service container.
+
+Phase 2: collapsed from the 5-deep Make chain to 3 layers:
+  distroless/base-debian12 -> sonic-common-layer -> sonic-swss-layer -> this image
+
+Layer accounting:
+  Layer 0: gcr.io/distroless/base-debian12           ~20 MB   (upstream, pinned)
+  Layer 1: //dockers/sonic-common-layer               ~130 MB  (supervisord, libs)
+  Layer 2: //dockers/docker-swss-layer-bullseye       ~120 MB  (libswsscommon+sairedis)
+  Layer 3: THIS FILE                                  ~65 MB   (frr + configs)
+  Total:                                              ~335 MB  (< 400 MB budget)
+"""
+
+load("@rules_oci//oci:defs.bzl", "oci_image")
+load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
+load("//rules/bazel/oci:strip_layer.bzl", "stripped_layer")
+load("//rules/bazel/j2:j2.bzl", "j2_render")
+
+package(default_visibility = ["//visibility:public"])
+
+# -- Jinja2 templates rendered at build time -----------------------------------
+
+j2_render(
+    name = "supervisord_conf",
+    template = "supervisord.conf.j2",
+    vars = "//files/build_vars:fpm_frr.json",
+    output = "supervisord.conf",
+)
+
+j2_render(
+    name = "critical_processes",
+    template = "critical_processes.j2",
+    vars = "//files/build_vars:fpm_frr.json",
+    output = "critical_processes",
+)
+
+# -- apt runtime packages layer ------------------------------------------------
+
+genrule(
+    name = "fpm_frr_apt_layer",
+    srcs = [],
+    outs = ["fpm_frr_apt_layer.tar"],
+    cmd = """
+set -euo pipefail
+ROOTFS=$$(mktemp -d)
+trap 'rm -rf "$$ROOTFS"' EXIT
+
+apt-get -y install --no-install-recommends \
+  -o Dir::Cache=$$ROOTFS/var/cache/apt \
+  -o Dir::State=$$ROOTFS/var/lib/apt \
+  iproute2 logrotate
+
+rm -rf $$ROOTFS/var/cache $$ROOTFS/var/lib/apt
+SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \
+  --owner=0 --group=0 \
+  -C "$$ROOTFS" -cf $(OUTS) .
+""",
+)
+
+# -- FRR + swss binary layer --------------------------------------------------
+
+genrule(
+    name = "fpm_frr_binary_layer",
+    srcs = [
+        "//src/sonic-frr:frr_debs",
+        "//src/sonic-swss:swss_deb",
+    ],
+    outs = ["fpm_frr_binary_layer.tar"],
+    cmd = """
+set -euo pipefail
+ROOTFS=$$(mktemp -d)
+trap 'rm -rf "$$ROOTFS"' EXIT
+for deb in $(SRCS); do
+    dpkg-deb -x "$$deb" "$$ROOTFS"
+done
+SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \
+  --owner=0 --group=0 \
+  -C "$$ROOTFS" -cf $(OUTS) .
+""",
+)
+
+# -- config + scripts layer ----------------------------------------------------
+
+pkg_tar(
+    name = "fpm_frr_config_layer",
+    srcs = [
+        ":supervisord_conf",
+        ":critical_processes",
+        "docker_init.sh",
+        "snmp.conf",
+        "TSA",
+        "TSB",
+        "TSC",
+        "TS",
+        "zsocket.sh",
+        "vtysh.conf",
+    ],
+    remap_paths = {
+        "supervisord.conf": "/etc/supervisor/conf.d/supervisord.conf",
+        "critical_processes": "/etc/supervisor/critical_processes",
+        "docker_init.sh": "/usr/bin/docker_init.sh",
+        "snmp.conf": "/etc/snmp/frr.conf",
+        "TSA": "/usr/bin/TSA",
+        "TSB": "/usr/bin/TSB",
+        "TSC": "/usr/bin/TSC",
+        "TS": "/usr/bin/TS",
+        "zsocket.sh": "/usr/bin/zsocket.sh",
+        "vtysh.conf": "/etc/frr/vtysh.conf",
+    },
+    mode = "0755",
+)
+
+# -- FRR template files layer --------------------------------------------------
+
+pkg_tar(
+    name = "fpm_frr_templates_layer",
+    srcs = glob(["frr/**"]),
+    strip_prefix = ".",
+    package_dir = "/usr/share/sonic/templates",
+)
+
+# -- Size budget enforcement ---------------------------------------------------
+
+stripped_layer(
+    name = "fpm_frr_apt_layer_stripped",
+    src = ":fpm_frr_apt_layer",
+    size_budget_mb = 15,
+)
+
+stripped_layer(
+    name = "fpm_frr_binary_layer_stripped",
+    src = ":fpm_frr_binary_layer",
+    size_budget_mb = 50,
+)
+
+# -- docker-fpm-frr OCI image -------------------------------------------------
+
+sonic_oci_image(
+    name = "docker_fpm_frr",
+    base = "//dockers/docker-swss-layer-bullseye:sonic_swss_layer_bullseye",
+    tars = [
+        ":fpm_frr_apt_layer_stripped",
+        ":fpm_frr_binary_layer_stripped",
+        ":fpm_frr_config_layer",
+        ":fpm_frr_templates_layer",
+    ],
+    env = {
+        "DEBIAN_FRONTEND": "noninteractive",
+    },
+    entrypoint = ["/usr/bin/docker_init.sh"],
+    labels = {
+        "org.opencontainers.image.title": "docker-fpm-frr",
+        "org.opencontainers.image.description": "SONiC FRRouting BGP/OSPF/IS-IS service",
+        "sonic.container.name": "bgp",
+    },
+)

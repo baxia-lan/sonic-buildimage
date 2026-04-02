@@ -1,0 +1,89 @@
+"""docker-iccpd — SONiC ICCP (MC-LAG) daemon service container.
+
+Phase 2: collapsed from the 5-deep Make chain to 3 layers:
+  distroless/base-debian12 -> sonic-common-layer -> sonic-swss-layer -> this image
+
+Layer accounting:
+  Layer 0: gcr.io/distroless/base-debian12           ~20 MB   (upstream, pinned)
+  Layer 1: //dockers/sonic-common-layer               ~130 MB  (supervisord, libs)
+  Layer 2: //dockers/docker-swss-layer-bullseye       ~120 MB  (libswsscommon+sairedis)
+  Layer 3: THIS FILE                                  ~25 MB   (iccpd + iptables + configs)
+  Total:                                              ~295 MB  (< 300 MB budget)
+"""
+
+load("@rules_oci//oci:defs.bzl", "oci_image")
+load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
+load("//rules/bazel/oci:strip_layer.bzl", "stripped_layer")
+load("//rules/bazel/j2:j2.bzl", "j2_render")
+
+package(default_visibility = ["//visibility:public"])
+
+# -- apt runtime packages layer ------------------------------------------------
+
+genrule(
+    name = "iccpd_apt_layer",
+    srcs = [],
+    outs = ["iccpd_apt_layer.tar"],
+    cmd = """
+set -euo pipefail
+ROOTFS=$$(mktemp -d)
+trap 'rm -rf "$$ROOTFS"' EXIT
+
+apt-get -y install --no-install-recommends \
+  -o Dir::Cache=$$ROOTFS/var/cache/apt \
+  -o Dir::State=$$ROOTFS/var/lib/apt \
+  iptables
+
+rm -rf $$ROOTFS/var/cache $$ROOTFS/var/lib/apt
+SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \
+  --owner=0 --group=0 \
+  -C "$$ROOTFS" -cf $(OUTS) .
+""",
+)
+
+# -- config + scripts layer ----------------------------------------------------
+
+pkg_tar(
+    name = "iccpd_config_layer",
+    srcs = [
+        "start.sh",
+        "iccpd.sh",
+        "supervisord.conf",
+        "iccpd.j2",
+    ],
+    remap_paths = {
+        "start.sh": "/usr/bin/start.sh",
+        "iccpd.sh": "/usr/bin/iccpd.sh",
+        "supervisord.conf": "/etc/supervisor/conf.d/supervisord.conf",
+        "iccpd.j2": "/usr/share/sonic/templates/iccpd.j2",
+    },
+    mode = "0755",
+)
+
+# -- Size budget enforcement ---------------------------------------------------
+
+stripped_layer(
+    name = "iccpd_apt_layer_stripped",
+    src = ":iccpd_apt_layer",
+    size_budget_mb = 10,
+)
+
+# -- docker-iccpd OCI image ---------------------------------------------------
+
+sonic_oci_image(
+    name = "docker_iccpd",
+    base = "//dockers/docker-swss-layer-bullseye:sonic_swss_layer_bullseye",
+    tars = [
+        ":iccpd_apt_layer_stripped",
+        ":iccpd_config_layer",
+    ],
+    env = {
+        "DEBIAN_FRONTEND": "noninteractive",
+    },
+    labels = {
+        "org.opencontainers.image.title": "docker-iccpd",
+        "org.opencontainers.image.description": "SONiC ICCP MC-LAG daemon",
+        "sonic.container.name": "iccpd",
+    },
+)

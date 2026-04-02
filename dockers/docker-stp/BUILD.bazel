@@ -1,0 +1,107 @@
+"""docker-stp — SONiC Spanning Tree Protocol service container.
+
+Phase 2: collapsed to sonic-common-layer base.
+Provides STP daemon with runtime deps for D-Bus and ebtables.
+"""
+
+load("@rules_oci//oci:defs.bzl", "oci_image")
+load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
+load("//rules/bazel/oci:strip_layer.bzl", "stripped_layer")
+
+package(default_visibility = ["//visibility:public"])
+
+# ── Apt packages layer ───────────────────────────────────────────────────────
+
+genrule(
+    name = "stp_apt_layer",
+    srcs = [],
+    outs = ["stp_apt_layer.tar"],
+    cmd = """
+set -euo pipefail
+ROOTFS=$$(mktemp -d)
+trap 'rm -rf "$$ROOTFS"' EXIT
+
+apt-get -y install --no-install-recommends \
+  -o Dir::Cache=$$ROOTFS/var/cache/apt \
+  -o Dir::State=$$ROOTFS/var/lib/apt \
+  libdbus-1-3 libdaemon0 libjansson4 ebtables
+
+rm -rf $$ROOTFS/var/cache $$ROOTFS/var/lib/apt
+SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \
+  --owner=0 --group=0 \
+  -C "$$ROOTFS" -cf $(OUTS) .
+""",
+)
+
+# ── Service debs layer ───────────────────────────────────────────────────────
+
+genrule(
+    name = "stp_binary_layer",
+    srcs = [
+        "//src/sonic-stp:stp",
+    ],
+    outs = ["stp_binary_layer.tar"],
+    cmd = """
+set -euo pipefail
+ROOTFS=$$(mktemp -d)
+trap 'rm -rf "$$ROOTFS"' EXIT
+for deb in $(SRCS); do
+    dpkg-deb -x "$$deb" "$$ROOTFS"
+done
+SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \
+  --owner=0 --group=0 \
+  -C "$$ROOTFS" -cf $(OUTS) .
+""",
+)
+
+# ── Config + scripts layer ───────────────────────────────────────────────────
+
+pkg_tar(
+    name = "stp_config_layer",
+    srcs = [
+        "supervisord.conf",
+        "critical_processes",
+        "start.sh",
+    ],
+    remap_paths = {
+        "supervisord.conf": "/etc/supervisor/conf.d/supervisord.conf",
+        "critical_processes": "/etc/supervisor/critical_processes",
+        "start.sh": "/usr/bin/start.sh",
+    },
+    mode = "0755",
+)
+
+# ── Size budget enforcement ──────────────────────────────────────────────────
+
+stripped_layer(
+    name = "stp_apt_layer_stripped",
+    src = ":stp_apt_layer",
+    size_budget_mb = 20,
+)
+
+stripped_layer(
+    name = "stp_binary_layer_stripped",
+    src = ":stp_binary_layer",
+    size_budget_mb = 15,
+)
+
+# ── docker-stp OCI image ────────────────────────────────────────────────────
+
+sonic_oci_image(
+    name = "docker_stp",
+    base = "//dockers/sonic-common-layer:sonic_common_layer",
+    tars = [
+        ":stp_apt_layer_stripped",
+        ":stp_binary_layer_stripped",
+        ":stp_config_layer",
+    ],
+    env = {
+        "DEBIAN_FRONTEND": "noninteractive",
+    },
+    labels = {
+        "org.opencontainers.image.title": "docker-stp",
+        "org.opencontainers.image.description": "SONiC Spanning Tree Protocol service",
+        "sonic.container.name": "stp",
+    },
+)

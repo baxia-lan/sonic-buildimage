@@ -29,7 +29,7 @@ Explicitly NOT included (removed vs old docker-swss-layer):
   - apt cache (/var/cache/apt cleaned)
 """
 
-load("@rules_oci//oci:defs.bzl", "oci_image", "oci_tarball")
+load("@rules_oci//oci:defs.bzl", "oci_image")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 load("//rules/bazel/oci:oci.bzl", "sonic_oci_image", "sonic_oci_layer")
 load("//rules/bazel/oci:strip_layer.bzl", "stripped_layer")
@@ -62,10 +62,6 @@ SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \\
   --owner=0 --group=0 \\
   -C "$$ROOTFS" -cf $(OUTS) .
 """,
-    execution_requirements = {
-        "container-image": "docker://index.docker.io/library/debian@sha256:9a6e7c4b57a7c27d4a09ef94c4f196f3c40fe9ce0eff08e4b4e72b85b7c5fa88",
-        "no-sandbox": "0",
-    },
 )
 
 # ── libsairedis runtime layer ─────────────────────────────────────────────────
@@ -90,10 +86,6 @@ SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \\
   --owner=0 --group=0 \\
   -C "$$ROOTFS" -cf $(OUTS) .
 """,
-    execution_requirements = {
-        "container-image": "docker://index.docker.io/library/debian@sha256:9a6e7c4b57a7c27d4a09ef94c4f196f3c40fe9ce0eff08e4b4e72b85b7c5fa88",
-        "no-sandbox": "0",
-    },
 )
 
 # ── iputils-ping apt layer ────────────────────────────────────────────────────
@@ -114,10 +106,6 @@ SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \\
   --owner=0 --group=0 \\
   -C "$$ROOTFS" -cf $(OUTS) .
 """,
-    execution_requirements = {
-        "container-image": "docker://index.docker.io/library/debian@sha256:9a6e7c4b57a7c27d4a09ef94c4f196f3c40fe9ce0eff08e4b4e72b85b7c5fa88",
-        "no-sandbox": "0",
-    },
 )
 
 # ── Phase 3: Size budget enforcement ──────────────────────────────────────────
