@@ -95,80 +95,42 @@ genrule(
     outs = ["common_apt_layer.tar"],
     cmd = """
 set -euo pipefail
-# This genrule runs on RBE inside a Debian bookworm environment.
-# It installs the listed packages into a temporary rootfs and
-# produces a tar layer suitable for oci_image.
-ROOTFS=$$(mktemp -d)
-trap 'rm -rf "$$ROOTFS"' EXIT
+OUT=$$(cd $$(dirname $(OUTS)) && pwd)/$$(basename $(OUTS))
 
-# Install dpkg path exclusions BEFORE installing any packages.
-# This prevents man pages, docs, locales from being written at all.
-mkdir -p $$ROOTFS/etc/dpkg/dpkg.cfg.d $$ROOTFS/etc/apt/apt.conf.d
-cp $(location //files/dpkg:01_sonic_excludes) $$ROOTFS/etc/dpkg/dpkg.cfg.d/01_sonic_excludes
-cp $(location //files/dpkg:02_sonic_no_recommends) $$ROOTFS/etc/apt/apt.conf.d/02_no_recommends
-
-apt-get -y -o Dir::Cache=$$ROOTFS/var/cache/apt \\
-           -o Dir::State=$$ROOTFS/var/lib/apt \\
-           -o APT::Get::AllowUnauthenticated=true \\
-           -o DPkg::options::=--root=$$ROOTFS \\
-  install --no-install-recommends \\
-    iproute2 \\
-    net-tools \\
-    redis-tools \\
-    libdaemon0 \\
-    libdbus-1-3 \\
-    libjansson4 \\
-    libzmq5 \\
-    libwrap0 \\
-    libssl3 \\
-    rsyslog \\
-    procps \\
-    jq \\
-    -o Dir::Cache::archives=$$ROOTFS/debs
-
-# NOT installed (Phase 3 removals):
-#   perl          — only needed by dpkg postinst; no dpkg at runtime
-#   vim-tiny      — debug tool, not needed in production
-#   python3-pip   — packages installed at build time, not runtime
-#   exim4         — was pulled in as rsyslog Recommends; blocked by no-recommends
-#   curl/wget     — not needed at runtime; health checks use Python
-
-# Install supervisord from pip into the rootfs.
-pip3 install --no-cache-dir --target $$ROOTFS/usr/local/lib/python3/dist-packages \\
-    supervisor==4.2.1 \\
-    supervisord-dependent-startup==1.4.0
-
-# Create supervisord state dirs.
-mkdir -p $$ROOTFS/var/log/supervisor $$ROOTFS/etc/supervisor/conf.d
-
-# Phase 3: strip debug symbols from all shared libraries
-find "$$ROOTFS" -name '*.so*' -type f -exec strip --strip-debug {} \\; 2>/dev/null || true
-
-# Phase 3: clean up documentation that dpkg excludes may have missed
-rm -rf $$ROOTFS/usr/share/man $$ROOTFS/usr/share/doc $$ROOTFS/usr/share/info \\
-       $$ROOTFS/usr/share/locale $$ROOTFS/usr/share/i18n \\
-       $$ROOTFS/usr/share/groff $$ROOTFS/usr/share/lintian \\
-       $$ROOTFS/usr/share/bash-completion \\
-       $$ROOTFS/var/cache/man 2>/dev/null || true
-
-# Phase 3: remove Python bytecode caches
-find "$$ROOTFS" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-
-# Create deterministic tar (SOURCE_DATE_EPOCH=0, sorted).
-SOURCE_DATE_EPOCH=0 tar \\
-  --sort=name \\
-  --mtime=@0 \\
-  --owner=0 --group=0 \\
-  -C $$ROOTFS \\
-  -cf $(OUTS) \\
-  --exclude=./var/cache \\
-  --exclude=./var/lib/apt \\
-  --exclude=./debs \\
-  .
+docker run --rm \
+  -v "$$OUT:/output/layer.tar" \
+  -e DEBIAN_FRONTEND=noninteractive \
+  debian:bookworm-slim \
+  bash -euxo pipefail -c '
+    apt-get update -qq
+    apt-get install -y -qq --no-install-recommends \
+      iproute2 net-tools redis-tools libdaemon0 libdbus-1-3 \
+      libjansson4 libzmq5 libwrap0 libssl3 rsyslog procps jq \
+      python3 python3-pip
+    pip3 install --break-system-packages --no-cache-dir \
+      supervisor==4.2.1 supervisord-dependent-startup==1.4.0
+    mkdir -p /var/log/supervisor /etc/supervisor/conf.d
+    # Phase 3: strip debug symbols
+    find / -name "*.so*" -type f -exec strip --strip-debug {} \; 2>/dev/null || true
+    # Phase 3: remove docs, man, locale
+    rm -rf /usr/share/man /usr/share/doc /usr/share/info \
+           /usr/share/locale /usr/share/i18n /usr/share/groff \
+           /usr/share/lintian /usr/share/bash-completion \
+           /var/cache/man /var/cache/apt /var/lib/apt/lists 2>/dev/null || true
+    find / -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+    # Create deterministic tar
+    SOURCE_DATE_EPOCH=0 tar \
+      --sort=name --mtime=@0 --owner=0 --group=0 \
+      --exclude=./proc --exclude=./sys --exclude=./dev \
+      --exclude=./output --exclude=./var/cache \
+      --exclude=./var/lib/apt --exclude=./run \
+      -C / -cf /output/layer.tar .
+  '
 """,
     tags = [
         "requires-network",
         "no-cache",
+        "requires-docker",
     ],
 )
 
