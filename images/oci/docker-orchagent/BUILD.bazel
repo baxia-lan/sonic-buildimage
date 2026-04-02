@@ -40,7 +40,11 @@ genrule(
         "//dockers/docker-orchagent:review_srcs",
         "//files:build_templates/arp_update_vars.j2",
         "//files:scripts/arp_update",
+        "//src:redis_dump_load_review_srcs",
         "//src:scapy_review_srcs",
+        "//src:sonic_py_common_review_srcs",
+        "//src/sonic-swss-common:review_srcs",
+        "//src/sonic-swss-common/tests:review_srcs",
     ],
     outs = ["docker-orchagent.gz"],
     cmd = """

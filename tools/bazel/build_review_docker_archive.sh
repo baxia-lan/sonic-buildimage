@@ -82,7 +82,10 @@ trap cleanup EXIT
 mkdir -p \
     "${context_dir}/orchagent" \
     "${context_dir}/files" \
+    "${context_dir}/redis-dump-load" \
     "${context_dir}/scapy" \
+    "${context_dir}/sonic-py-common" \
+    "${context_dir}/sonic-swss-common" \
     "${context_dir}/review"
 
 copy_input() {
@@ -112,6 +115,30 @@ copy_input() {
         src/scapy/*)
             rel="${src#src/scapy/}"
             dest="${context_dir}/scapy/${rel}"
+            ;;
+        */src/redis-dump-load/*)
+            rel="${src#*/src/redis-dump-load/}"
+            dest="${context_dir}/redis-dump-load/${rel}"
+            ;;
+        src/redis-dump-load/*)
+            rel="${src#src/redis-dump-load/}"
+            dest="${context_dir}/redis-dump-load/${rel}"
+            ;;
+        */src/sonic-py-common/*)
+            rel="${src#*/src/sonic-py-common/}"
+            dest="${context_dir}/sonic-py-common/${rel}"
+            ;;
+        src/sonic-py-common/*)
+            rel="${src#src/sonic-py-common/}"
+            dest="${context_dir}/sonic-py-common/${rel}"
+            ;;
+        */src/sonic-swss-common/*)
+            rel="${src#*/src/sonic-swss-common/}"
+            dest="${context_dir}/sonic-swss-common/${rel}"
+            ;;
+        src/sonic-swss-common/*)
+            rel="${src#src/sonic-swss-common/}"
+            dest="${context_dir}/sonic-swss-common/${rel}"
             ;;
         *)
             echo "Unsupported review input: ${src}" >&2
@@ -149,7 +176,7 @@ cat > "${context_dir}/review/MIGRATION_STAGE.txt" <<'EOF'
 docker-orchagent review image
 
 - Built by Bazel as a concrete docker archive (.gz)
-- Carries orchagent scripts, templates, local scapy install, and core runtime packages
+- Carries orchagent scripts, templates, local scapy install, local swsscommon/sonic-db-cli, and local sonic-py-common
 - Does not yet include full SWSS/SAI runtime parity or config-engine rendering
 - Intended for image layout and dependency review before full hermetic migration
 EOF
@@ -163,43 +190,96 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \\
     arping \\
+    autoconf \\
+    autoconf-archive \\
+    automake \\
     bash \\
+    build-essential \\
     bridge-utils \\
     ca-certificates \\
     conntrack \\
     ifupdown \\
     iproute2 \\
     jq \\
+    libboost-dev \\
+    libboost-serialization-dev \\
+    libboost-serialization1.74.0 \\
+    libhiredis-dev \\
+    libhiredis0.14 \\
+    libnl-3-200 \\
+    libnl-3-dev \\
+    libnl-genl-3-200 \\
+    libnl-genl-3-dev \\
+    libnl-nf-3-200 \\
+    libnl-nf-3-dev \\
+    libnl-route-3-200 \\
+    libnl-route-3-dev \\
+    libpython3-dev \\
+    libpython3.11 \\
+    libtool \\
+    libuuid1 \\
+    libzmq3-dev \\
+    libzmq5 \\
+    m4 \\
     ndisc6 \\
+    nlohmann-json3-dev \\
     ndppd \\
     pciutils \\
+    pkg-config \\
     python3 \\
+    python3-natsort \\
     python3-netifaces \\
+    python3-packaging \\
     python3-pip \\
     python3-protobuf \\
+    python3-redis \\
+    python3-setuptools \\
+    python3-yaml \\
     rsyslog \\
+    swig \\
     supervisor \\
     tcpdump \\
+    uuid-dev \\
  && python3 -m pip install --break-system-packages --no-cache-dir pyroute2==0.5.14 \\
  && rm -rf /var/lib/apt/lists/*
 
 COPY orchagent /opt/sonic/docker-orchagent-src
 COPY files/arp_update /usr/bin/arp_update
 COPY files/arp_update_vars.j2 /usr/share/sonic/templates/arp_update_vars.j2
+COPY redis-dump-load /opt/sonic/redis-dump-load-src
 COPY scapy /opt/sonic/scapy-src
+COPY sonic-py-common /opt/sonic/sonic-py-common-src
+COPY sonic-swss-common /opt/sonic/sonic-swss-common-src
 COPY review/docker-init.sh /usr/bin/docker-init.sh
 COPY review/MIGRATION_STAGE.txt /opt/sonic/review/MIGRATION_STAGE.txt
 
 RUN mkdir -p \\
     /etc/sonic \\
-    /etc/supervisor/conf.d \\
     /opt/sonic/review \\
+    /etc/supervisor/conf.d \\
+    /var/run/redis/sonic-db \\
     /usr/share/sonic/hwsku \\
     /usr/share/sonic/platform \\
     /usr/share/sonic/templates \\
     /var/log/swss \\
     /zmq_swss \\
- && python3 -m pip install --break-system-packages --no-cache-dir /opt/sonic/scapy-src \\
+ && cd /opt/sonic/sonic-swss-common-src \\
+ && ./autogen.sh \\
+ && ./configure --enable-python2=no --enable-yangmodules=no \\
+ && make -j"\$(nproc)" common/cfg_schema.h common/libswsscommon.la common/swssloglevel pyext/py3/_swsscommon.la sonic-db-cli/sonic-db-cli \\
+ && SONIC_PURELIB="\$(python3 -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')" \\
+ && mkdir -p "\${SONIC_PURELIB}/swsscommon" \\
+ && cp -P /opt/sonic/sonic-swss-common-src/common/.libs/libswsscommon.so* /usr/local/lib/ \\
+ && cp /opt/sonic/sonic-swss-common-src/common/.libs/swssloglevel /usr/bin/swssloglevel \\
+ && cp /opt/sonic/sonic-swss-common-src/common/database_config.json /var/run/redis/sonic-db/database_config.json \\
+ && cp /opt/sonic/sonic-swss-common-src/sonic-db-cli/.libs/sonic-db-cli /usr/bin/sonic-db-cli \\
+ && cp /opt/sonic/sonic-swss-common-src/pyext/py3/__init__.py "\${SONIC_PURELIB}/swsscommon/__init__.py" \\
+ && cp /opt/sonic/sonic-swss-common-src/pyext/py3/swsscommon.py "\${SONIC_PURELIB}/swsscommon/swsscommon.py" \\
+ && cp /opt/sonic/sonic-swss-common-src/pyext/py3/.libs/_swsscommon.so "\${SONIC_PURELIB}/swsscommon/_swsscommon.so" \\
+ && ldconfig \\
+ && python3 -m pip install --break-system-packages --no-cache-dir --no-deps /opt/sonic/redis-dump-load-src \\
+ && python3 -m pip install --break-system-packages --no-cache-dir --no-deps /opt/sonic/sonic-py-common-src \\
+ && python3 -m pip install --break-system-packages --no-cache-dir --no-deps /opt/sonic/scapy-src \\
  && cp /opt/sonic/docker-orchagent-src/arp_update.conf /usr/share/sonic/templates/ \\
  && cp /opt/sonic/docker-orchagent-src/ndppd.conf /usr/share/sonic/templates/ \\
  && cp /opt/sonic/docker-orchagent-src/tunnel_packet_handler.conf /usr/share/sonic/templates/ \\
@@ -208,14 +288,35 @@ RUN mkdir -p \\
  && cp /opt/sonic/docker-orchagent-src/orchagent.sh /usr/bin/ \\
  && cp /opt/sonic/docker-orchagent-src/swssconfig.sh /usr/bin/ \\
  && cp /opt/sonic/docker-orchagent-src/buffermgrd.sh /usr/bin/ \\
- && cp /opt/sonic/docker-orchagent-src/base_image_files/swssloglevel /usr/bin/swssloglevel \\
  && find /opt/sonic/docker-orchagent-src -maxdepth 1 -name '*.j2' -exec cp {} /usr/share/sonic/templates/ \; \\
- && rm -rf /opt/sonic/scapy-src \\
+ && apt-get purge -y --auto-remove \\
+    autoconf \\
+    autoconf-archive \\
+    automake \\
+    build-essential \\
+    libboost-dev \\
+    libboost-serialization-dev \\
+    libhiredis-dev \\
+    libnl-3-dev \\
+    libnl-genl-3-dev \\
+    libnl-nf-3-dev \\
+    libnl-route-3-dev \\
+    libpython3-dev \\
+    libtool \\
+    m4 \\
+    nlohmann-json3-dev \\
+    pkg-config \\
+    swig \\
+    uuid-dev \\
+    libzmq3-dev \\
+ && apt-get clean \\
+ && rm -rf /var/lib/apt/lists/* /opt/sonic/redis-dump-load-src /opt/sonic/scapy-src /opt/sonic/sonic-py-common-src /opt/sonic/sonic-swss-common-src /root/.cache/pip \\
  && chmod +x \\
     /usr/bin/arp_update \\
     /usr/bin/buffermgrd.sh \\
     /usr/bin/docker-init.sh \\
     /usr/bin/orchagent.sh \\
+    /usr/bin/sonic-db-cli \\
     /usr/bin/swssconfig.sh \\
     /usr/bin/swssloglevel
 

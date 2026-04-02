@@ -11,6 +11,9 @@ This path produces a real Docker archive:
 - legacy export: `//images/oci/docker-orchagent:target_tree`
 - exported file: `target/docker-orchagent.gz`
 - current review image shape: single-layer `linux/amd64`
+- current review image contents include local-source `scapy`,
+  `sonic-py-common`, `redis-dump-load`, and locally built
+  `swsscommon` / `sonic-db-cli` / `swssloglevel`
 
 This is a concrete artifact for review. It is not the final hermetic SONiC
 runtime image yet.
@@ -18,6 +21,9 @@ runtime image yet.
 ## Main Files
 
 - `images/oci/docker-orchagent/BUILD.bazel`
+- `src/BUILD.bazel`
+- `src/sonic-swss-common/BUILD.bazel`
+- `src/sonic-swss-common/tests/BUILD`
 - `tools/bazel/build_review_docker_archive.sh`
 - `tools/bazel/export_target_tree.sh`
 - `dockers/docker-orchagent/BUILD.bazel`
@@ -62,12 +68,17 @@ Outputs:
 - the container contains `/usr/bin/orchagent.sh`
 - the container contains `/usr/share/sonic/templates/arp_update.conf`
 - the container contains `/usr/share/sonic/templates/arp_update_vars.j2`
-- the container imports `scapy`
+- the container imports `swsscommon`, `sonic_py_common`, `scapy`, and `redisdl`
+- `sonic-db-cli -h` runs in the container
+- `swssloglevel -h` runs in the container
+- current artifact size is about `93M` compressed and `300MB` loaded
+- current artifact SHA256 is `bd439ce593217a2394407644c4a2765c0ef6dc873e0a76dc77a0855cb2caf209`
 
 ## Known Gaps
 
 - the concrete image builder still depends on Docker Buildx
 - the review Dockerfile still uses `apt-get` and `pip`
+- `sonic-swss-common` source exposure currently depends on Bazel metadata added in that submodule
 - the image is suitable for structure and dependency review, not yet full SONiC
   runtime parity
 - the target is intentionally tagged `manual` and is not yet the final CI-default
