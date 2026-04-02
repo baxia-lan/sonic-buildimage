@@ -9,8 +9,11 @@ build --action_env=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:
 # Reproducible packaging timestamps.
 build --action_env=SOURCE_DATE_EPOCH=0
 # No accidental host env leaking into builds.
-build --action_env=HOME=/nonexistent
 build --action_env=USER=bazel
+# Allow Docker CLI to find its socket in genrules.
+# HOME is needed for Docker config; DOCKER_HOST for the socket.
+build --action_env=HOME
+build --action_env=DOCKER_HOST
 
 # ── Sandbox ──────────────────────────────────────────────────────────────────
 build --spawn_strategy=sandboxed

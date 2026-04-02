@@ -3,4 +3,5 @@
 exports_files([
     "oci.bzl",
     "strip_layer.bzl",
+    "docker_layer.bzl",
 ])

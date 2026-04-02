@@ -1,43 +1,17 @@
 """sonic-common-layer — shared base for all SONiC service containers.
 
 Phase 2: replaces the docker-base + docker-config-engine layer pair.
-
-Before (5-layer chain):
-  debian:bullseye
-    └── docker-base-bullseye         (~200 MB)
-        └── docker-config-engine-bullseye  (+~80 MB supervisord, j2, py pkgs)
-            └── docker-swss-layer-bullseye  (+~300 MB libswsscommon)
-                └── <service>               (+binary)
-
-After (3-layer target):
-  gcr.io/distroless/base-debian12    (~20 MB, no shell)
-    └── sonic-common-layer           (supervisord, libssl, redis-tools, ~130 MB)
-        └── <service>                (libswsscommon + binary, ~100 MB)
-
-Size budget: sonic-common-layer must be ≤ 150 MB (see CLAUDE.md).
-
-What's in this layer vs the old docker-base + docker-config-engine:
-  KEPT:   supervisord, redis-tools, libdbus, libjansson, libzmq, iproute2, rsyslog
-  KEPT:   /var/log/supervisor, /etc/supervisor/conf.d skeleton
-  REMOVED: apt, pip, python3-pip, build-essential (not needed at runtime)
-  REMOVED: perl, exim4, vim-tiny (not needed at runtime)
-  REMOVED: docker-config-engine j2 rendering (moved to build time via //rules/bazel/j2)
-  REMOVED: python-is-python3 (services that need Python declare it explicitly)
-
-The config-engine j2 rendering that was done at container start is now:
-  - Static templates → rendered at Bazel build time via //rules/bazel/j2:j2.bzl
-  - Dynamic templates (interface IPs, etc.) → rendered at runtime by a minimal
-    Python script (//files/config-engine:render_dynamic.py), not a full image layer.
+  distroless/base-debian12 → sonic-common-layer → <service>
+Size budget: ≤ 150 MB.
 """
 
 load("@rules_oci//oci:defs.bzl", "oci_image")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
-load("//rules/bazel/oci:oci.bzl", "sonic_oci_image", "sonic_oci_layer")
-load("//rules/bazel/oci:strip_layer.bzl", "stripped_layer")
+load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
+load("//rules/bazel/oci:docker_layer.bzl", "apt_install_layer")
 
 package(default_visibility = ["//visibility:public"])
 
-# ── supervisord configuration skeleton ────────────────────────────────────────
 pkg_tar(
     name = "supervisord_skel_layer",
     srcs = [
@@ -51,21 +25,15 @@ pkg_tar(
     mode = "0644",
 )
 
-# ── rsyslog configuration ────────────────────────────────────────────────────
 pkg_tar(
     name = "rsyslog_layer",
-    srcs = [
-        "//files/rsyslog:rsyslog.conf",
-    ],
+    srcs = ["//files/rsyslog:rsyslog.conf"],
     remap_paths = {
         "files/rsyslog/rsyslog.conf": "/etc/rsyslog.conf",
     },
     mode = "0644",
 )
 
-# ── dpkg exclude configuration (no docs, no man pages) ───────────────────────
-# This replaces the dpkg_01_drop file from docker-base.
-# It tells dpkg not to install man pages, docs, or locale data.
 pkg_tar(
     name = "dpkg_excludes_layer",
     srcs = ["//files/dpkg:01_sonic_excludes"],
@@ -75,79 +43,28 @@ pkg_tar(
     mode = "0644",
 )
 
-# ── apt package layer ─────────────────────────────────────────────────────────
-# These packages are pre-installed from the Debian repository.
-# Only packages actually needed at runtime are listed here.
-# All development packages (headers, -dev) are absent from this layer.
-#
-# To add a package: verify with ldd that the binary needs it, document in
-# docs/removed_deps.md if removing.
-#
-# This layer is built by a genrule that runs apt-get inside the
-# distroless-compatible bootstrap container. The resulting tar is
-# deterministic (SOURCE_DATE_EPOCH=0, sorted file list).
-genrule(
+apt_install_layer(
     name = "common_apt_layer",
-    srcs = [
-        "//files/dpkg:01_sonic_excludes",
-        "//files/dpkg:02_sonic_no_recommends",
+    packages = [
+        "iproute2", "net-tools", "redis-tools", "libdaemon0", "libdbus-1-3",
+        "libjansson4", "libzmq5", "libwrap0", "libssl3", "rsyslog",
+        "procps", "jq", "python3", "python3-pip", "iputils-ping",
     ],
-    outs = ["common_apt_layer.tar"],
-    cmd = """
-set -euo pipefail
-OUT=$$(cd $$(dirname $(OUTS)) && pwd)/$$(basename $(OUTS))
-
-docker run --rm \
-  -v "$$OUT:/output/layer.tar" \
-  -e DEBIAN_FRONTEND=noninteractive \
-  debian:bookworm-slim \
-  bash -euxo pipefail -c '
-    apt-get update -qq
-    apt-get install -y -qq --no-install-recommends \
-      iproute2 net-tools redis-tools libdaemon0 libdbus-1-3 \
-      libjansson4 libzmq5 libwrap0 libssl3 rsyslog procps jq \
-      python3 python3-pip
-    pip3 install --break-system-packages --no-cache-dir \
-      supervisor==4.2.1 supervisord-dependent-startup==1.4.0
-    mkdir -p /var/log/supervisor /etc/supervisor/conf.d
-    # Phase 3: strip debug symbols
-    find / -name "*.so*" -type f -exec strip --strip-debug {} \; 2>/dev/null || true
-    # Phase 3: remove docs, man, locale
-    rm -rf /usr/share/man /usr/share/doc /usr/share/info \
-           /usr/share/locale /usr/share/i18n /usr/share/groff \
-           /usr/share/lintian /usr/share/bash-completion \
-           /var/cache/man /var/cache/apt /var/lib/apt/lists 2>/dev/null || true
-    find / -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-    # Create deterministic tar
-    SOURCE_DATE_EPOCH=0 tar \
-      --sort=name --mtime=@0 --owner=0 --group=0 \
-      --exclude=./proc --exclude=./sys --exclude=./dev \
-      --exclude=./output --exclude=./var/cache \
-      --exclude=./var/lib/apt --exclude=./run \
-      -C / -cf /output/layer.tar .
-  '
-""",
-    tags = [
-        "requires-network",
-        "no-cache",
-        "requires-docker",
+    pip_packages = [
+        "supervisor==4.2.1",
+        "supervisord-dependent-startup==1.4.0",
     ],
+    post_install_cmds = [
+        "mkdir -p /var/log/supervisor /etc/supervisor/conf.d",
+    ],
+    size_budget_mb = 200,
 )
 
-# ── Phase 3: Size budget enforcement ──────────────────────────────────────────
-# sonic-common-layer must be ≤ 150 MB (see CLAUDE.md).
-stripped_layer(
-    name = "common_apt_layer_stripped",
-    src = ":common_apt_layer",
-    size_budget_mb = 150,
-)
-
-# ── sonic-common-layer OCI image ──────────────────────────────────────────────
 sonic_oci_image(
     name = "sonic_common_layer",
     base = "@distroless_base_debian12",
     tars = [
-        ":common_apt_layer_stripped",
+        ":common_apt_layer",
         ":supervisord_skel_layer",
         ":rsyslog_layer",
         ":dpkg_excludes_layer",

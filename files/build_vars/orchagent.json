@@ -6,5 +6,16 @@
     "ENABLE_ASAN": "n",
     "INCLUDE_SYSTEM_TELEMETRY": "y",
     "INCLUDE_RESTAPI": "n",
-    "INCLUDE_NAT": "y"
+    "INCLUDE_NAT": "y",
+    "DEVICE_METADATA": {
+        "localhost": {
+            "switch_type": "",
+            "sub_role": "",
+            "hostname": "sonic",
+            "platform": "x86_64-broadcom_common"
+        }
+    },
+    "WARM_BOOT_ENABLED": "false",
+    "FAST_REBOOT": "false",
+    "is_fabric_asic": 0
 }

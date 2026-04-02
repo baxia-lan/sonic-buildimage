@@ -1,138 +1,48 @@
 """docker-swss-layer-bullseye — libswsscommon + libsairedis shared layer.
 
-Phase 2: replaces the current docker-swss-layer-bullseye Docker image which
-sits at layer 3 of the 5-deep chain.
-
-Before:
-  docker-config-engine-bullseye (layer 2)
-    └── docker-swss-layer-bullseye (layer 3, adds ~300 MB)
-        └── docker-orchagent (layer 4)
-
-After (this file + sonic-common-layer):
-  sonic-common-layer (layer 1, ~130 MB)
-    └── sonic_swss_layer_bullseye (layer 2, adds ~120 MB libswsscommon+sairedis)
-        └── docker-orchagent (layer 3, adds only the orchagent binary)
-
-This layer is shared by ALL swss-family services:
-  docker-orchagent, docker-syncd, docker-teamd, docker-nat, docker-macsec, ...
-Any change here rebuilds all downstream service images — keep it minimal.
-
-Contents:
-  - libswsscommon (from //src/sonic-swss-common)
-  - libsairedis   (from //src/sonic-sairedis)
-  - Python bindings for both (python3-swsscommon)
-  - iputils-ping  (network diagnostics, needed by orchagent health check)
-
-Explicitly NOT included (removed vs old docker-swss-layer):
-  - build-essential, python3-dev (build-time only, strip from runtime image)
-  - libhiredis-dev, libnl-3-dev (headers, runtime doesn't need them)
-  - apt cache (/var/cache/apt cleaned)
+Phase 2: replaces the 5-deep Docker chain with:
+  sonic-common-layer → sonic_swss_layer (this) → <service>
 """
 
 load("@rules_oci//oci:defs.bzl", "oci_image")
-load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
-load("//rules/bazel/oci:oci.bzl", "sonic_oci_image", "sonic_oci_layer")
-load("//rules/bazel/oci:strip_layer.bzl", "stripped_layer")
+load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
+load("//rules/bazel/oci:docker_layer.bzl", "apt_install_layer", "deb_extract_layer")
 
 package(default_visibility = ["//visibility:public"])
 
-# ── libswsscommon runtime layer ───────────────────────────────────────────────
-# Unpacks the libswsscommon .deb into a tar layer suitable for oci_image.
-# The .deb is built by //src/sonic-swss-common:libswsscommon_deb.
-#
-# TODO(migration): Replace genrule with a proper deb_to_layer() rule once
-# src/sonic-swss-common/BUILD.bazel is written.
-genrule(
+deb_extract_layer(
     name = "libswsscommon_layer",
-    srcs = [
+    debs = [
         "//src/sonic-swss-common:swss_common",
         "//src/sonic-swss-common:python3_swsscommon",
     ],
-    outs = ["libswsscommon_layer.tar"],
-    cmd = """
-set -euo pipefail
-ROOTFS=$$(mktemp -d)
-trap 'rm -rf "$$ROOTFS"' EXIT
-for deb in $(SRCS); do
-  dpkg-deb -x "$$deb" "$$ROOTFS"
-done
-# Strip debug symbols from shared libraries.
-find "$$ROOTFS" -name '*.so*' -type f | xargs -r strip --strip-debug
-SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \\
-  --owner=0 --group=0 \\
-  -C "$$ROOTFS" -cf $(OUTS) .
-""",
-)
-
-# ── libsairedis runtime layer ─────────────────────────────────────────────────
-# TODO(migration): Replace with //src/sonic-sairedis:libsairedis_deb once
-# src/sonic-sairedis/BUILD.bazel is written.
-genrule(
-    name = "libsairedis_layer",
-    srcs = [
-        "//src/sonic-sairedis:sairedis",
-        "//src/sonic-sairedis:saimetadata",
-    ],
-    outs = ["libsairedis_layer.tar"],
-    cmd = """
-set -euo pipefail
-ROOTFS=$$(mktemp -d)
-trap 'rm -rf "$$ROOTFS"' EXIT
-for deb in $(SRCS); do
-  dpkg-deb -x "$$deb" "$$ROOTFS"
-done
-find "$$ROOTFS" -name '*.so*' -type f | xargs -r strip --strip-debug
-SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \\
-  --owner=0 --group=0 \\
-  -C "$$ROOTFS" -cf $(OUTS) .
-""",
-)
-
-# ── iputils-ping apt layer ────────────────────────────────────────────────────
-genrule(
-    name = "iputils_layer",
-    srcs = [],
-    outs = ["iputils_layer.tar"],
-    cmd = """
-set -euo pipefail
-ROOTFS=$$(mktemp -d)
-trap 'rm -rf "$$ROOTFS"' EXIT
-apt-get -y install --no-install-recommends \\
-  -o Dir::Cache=$$ROOTFS/var/cache/apt \\
-  -o Dir::State=$$ROOTFS/var/lib/apt \\
-  iputils-ping
-rm -rf $$ROOTFS/var/cache $$ROOTFS/var/lib/apt
-SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \\
-  --owner=0 --group=0 \\
-  -C "$$ROOTFS" -cf $(OUTS) .
-""",
-)
-
-# ── Phase 3: Size budget enforcement ──────────────────────────────────────────
-# Each sub-layer is stripped and size-checked individually.
-stripped_layer(
-    name = "libswsscommon_layer_stripped",
-    src = ":libswsscommon_layer",
     size_budget_mb = 80,
 )
 
-stripped_layer(
-    name = "libsairedis_layer_stripped",
-    src = ":libsairedis_layer",
+deb_extract_layer(
+    name = "libsairedis_layer",
+    debs = [
+        "//src/sonic-sairedis:sairedis",
+        "//src/sonic-sairedis:saimetadata",
+    ],
     size_budget_mb = 60,
 )
 
-# ── sonic-swss-layer-bullseye OCI image ───────────────────────────────────────
+apt_install_layer(
+    name = "iputils_layer",
+    packages = ["iputils-ping"],
+)
+
 sonic_oci_image(
     name = "sonic_swss_layer_bullseye",
     base = "//dockers/sonic-common-layer:sonic_common_layer",
     tars = [
-        ":libswsscommon_layer_stripped",
-        ":libsairedis_layer_stripped",
+        ":libswsscommon_layer",
+        ":libsairedis_layer",
         ":iputils_layer",
     ],
     labels = {
         "org.opencontainers.image.title": "sonic-swss-layer-bullseye",
-        "org.opencontainers.image.description": "libswsscommon + libsairedis shared layer for swss-family services",
+        "org.opencontainers.image.description": "libswsscommon + libsairedis shared layer",
     },
 )
