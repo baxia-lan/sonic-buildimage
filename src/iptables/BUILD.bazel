@@ -1,0 +1,30 @@
+"""iptables -- migrated from rules/iptables.mk."""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+deb_package_set(
+    name = "iptables_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+    build_deps = [],
+    debian_dir = "debian",
+    declared_outputs = [
+        "iptables_1.8.9-2_$(ARCH).deb",
+        "libip4tc2_1.8.9-2_$(ARCH).deb",
+    ],
+    version = "1.8.9",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "iptables",
+    actual = ":iptables_debs",
+    visibility = ["//visibility:public"],
+)

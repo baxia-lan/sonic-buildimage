@@ -1,0 +1,30 @@
+"""grub2 -- migrated from rules/grub2.mk."""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+deb_package_set(
+    name = "grub2_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+    build_deps = [],
+    debian_dir = "debian",
+    declared_outputs = [
+        "grub2-common_2.06_$(ARCH).deb",
+        "grub-common_2.06_$(ARCH).deb",
+    ],
+    version = "2.06",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "grub2",
+    actual = ":grub2_debs",
+    visibility = ["//visibility:public"],
+)

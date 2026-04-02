@@ -1,0 +1,18 @@
+"""nvidia-bluefield platform."""
+
+load("//rules/bazel/onie:onie.bzl", "onie_image", "sonic_rootfs")
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "platform_files",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+)
+
+exports_files(glob(["*.mk"]))

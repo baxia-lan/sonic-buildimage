@@ -1,0 +1,29 @@
+"""makedumpfile -- migrated from rules/makedumpfile.mk."""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+deb_package_set(
+    name = "makedumpfile_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+    build_deps = [],
+    debian_dir = "debian",
+    declared_outputs = [
+        "makedumpfile_1.7.7_$(ARCH).deb",
+    ],
+    version = "1.7.7",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "makedumpfile",
+    actual = ":makedumpfile_debs",
+    visibility = ["//visibility:public"],
+)

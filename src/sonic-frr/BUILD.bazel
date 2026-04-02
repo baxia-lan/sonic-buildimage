@@ -1,0 +1,55 @@
+"""FRR (Free Range Routing) Debian packages — migrated from rules/frr.mk.
+
+FRR is built from the frr/ subdirectory using autotools + dpkg-buildpackage.
+Version: 10.5.1-sonic-0
+
+Migration status: Phase 1.
+"""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+FRR_VERSION = "10.5.1-sonic-0"
+
+filegroup(
+    name = "patches",
+    srcs = glob(["patch/**"]),
+)
+
+deb_package_set(
+    name = "frr_debs",
+    srcs = glob(
+        ["frr/**/*"],
+        exclude = [
+            "frr/.git/**",
+        ],
+    ),
+    debian_dir = "frr/debian",
+    version = FRR_VERSION,
+    patches = [":patches"],
+    declared_outputs = [
+        "frr_" + FRR_VERSION + "_$(ARCH).deb",
+        "frr-pythontools_" + FRR_VERSION + "_all.deb",
+        "frr-snmp_" + FRR_VERSION + "_$(ARCH).deb",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "frr",
+    actual = ":frr_debs",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "frr_pythontools",
+    actual = ":frr_debs",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "frr_snmp",
+    actual = ":frr_debs",
+    visibility = ["//visibility:public"],
+)

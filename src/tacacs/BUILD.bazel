@@ -1,0 +1,30 @@
+"""tacacs -- migrated from rules/tacacs.mk."""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+deb_package_set(
+    name = "tacacs_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+    build_deps = [],
+    debian_dir = "debian",
+    declared_outputs = [
+        "libtac2_1.4.1-1_$(ARCH).deb",
+        "libpam-tacplus_1.4.1-1_$(ARCH).deb",
+    ],
+    version = "1.4.1",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "tacacs",
+    actual = ":tacacs_debs",
+    visibility = ["//visibility:public"],
+)

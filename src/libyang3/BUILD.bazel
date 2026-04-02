@@ -1,0 +1,31 @@
+"""libyang3 -- migrated from rules/libyang3.mk."""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+deb_package_set(
+    name = "libyang3_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+    build_deps = [],
+    debian_dir = "debian",
+    declared_outputs = [
+        "libyang3_3.12.2-1_$(ARCH).deb",
+        "libyang-dev_3.12.2-1_$(ARCH).deb",
+        "libyang3-tools_3.12.2-1_$(ARCH).deb",
+    ],
+    version = "3.12.2",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "libyang3",
+    actual = ":libyang3_debs",
+    visibility = ["//visibility:public"],
+)

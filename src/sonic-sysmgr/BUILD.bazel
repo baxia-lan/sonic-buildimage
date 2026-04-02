@@ -1,0 +1,63 @@
+"""sonic-sysmgr Debian packages — migrated from rules/sonic-sysmgr.mk.
+
+Contains the system manager daemon and gnoi protobuf definitions.
+Built using autotools + dpkg-buildpackage.
+
+Migration status: Phase 1.
+"""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+SYSMGR_VERSION = "1.0.0"
+
+filegroup(
+    name = "gnoi_protos",
+    srcs = glob(["gnoi/**/*.proto"]),
+    visibility = ["//visibility:public"],
+)
+
+deb_package_set(
+    name = "sysmgr_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+            "gnoi/**",
+        ],
+    ),
+    debian_dir = "debian",
+    version = SYSMGR_VERSION,
+    declared_outputs = [
+        "sonic-sysmgr_" + SYSMGR_VERSION + "_$(ARCH).deb",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "sysmgr",
+    actual = ":sysmgr_debs",
+    visibility = ["//visibility:public"],
+)
+
+genrule(
+    name = "gnoi_generated",
+    srcs = [":gnoi_protos"],
+    outs = [
+        "gnoi_pb2.py",
+        "gnoi_pb2_grpc.py",
+    ],
+    cmd = """
+set -euo pipefail
+PROTO_DIR=$$(dirname $(location gnoi/system/system.proto) 2>/dev/null || echo "gnoi")
+python3 -m grpc_tools.protoc \
+    -I"$$PROTO_DIR/../.." \
+    --python_out="$(@D)" \
+    --grpc_python_out="$(@D)" \
+    $(SRCS)
+    """,
+    tags = ["requires-docker"],
+    visibility = ["//visibility:public"],
+)

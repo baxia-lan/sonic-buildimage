@@ -1,0 +1,33 @@
+"""libpcre3 -- migrated from rules/libpcre3.mk."""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+deb_package_set(
+    name = "libpcre3_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+    build_deps = [],
+    debian_dir = "debian",
+    declared_outputs = [
+        "libpcre3_8.39_$(ARCH).deb",
+        "libpcre3-dev_8.39_$(ARCH).deb",
+        "libpcre16-3_8.39_$(ARCH).deb",
+        "libpcre32-3_8.39_$(ARCH).deb",
+        "libpcrecpp0v5_8.39_$(ARCH).deb",
+    ],
+    version = "8.39",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "libpcre3",
+    actual = ":libpcre3_debs",
+    visibility = ["//visibility:public"],
+)

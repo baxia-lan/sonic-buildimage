@@ -1,0 +1,29 @@
+"""monit -- migrated from rules/monit.mk."""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+deb_package_set(
+    name = "monit_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+    build_deps = [],
+    debian_dir = "debian",
+    declared_outputs = [
+        "monit_5.34.3-1_$(ARCH).deb",
+    ],
+    version = "5.34.3",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "monit",
+    actual = ":monit_debs",
+    visibility = ["//visibility:public"],
+)

@@ -1,0 +1,29 @@
+"""radius -- migrated from rules/radius.mk."""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+deb_package_set(
+    name = "radius_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+    build_deps = [],
+    debian_dir = "debian",
+    declared_outputs = [
+        "libpam-radius-auth_1.4.1-1_$(ARCH).deb",
+    ],
+    version = "1.4.1",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "radius",
+    actual = ":radius_debs",
+    visibility = ["//visibility:public"],
+)

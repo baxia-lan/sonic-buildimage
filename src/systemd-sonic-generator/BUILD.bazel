@@ -1,0 +1,29 @@
+"""systemd-sonic-generator -- migrated from rules/systemd-sonic-generator.mk."""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+deb_package_set(
+    name = "systemd_sonic_generator_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+    build_deps = [],
+    debian_dir = "debian",
+    declared_outputs = [
+        "systemd-sonic-generator_1.0.0_$(ARCH).deb",
+    ],
+    version = "1.0.0",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "systemd_sonic_generator",
+    actual = ":systemd_sonic_generator_debs",
+    visibility = ["//visibility:public"],
+)

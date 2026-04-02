@@ -1,0 +1,30 @@
+"""initramfs-tools -- migrated from rules/initramfs-tools.mk."""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+deb_package_set(
+    name = "initramfs_tools_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+    build_deps = [],
+    debian_dir = "debian",
+    declared_outputs = [
+        "initramfs-tools_0.142_all.deb",
+        "initramfs-tools-core_0.142_all.deb",
+    ],
+    version = "0.142",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "initramfs_tools",
+    actual = ":initramfs_tools_debs",
+    visibility = ["//visibility:public"],
+)

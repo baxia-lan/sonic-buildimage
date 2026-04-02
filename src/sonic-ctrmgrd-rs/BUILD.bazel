@@ -1,0 +1,18 @@
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+deb_package_set(
+    name = "sonic_ctrmgrd_rs_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+    debian_dir = "debian",
+    version = "1.0.0",
+    declared_outputs = ["sonic-ctrmgrd-rs_1.0.0_$(ARCH).deb"],
+    visibility = ["//visibility:public"],
+)

@@ -1,0 +1,29 @@
+"""socat -- migrated from rules/socat.mk."""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+deb_package_set(
+    name = "socat_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+    build_deps = [],
+    debian_dir = "debian",
+    declared_outputs = [
+        "socat_1.7.4.1-3_$(ARCH).deb",
+    ],
+    version = "1.7.4.1",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "socat",
+    actual = ":socat_debs",
+    visibility = ["//visibility:public"],
+)

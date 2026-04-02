@@ -1,0 +1,22 @@
+load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
+load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+
+package(default_visibility = ["//visibility:public"])
+
+pkg_tar(
+    name = "sonic_mgmt_config_layer",
+    srcs = glob([
+        "*.sh",
+        "*.py",
+        "*.conf",
+        "*.j2",
+    ]),
+    mode = "0755",
+)
+
+sonic_oci_image(
+    name = "docker_sonic_mgmt",
+    base = "//dockers/sonic-common-layer:sonic_common_layer",
+    labels = {"org.opencontainers.image.title": "docker-sonic-mgmt"},
+    tars = [":sonic_mgmt_config_layer"],
+)

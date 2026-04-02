@@ -1,0 +1,30 @@
+"""redis -- migrated from rules/redis.mk."""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+deb_package_set(
+    name = "redis_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+    build_deps = [],
+    debian_dir = "debian",
+    declared_outputs = [
+        "redis-tools_7.0.15_$(ARCH).deb",
+        "redis-server_7.0.15_$(ARCH).deb",
+    ],
+    version = "7.0.15",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "redis",
+    actual = ":redis_debs",
+    visibility = ["//visibility:public"],
+)

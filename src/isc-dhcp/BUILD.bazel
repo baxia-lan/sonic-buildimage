@@ -1,0 +1,29 @@
+"""isc-dhcp -- migrated from rules/isc-dhcp.mk."""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+deb_package_set(
+    name = "isc_dhcp_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+    build_deps = [],
+    debian_dir = "debian",
+    declared_outputs = [
+        "isc-dhcp-relay_4.4.3-P1-2_$(ARCH).deb",
+    ],
+    version = "4.4.3",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "isc_dhcp",
+    actual = ":isc_dhcp_debs",
+    visibility = ["//visibility:public"],
+)

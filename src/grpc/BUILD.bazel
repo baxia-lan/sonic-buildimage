@@ -1,0 +1,33 @@
+"""grpc -- migrated from rules/grpc.mk."""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+deb_package_set(
+    name = "grpc_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+    build_deps = [
+        "//src/protobuf:protobuf",
+    ],
+    debian_dir = "debian",
+    declared_outputs = [
+        "libgrpc10_1.30.2-3_$(ARCH).deb",
+        "libgrpc-dev_1.30.2-3_$(ARCH).deb",
+        "libgrpc++1_1.30.2-3_$(ARCH).deb",
+    ],
+    version = "1.30.2",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "grpc",
+    actual = ":grpc_debs",
+    visibility = ["//visibility:public"],
+)

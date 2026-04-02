@@ -1,0 +1,29 @@
+"""flashrom -- migrated from rules/flashrom.mk."""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+deb_package_set(
+    name = "flashrom_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+    build_deps = [],
+    debian_dir = "debian",
+    declared_outputs = [
+        "flashrom_0.9.7_$(ARCH).deb",
+    ],
+    version = "0.9.7",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "flashrom",
+    actual = ":flashrom_debs",
+    visibility = ["//visibility:public"],
+)

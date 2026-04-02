@@ -1,0 +1,29 @@
+"""rasdaemon -- migrated from rules/rasdaemon.mk."""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+deb_package_set(
+    name = "rasdaemon_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+    build_deps = [],
+    debian_dir = "debian",
+    declared_outputs = [
+        "rasdaemon_0.6.8-1_$(ARCH).deb",
+    ],
+    version = "0.6.8",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "rasdaemon",
+    actual = ":rasdaemon_debs",
+    visibility = ["//visibility:public"],
+)

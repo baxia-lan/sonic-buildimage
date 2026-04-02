@@ -1,0 +1,11 @@
+"""docker-config-engine — LEGACY: replaced by sonic-common-layer in Phase 2."""
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(glob([
+    "*.j2",
+    "Dockerfile*",
+    "*.sh",
+    "*.conf",
+    "*.py",
+]))

@@ -1,0 +1,32 @@
+"""protobuf -- migrated from rules/protobuf.mk."""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+deb_package_set(
+    name = "protobuf_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+    build_deps = [],
+    debian_dir = "debian",
+    declared_outputs = [
+        "libprotobuf32_3.21.12-3_$(ARCH).deb",
+        "libprotobuf-dev_3.21.12-3_$(ARCH).deb",
+        "libprotobuf-lite32_3.21.12-3_$(ARCH).deb",
+        "libprotoc32_3.21.12-3_$(ARCH).deb",
+    ],
+    version = "3.21.12",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "protobuf",
+    actual = ":protobuf_debs",
+    visibility = ["//visibility:public"],
+)

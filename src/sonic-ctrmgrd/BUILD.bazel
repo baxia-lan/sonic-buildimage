@@ -1,0 +1,10 @@
+load("//rules/bazel/wheel:wheel.bzl", "sonic_wheel")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_wheel(
+    name = "sonic_ctrmgrd_wheel",
+    distribution = "sonic_ctrmgrd",
+    version = "1.0.0",
+    visibility = ["//visibility:public"],
+)

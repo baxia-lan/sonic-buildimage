@@ -1,0 +1,30 @@
+"""lldpd -- migrated from rules/lldpd.mk."""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+deb_package_set(
+    name = "lldpd_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+    build_deps = [],
+    debian_dir = "debian",
+    declared_outputs = [
+        "lldpd_1.0.16-1+deb12u1_$(ARCH).deb",
+        "liblldpctl-dev_1.0.16-1+deb12u1_$(ARCH).deb",
+    ],
+    version = "1.0.16",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "lldpd",
+    actual = ":lldpd_debs",
+    visibility = ["//visibility:public"],
+)

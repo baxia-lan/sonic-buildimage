@@ -1,0 +1,29 @@
+"""iccpd -- migrated from rules/iccpd.mk."""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+deb_package_set(
+    name = "iccpd_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+    build_deps = [],
+    debian_dir = "debian",
+    declared_outputs = [
+        "iccpd_0.0.5_$(ARCH).deb",
+    ],
+    version = "0.0.5",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "iccpd",
+    actual = ":iccpd_debs",
+    visibility = ["//visibility:public"],
+)

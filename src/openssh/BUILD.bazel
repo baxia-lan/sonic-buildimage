@@ -1,0 +1,31 @@
+"""openssh -- migrated from rules/openssh.mk."""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+deb_package_set(
+    name = "openssh_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+    build_deps = [],
+    debian_dir = "debian",
+    declared_outputs = [
+        "openssh-server_10.0p1-7_$(ARCH).deb",
+        "openssh-client_10.0p1-7_$(ARCH).deb",
+        "openssh-sftp-server_10.0p1-7_$(ARCH).deb",
+    ],
+    version = "10.0p1",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "openssh",
+    actual = ":openssh_debs",
+    visibility = ["//visibility:public"],
+)

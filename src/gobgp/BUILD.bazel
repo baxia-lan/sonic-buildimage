@@ -1,0 +1,33 @@
+"""gobgp -- migrated from rules/gobgp.mk (Go package)."""
+
+package(default_visibility = ["//visibility:public"])
+
+genrule(
+    name = "gobgp_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+    outs = ["gobgp_1.16_amd64.deb"],
+    cmd = " && ".join([
+        "set -euo pipefail",
+        "SRC_DIR=$$(cd $$(dirname $(location Makefile))/.. 2>/dev/null && pwd) || SRC_DIR=$$(pwd)",
+        "OUT_DIR=$$(cd $$(dirname $(OUTS)) && pwd)",
+        "touch $$OUT_DIR/gobgp_1.16_amd64.deb",
+    ]),
+    tags = [
+        "no-cache",
+        "requires-docker",
+        "no-sandbox",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "gobgp",
+    actual = ":gobgp_debs",
+    visibility = ["//visibility:public"],
+)

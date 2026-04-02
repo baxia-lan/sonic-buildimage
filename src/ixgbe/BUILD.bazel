@@ -1,0 +1,29 @@
+"""ixgbe -- migrated from rules/ixgbe.mk."""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+deb_package_set(
+    name = "ixgbe_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+    build_deps = [],
+    debian_dir = "debian",
+    declared_outputs = [
+        "ixgbe_5.2.4_$(ARCH).deb",
+    ],
+    version = "5.2.4",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "ixgbe",
+    actual = ":ixgbe_debs",
+    visibility = ["//visibility:public"],
+)

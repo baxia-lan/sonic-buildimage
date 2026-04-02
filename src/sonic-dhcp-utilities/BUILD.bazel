@@ -1,0 +1,10 @@
+load("//rules/bazel/wheel:wheel.bzl", "sonic_wheel")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_wheel(
+    name = "sonic_dhcp_utilities_wheel",
+    distribution = "sonic_dhcp_utilities",
+    version = "1.0",
+    visibility = ["//visibility:public"],
+)

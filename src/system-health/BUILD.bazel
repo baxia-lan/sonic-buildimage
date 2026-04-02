@@ -1,0 +1,10 @@
+load("//rules/bazel/wheel:wheel.bzl", "sonic_wheel")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_wheel(
+    name = "system_health_wheel",
+    distribution = "system_health",
+    version = "1.0",
+    visibility = ["//visibility:public"],
+)

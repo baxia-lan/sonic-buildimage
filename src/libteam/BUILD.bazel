@@ -1,0 +1,31 @@
+"""libteam -- migrated from rules/libteam.mk."""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+deb_package_set(
+    name = "libteam_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+    build_deps = [],
+    debian_dir = "debian",
+    declared_outputs = [
+        "libteam5_1.31-1_$(ARCH).deb",
+        "libteam-dev_1.31-1_$(ARCH).deb",
+        "libteamdctl0_1.31-1_$(ARCH).deb",
+    ],
+    version = "1.31",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "libteam",
+    actual = ":libteam_debs",
+    visibility = ["//visibility:public"],
+)

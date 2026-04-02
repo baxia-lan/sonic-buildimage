@@ -1,0 +1,29 @@
+"""ifupdown2 -- migrated from rules/ifupdown2.mk."""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+deb_package_set(
+    name = "ifupdown2_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+    build_deps = [],
+    debian_dir = "debian",
+    declared_outputs = [
+        "ifupdown2_3.0.0-1_all.deb",
+    ],
+    version = "3.0.0",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "ifupdown2",
+    actual = ":ifupdown2_debs",
+    visibility = ["//visibility:public"],
+)

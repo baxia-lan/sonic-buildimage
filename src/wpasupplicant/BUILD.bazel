@@ -1,0 +1,35 @@
+"""wpasupplicant Debian packages — migrated from rules/wpasupplicant.mk.
+
+Built from the sonic-wpa-supplicant/ subdirectory using dpkg-buildpackage.
+Version: 2.10-sonic-0
+
+Migration status: Phase 1.
+"""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+WPASUPPLICANT_VERSION = "2.10-sonic-0"
+
+deb_package_set(
+    name = "wpasupplicant_debs",
+    srcs = glob(
+        ["sonic-wpa-supplicant/**/*"],
+        exclude = [
+            "sonic-wpa-supplicant/.git/**",
+        ],
+    ),
+    debian_dir = "sonic-wpa-supplicant/debian",
+    version = WPASUPPLICANT_VERSION,
+    declared_outputs = [
+        "wpasupplicant_" + WPASUPPLICANT_VERSION + "_$(ARCH).deb",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "wpasupplicant",
+    actual = ":wpasupplicant_debs",
+    visibility = ["//visibility:public"],
+)
