@@ -1,0 +1,89 @@
+"""libnl3 Debian packages — migrated from src/libnl3/Makefile.
+
+Upstream source: https://deb.debian.org/debian/pool/main/libn/libnl3/
+Version: 3.7.0-0.2+b1sonic1
+
+Migration status: Phase 1 — replaces src/libnl3/Makefile.
+Make equivalent: LIBNL3 variable in rules/libnl3.mk.
+
+Output equivalence: Bazel-produced .deb must pass debdiff against Make output.
+Verification: bazel build //src/libnl3:libnl3_debs --sandbox_debug
+
+sha256 checksums for upstream source (refresh with: sha256sum <file>):
+  libnl3_3.7.0.orig.tar.gz:   TODO — run after first successful build
+  libnl3_3.7.0-0.2.debian.tar.xz: TODO
+"""
+
+load("//rules/bazel/deb:deb.bzl", "debian_source_package")
+
+package(default_visibility = ["//visibility:private"])
+
+# ── Upstream source archive (fetched via repository_rule in MODULE.bazel) ──────
+# The http_archive named "libnl3_source" is declared in MODULE.bazel via
+# an extension. It downloads the .dsc, .orig.tar.gz, and .debian.tar.xz from
+# the Debian pool, making them available as @libnl3_source//:dsc etc.
+
+LIBNL3_VERSION_BASE = "3.7.0"
+LIBNL3_VERSION = LIBNL3_VERSION_BASE + "-0.2"
+LIBNL3_VERSION_SONIC = LIBNL3_VERSION_BASE + "-0.2+b1sonic1"
+
+# ── SONiC patches ─────────────────────────────────────────────────────────────
+filegroup(
+    name = "patches",
+    srcs = [
+        "patch/0003-Adding-support-for-RTA_NH_ID-attribute.patch",
+        "patch/keep-symbol-versions-in-libraries.patch",
+        "patch/skip-tests-when-having-no-private-netns.patch",
+        "patch/switch-to-debhelper.patch",
+        "patch/update-changelog.patch",
+    ],
+)
+
+# ── Debian package build ───────────────────────────────────────────────────────
+# Produces all libnl3 binary packages from the Debian source package.
+# The sonic-slave-bullseye container provides the build environment
+# (dpkg-buildpackage + all Build-Depends pre-installed).
+debian_source_package(
+    name = "libnl3_debs",
+    dsc = "@libnl3_source//:dsc",
+    srcs = [
+        "@libnl3_source//:orig_tar",
+        "@libnl3_source//:debian_tar",
+    ],
+    version = LIBNL3_VERSION_SONIC,
+    patches = [":patches"],
+    patch_series = "patch/series",
+    declared_outputs = [
+        "libnl-3-200_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
+        "libnl-3-200-dbgsym_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
+        "libnl-3-dev_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
+        "libnl-genl-3-200_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
+        "libnl-genl-3-200-dbgsym_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
+        "libnl-genl-3-dev_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
+        "libnl-route-3-200_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
+        "libnl-route-3-200-dbgsym_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
+        "libnl-route-3-dev_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
+        "libnl-nf-3-200_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
+        "libnl-nf-3-200-dbgsym_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
+        "libnl-nf-3-dev_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
+        "libnl-cli-3-200_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
+        "libnl-cli-3-200-dbgsym_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
+        "libnl-cli-3-dev_" + LIBNL3_VERSION_SONIC + "_$(ARCH).deb",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+# ── Individual package aliases (for downstream deps) ──────────────────────────
+# Downstream targets can depend on //src/libnl3:libnl3 (the runtime lib)
+# or //src/libnl3:libnl3_dev (headers for compilation) directly.
+alias(
+    name = "libnl3",
+    actual = ":libnl3_debs",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "libnl3_dev",
+    actual = ":libnl3_debs",
+    visibility = ["//visibility:public"],
+)
