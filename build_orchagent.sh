@@ -89,23 +89,51 @@ docker run --rm \
       libhiredis-dev swig libgtest-dev libgmock-dev libboost-dev \
       libboost-serialization-dev libzmq3-dev pkg-config \
       dh-exec nlohmann-json3-dev python3-dev libprotobuf-dev protobuf-compiler \
-      autoconf automake libtool libyang2-dev curl
+      autoconf automake libtool libyang2-dev curl uuid-dev ca-certificates \
+      libclang-dev clang
+    # Install cppzmq header (zmq.hpp) - not packaged in bookworm
+    curl -sSL https://raw.githubusercontent.com/zeromq/cppzmq/v4.10.0/zmq.hpp -o /usr/include/zmq.hpp
+    curl -sSL https://raw.githubusercontent.com/zeromq/cppzmq/v4.10.0/zmq_addon.hpp -o /usr/include/zmq_addon.hpp
+    ls -la /usr/include/zmq.hpp
 
-    # Install Rust (needed by swss-common for sonic-dash-api)
-    apt-get install -y -qq --no-install-recommends curl ca-certificates
+    # Install Rust (needed by swss-common cargo build)
     curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal 2>&1 | tail -3
     . /root/.cargo/env
     cargo --version
 
-    # Build swss-common
+    # Build swss-common with noyangmod profile (avoids sonic_yang dependency)
     if [ -d /src/sonic-swss-common/debian ]; then
       cp -a /src/sonic-swss-common /tmp/swss-common
       cd /tmp/swss-common
-      # Ensure cargo is on PATH for debian/rules
       export PATH="/root/.cargo/bin:$PATH"
-      DEB_BUILD_OPTIONS=nocheck dpkg-buildpackage -rfakeroot -b -us -uc -d 2>&1 | tail -30 || echo "swss-common build incomplete"
+      # Use noyangmod profile to skip sonic_yang dependency
+      DEB_BUILD_OPTIONS=nocheck DEB_BUILD_PROFILES=noyangmod \
+        dpkg-buildpackage -rfakeroot -b -us -uc -d -Pnoyangmod,nopython2 2>&1 | tail -30 || echo "swss-common build incomplete"
       ls -la /tmp/*.deb 2>/dev/null || echo "No debs produced"
       cp /tmp/*.deb /build/ 2>/dev/null || true
+    fi
+
+    # Build sairedis if swss-common succeeded
+    if ls /build/libswsscommon*.deb 1>/dev/null 2>&1; then
+      dpkg -i /build/libswsscommon*.deb /build/libswsscommon-dev*.deb 2>/dev/null || apt-get install -f -y -qq 2>/dev/null || true
+      if [ -d /src/sonic-sairedis/debian ]; then
+        cp -a /src/sonic-sairedis /tmp/sairedis
+        cd /tmp/sairedis
+        DEB_BUILD_OPTIONS=nocheck dpkg-buildpackage -rfakeroot -b -us -uc -d 2>&1 | tail -30 || echo "sairedis build incomplete"
+        cp /tmp/*.deb /build/ 2>/dev/null || true
+      fi
+    fi
+
+    # Build swss if swss-common and sairedis succeeded
+    if ls /build/libswsscommon*.deb 1>/dev/null 2>&1; then
+      dpkg -i /build/*.deb 2>/dev/null || apt-get install -f -y -qq 2>/dev/null || true
+      if [ -d /src/sonic-swss/debian ]; then
+        cp -a /src/sonic-swss /tmp/swss
+        cd /tmp/swss
+        export PATH="/root/.cargo/bin:$PATH"
+        DEB_BUILD_OPTIONS=nocheck dpkg-buildpackage -rfakeroot -b -us -uc -d 2>&1 | tail -30 || echo "swss build incomplete"
+        cp /tmp/swss*.deb /build/ 2>/dev/null || true
+      fi
     fi
 
     echo "Debs produced: $(ls /build/*.deb 2>/dev/null | wc -l)"
