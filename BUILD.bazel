@@ -1,6 +1,19 @@
 """Root BUILD file — exposes repo-wide targets."""
 
 load("@buildifier_prebuilt//:rules.bzl", "buildifier", "buildifier_test")
+load("//:sonic_image.bzl", "sonic_platform_docker", "sonic_platform_image")
+
+# ── Platform-aware top-level targets ─────────────────────────────────────────
+# Usage: bazel build //:sonic_image --platforms=//platforms:broadcom_amd64
+sonic_platform_image(
+    name = "sonic_image",
+    visibility = ["//visibility:public"],
+)
+
+sonic_platform_docker(
+    name = "docker_orchagent",
+    visibility = ["//visibility:public"],
+)
 
 # ── buildifier ────────────────────────────────────────────────────────────────
 # Format all BUILD/bzl files:  bazel run //:buildifier

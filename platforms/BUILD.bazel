@@ -157,3 +157,39 @@ config_setting(
     name = "is_trixie",
     constraint_values = [":trixie"],
 )
+
+# ── Combined platform targets (arch + vendor + distro) ────────────────────────
+# Use: bazel build --platforms=//platforms:broadcom_amd64 //...
+
+platform(
+    name = "broadcom_amd64",
+    constraint_values = [
+        ":amd64",
+        ":broadcom",
+        ":bookworm",
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+platform(
+    name = "mellanox_amd64",
+    constraint_values = [
+        ":amd64",
+        ":mellanox",
+        ":bookworm",
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+platform(
+    name = "vs_amd64",
+    constraint_values = [
+        ":amd64",
+        ":vs",
+        ":bookworm",
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
