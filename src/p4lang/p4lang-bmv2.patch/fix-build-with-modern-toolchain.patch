@@ -1,0 +1,20 @@
+--- a/debian/rules
++++ b/debian/rules
+@@ -20,14 +20,15 @@
+ 
+ clean:
+ 	@ echo CLEAN
+-	rm -f ../$(upstreampck)
+-	tar czf ../$(upstreampck) --exclude=debian --exclude=.pc .
+ 	dh_testdir
+ 	dh_auto_clean
+ 	dh_clean
+ 
+ override_dh_auto_configure:
++	# A lowercase top-level "version" file shadows the C++17 <version> header.
++	# The project already uses the uppercase VERSION file for version discovery.
++	rm -f version
+ 	dh_auto_configure -- --with-pdfixed --with-thrift --with-nanomsg --with-pi
+ 
+ override_dh_auto_install:
+ 	make DESTDIR=$(CURDIR)/debian/p4lang-bmv2 install

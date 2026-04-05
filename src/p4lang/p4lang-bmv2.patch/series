@@ -1,1 +1,2 @@
 use-boost-1.83.patch
+fix-build-with-modern-toolchain.patch
