@@ -16,6 +16,7 @@ $(addprefix $(DEST)/, $(P4LANG_TARGET)): $(DEST)/% :
 	pushd p4lang-pi-$(P4LANG_PI_VERSION)
 	patch -p1 -i ../p4lang-pi.patch/use-boost-1.83.patch
 	patch -p1 -i ../p4lang-pi.patch/fix-jobserver-build.patch
+	patch -p1 -i ../p4lang-pi.patch/trim-runtime-only-build.patch
 ifeq ($(CROSS_BUILD_ENVIRON), y)
 	dpkg-buildpackage -us -uc -b -a$(CONFIGURED_ARCH) -Pcross,nocheck -j$(SONIC_CONFIG_MAKE_JOBS) --admindir $(SONIC_DPKG_ADMINDIR)
 else
@@ -38,6 +39,7 @@ $(addprefix $(DEST)/, $(P4LANG_BMV2_TARGET)): $(DEST)/% :
 	pushd p4lang-bmv2-$(P4LANG_BMV2_VERSION)
 	patch -p1 -i ../p4lang-bmv2.patch/use-boost-1.83.patch
 	patch -p1 -i ../p4lang-bmv2.patch/fix-build-with-modern-toolchain.patch
+	patch -p1 -i ../p4lang-bmv2.patch/trim-runtime-only-build.patch
 ifeq ($(CROSS_BUILD_ENVIRON), y)
 	dpkg-buildpackage -us -uc -b -a$(CONFIGURED_ARCH) -Pcross,nocheck -j$(SONIC_CONFIG_MAKE_JOBS) --admindir $(SONIC_DPKG_ADMINDIR)
 else

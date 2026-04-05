@@ -87,7 +87,16 @@ workspace_root="$(dirname "${workspace_marker}")"
 export HOME="${HOME:-$(dirname "${workspace_root}")}"
 export PATH="/Applications/Docker.app/Contents/Resources/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"
 tmpdir="$(mktemp -d)"
-relative_target_dir=".bazel-legacy-target/$(basename "${tmpdir}")"
+sanitize_path_component() {
+    printf '%s' "$1" | tr '/: ' '---' | tr -cd 'A-Za-z0-9._-'
+}
+
+docker_platform_component="default"
+if [[ -n "${docker_platform}" ]]; then
+    docker_platform_component="$(sanitize_path_component "${docker_platform}")"
+fi
+
+relative_target_dir=".bazel-legacy-target/bridge-$(sanitize_path_component "${platform}")-${bldenv}-${docker_platform_component}"
 target_dir="${workspace_root}/${relative_target_dir}"
 saved_platform="${tmpdir}/saved.platform"
 saved_arch="${tmpdir}/saved.arch"
@@ -183,13 +192,12 @@ if [[ -n "${manifest}" ]]; then
     echo "Using manifest ${manifest}" >&2
 fi
 
-mkdir -p "${target_dir}"
 printf '%s\n' "${make_vars[@]-}" > "${helper_make_vars}"
 
 workspace_uid="$(stat -f '%u' "${workspace_root}" 2>/dev/null || stat -c '%u' "${workspace_root}")"
 workspace_gid="$(stat -f '%g' "${workspace_root}" 2>/dev/null || stat -c '%g' "${workspace_root}")"
-bridge_cache_source="${workspace_root}/.cache/legacy-bridge/artifacts"
-mkdir -p "${bridge_cache_source}"
+bridge_cache_source="${workspace_root}/.cache/legacy-bridge/artifacts-v2"
+mkdir -p "${target_dir}" "${bridge_cache_source}"
 
 cat > "${helper_script}" <<'EOF'
 #!/usr/bin/env bash

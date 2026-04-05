@@ -1,0 +1,127 @@
+--- a/configure.ac
++++ b/configure.ac
+@@ -28,6 +28,22 @@
+ 
+ AM_CONDITIONAL([COND_TARGETS], [test "$want_targets" = yes])
+ 
++want_runtime_tests=yes
++AC_ARG_ENABLE([runtime-tests],
++    AS_HELP_STRING([--disable-runtime-tests],
++                   [Skip building unit and integration tests that are not installed by the Debian package]),
++    [want_runtime_tests="$enableval"], [])
++
++AM_CONDITIONAL([COND_RUNTIME_TESTS], [test "$want_runtime_tests" != no])
++
++want_runtime_examples=yes
++AC_ARG_ENABLE([runtime-examples],
++    AS_HELP_STRING([--disable-runtime-examples],
++                   [Skip building example-only targets that are not installed by the Debian package]),
++    [want_runtime_examples="$enableval"], [])
++
++AM_CONDITIONAL([COND_RUNTIME_EXAMPLES], [test "$want_runtime_examples" != no])
++
+ want_stress_tests=no
+ AC_ARG_WITH([stress_tests],
+     AS_HELP_STRING([--with-stress-tests], [Include stress tests]),
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -8,7 +8,12 @@
+ 
+ if COND_THRIFT
+     MAYBE_THRIFT = thrift_src
++endif
++
++if COND_THRIFT
++if COND_RUNTIME_TESTS
+     MAYBE_TESTS = tests
++endif
+ endif
+ 
+ if COND_PI
+--- a/src/bm_apps/Makefile.am
++++ b/src/bm_apps/Makefile.am
+@@ -1,6 +1,10 @@
+ ACLOCAL_AMFLAGS = ${ACLOCAL_FLAGS} -I m4
+ 
+-SUBDIRS = . examples
++if COND_RUNTIME_EXAMPLES
++SUBDIRS = . examples
++else
++SUBDIRS = .
++endif
+ 
+ libbmapps_la_SOURCES = \
+ notifications.cpp \
+--- a/targets/Makefile.am
++++ b/targets/Makefile.am
+@@ -8,4 +8,8 @@
+ MAYBE_SECONDARY_TARGETS += simple_switch_grpc
+ endif
+ 
+-SUBDIRS = test_utils simple_switch psa_switch pna_nic $(MAYBE_SECONDARY_TARGETS)
++if COND_RUNTIME_TESTS
++MAYBE_TEST_UTILS = test_utils
++endif
++
++SUBDIRS = $(MAYBE_TEST_UTILS) simple_switch psa_switch pna_nic $(MAYBE_SECONDARY_TARGETS)
+--- a/targets/simple_switch/Makefile.am
++++ b/targets/simple_switch/Makefile.am
+@@ -1,6 +1,8 @@
+ if COND_NANOMSG
++if COND_RUNTIME_TESTS
+ MAYBE_TESTS = tests
+ endif
++endif
+ 
+ if COND_PI
+ AM_CPPFLAGS += \
+--- a/targets/psa_switch/Makefile.am
++++ b/targets/psa_switch/Makefile.am
+@@ -1,6 +1,8 @@
+ if COND_NANOMSG
++if COND_RUNTIME_TESTS
+ MAYBE_TESTS = tests
+ endif
++endif
+ 
+ SUBDIRS = . $(MAYBE_TESTS)
+ 
+--- a/targets/pna_nic/Makefile.am
++++ b/targets/pna_nic/Makefile.am
+@@ -1,6 +1,8 @@
+ if COND_NANOMSG
++if COND_RUNTIME_TESTS
+ MAYBE_TESTS = tests
+ endif
++endif
+ 
+ SUBDIRS = . $(MAYBE_TESTS)
+ 
+--- a/targets/simple_switch_grpc/Makefile.am
++++ b/targets/simple_switch_grpc/Makefile.am
+@@ -1,5 +1,9 @@
+ ACLOCAL_AMFLAGS = ${ACLOCAL_FLAGS} -I m4
+ 
+-SUBDIRS = . tests
++if COND_RUNTIME_TESTS
++SUBDIRS = . tests
++else
++SUBDIRS = .
++endif
+ 
+ AM_CPPFLAGS += \
+--- a/debian/rules
++++ b/debian/rules
+@@ -21,8 +21,10 @@
+ 
+ override_dh_auto_configure:
+ 	# A lowercase top-level "version" file shadows the C++17 <version> header.
+ 	# The project already uses the uppercase VERSION file for version discovery.
+ 	rm -f version
+-	dh_auto_configure -- --with-pdfixed --with-thrift --with-nanomsg --with-pi
++	dh_auto_configure -- --with-pdfixed --with-thrift --with-nanomsg --with-pi \
++		--disable-runtime-tests \
++		--disable-runtime-examples
+ 
+ override_dh_auto_install:
+ 	make DESTDIR=$(CURDIR)/debian/p4lang-bmv2 install

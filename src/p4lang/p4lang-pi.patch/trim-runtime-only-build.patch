@@ -1,0 +1,90 @@
+--- a/configure.ac
++++ b/configure.ac
+@@ -35,6 +35,22 @@
+ 
+ AM_CONDITIONAL([WITH_BMV2], [test "$want_bmv2" = yes])
+ 
++want_runtime_tests=yes
++AC_ARG_ENABLE([runtime-tests],
++    AS_HELP_STRING([--disable-runtime-tests],
++                   [Skip building unit and integration tests that are not installed by the Debian package]),
++    [want_runtime_tests="$enableval"], [])
++
++AM_CONDITIONAL([WITH_RUNTIME_TESTS], [test "$want_runtime_tests" != no])
++
++want_runtime_examples=yes
++AC_ARG_ENABLE([runtime-examples],
++    AS_HELP_STRING([--disable-runtime-examples],
++                   [Skip building example-only targets that are not installed by the Debian package]),
++    [want_runtime_examples="$enableval"], [])
++
++AM_CONDITIONAL([WITH_RUNTIME_EXAMPLES], [test "$want_runtime_examples" != no])
++
+ want_fe_cpp=no
+ AC_ARG_WITH([fe_cpp],
+     AS_HELP_STRING([--with-fe-cpp], [Build with C++ frontend]),
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -10,11 +10,19 @@
+ if WITH_PROTO
+ MAYBE_PROTO = proto
+ endif
++
++if WITH_RUNTIME_EXAMPLES
++MAYBE_EXAMPLES = examples
++endif
++
++if WITH_RUNTIME_TESTS
++MAYBE_TESTS = tests
++endif
+ 
+ # examples need to come after generators!
+ # proto depends on frontends_extra/cpp!
+-SUBDIRS = third_party lib include src generators targets $(MAYBE_CLI) examples \
+-bin tests frontends_extra $(MAYBE_PROTO)
++SUBDIRS = third_party lib include src generators targets $(MAYBE_CLI) $(MAYBE_EXAMPLES) \
++bin $(MAYBE_TESTS) frontends_extra $(MAYBE_PROTO)
+ 
+ DIST_SUBDIRS = third_party lib include src generators targets CLI examples \
+ bin tests frontends_extra $(MAYBE_PROTO)
+--- a/frontends_extra/cpp/Makefile.am
++++ b/frontends_extra/cpp/Makefile.am
+@@ -1,5 +1,9 @@
+ ACLOCAL_AMFLAGS = ${ACLOCAL_FLAGS} -I m4
+ 
+-SUBDIRS = . example
++if WITH_RUNTIME_EXAMPLES
++SUBDIRS = . example
++else
++SUBDIRS = .
++endif
+ 
+ AM_CPPFLAGS = \
+--- a/proto/Makefile.am
++++ b/proto/Makefile.am
+@@ -3,8 +3,12 @@
+ if WITH_PROTO_DEMO
+ MAYBE_PROTO_DEMO = demo_grpc
+ endif
++
++if WITH_RUNTIME_TESTS
++MAYBE_PROTO_TESTS = tests
++endif
+ 
+-SUBDIRS = . third_party p4info frontend server $(MAYBE_PROTO_DEMO) tests
++SUBDIRS = . third_party p4info frontend server $(MAYBE_PROTO_DEMO) $(MAYBE_PROTO_TESTS)
+ 
+ PROTOFLAGS += -I$(abs_srcdir) -I$(abs_builddir)
+ 
+--- a/debian/rules
++++ b/debian/rules
+@@ -21,7 +21,9 @@
+ 
+ override_dh_auto_configure:
+-	dh_auto_configure -- --with-proto --with-cli
++	dh_auto_configure -- --with-proto --with-cli \
++		--disable-runtime-tests \
++		--disable-runtime-examples
+ 
+ override_dh_auto_build:
+ 	# Explicit 'optional' labels are disallowed in the Proto3 syntax.
