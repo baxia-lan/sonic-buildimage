@@ -4,6 +4,19 @@ exports_files(
 )
 
 sh_binary(
+    name = "build_legacy_artifact_bridge",
+    srcs = ["build_legacy_artifact_bridge.sh"],
+    visibility = ["//visibility:public"],
+)
+
+sh_binary(
+    name = "build_legacy_bridge_helper_image",
+    srcs = ["build_legacy_bridge_helper_image.sh"],
+    data = ["legacy_bridge_helper.Dockerfile"],
+    visibility = ["//visibility:public"],
+)
+
+sh_binary(
     name = "build_review_docker_archive",
     srcs = ["build_review_docker_archive.sh"],
     visibility = ["//visibility:public"],

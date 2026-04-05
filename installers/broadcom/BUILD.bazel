@@ -1,13 +1,50 @@
-load("//bazel/sonic:defs.bzl", "sonic_export_to_target_tree")
+load("//bazel/sonic:defs.bzl", "sonic_export_to_target_tree", "sonic_host_image")
+load("//bazel/sonic/private:bridge.bzl", "legacy_artifact_bridge")
 load("//installers:data.bzl", "BROADCOM_ABOOT", "BROADCOM_ONIE", "BROADCOM_RAW")
-load("//installers:defs.bzl", "sonic_installer_variant")
+load("//installers:defs.bzl", "sonic_installer_manifest", "sonic_installer_variant")
 
 package(default_visibility = ["//visibility:public"])
 
-sonic_installer_variant(
-    name = "onie",
-    platform = "//platforms/broadcom:platform",
+sonic_installer_manifest(
+    name = "onie_manifest",
     data = BROADCOM_ONIE,
+    platform = "//platforms/broadcom:platform",
+)
+
+legacy_artifact_bridge(
+    name = "onie",
+    artifact_path = "sonic-broadcom.bin",
+    docker_platform = "linux/amd64",
+    legacy_target = "target/sonic-broadcom.bin",
+    make_vars = [
+        "BUILD_SKIP_TEST=y",
+        "SONIC_DPKG_CACHE_METHOD=rwcache",
+        "SONIC_VERSION_CACHE_METHOD=rcache",
+        "SONIC_VERSION_CONTROL_COMPONENTS=web",
+    ],
+    manifest = ":onie_manifest",
+    output_name = "sonic-broadcom.bin",
+    platform = "broadcom",
+    tags = ["manual"],
+)
+
+genrule(
+    name = "onie_lock",
+    srcs = [":onie_manifest"],
+    outs = ["sonic-broadcom.bin.lock.json"],
+    cmd = """
+lock=''
+for f in $(SRCS); do
+  case "$$f" in
+    *.lock.json)
+      lock="$$f"
+      ;;
+  esac
+done
+test -n "$$lock"
+cp "$$lock" "$@"
+""",
+    tags = ["manual"],
 )
 
 sonic_installer_variant(
@@ -16,17 +53,56 @@ sonic_installer_variant(
     data = BROADCOM_RAW,
 )
 
-sonic_installer_variant(
-    name = "aboot",
-    platform = "//platforms/broadcom:platform",
+sonic_installer_manifest(
+    name = "aboot_manifest",
     data = BROADCOM_ABOOT,
+    platform = "//platforms/broadcom:platform",
+)
+
+legacy_artifact_bridge(
+    name = "aboot",
+    artifact_path = "sonic-aboot-broadcom.swi",
+    docker_platform = "linux/amd64",
+    legacy_target = "target/sonic-aboot-broadcom.swi",
+    make_vars = [
+        "BUILD_SKIP_TEST=y",
+        "SONIC_DPKG_CACHE_METHOD=rwcache",
+        "SONIC_VERSION_CACHE_METHOD=rcache",
+        "SONIC_VERSION_CONTROL_COMPONENTS=web",
+    ],
+    manifest = ":aboot_manifest",
+    output_name = "sonic-aboot-broadcom.swi",
+    platform = "broadcom",
+    tags = ["manual"],
+)
+
+genrule(
+    name = "aboot_lock",
+    srcs = [":aboot_manifest"],
+    outs = ["sonic-aboot-broadcom.swi.lock.json"],
+    cmd = """
+lock=''
+for f in $(SRCS); do
+  case "$$f" in
+    *.lock.json)
+      lock="$$f"
+      ;;
+  esac
+done
+test -n "$$lock"
+cp "$$lock" "$@"
+""",
+    tags = ["manual"],
 )
 
 sonic_export_to_target_tree(
     name = "target_tree",
     exports = {
+        ":aboot": "target/sonic-aboot-broadcom.swi",
         ":aboot_lock": "target/installers/sonic-aboot-broadcom.swi.lock.json",
+        ":onie": "target/sonic-broadcom.bin",
         ":onie_lock": "target/installers/sonic-broadcom.bin.lock.json",
         ":raw_lock": "target/installers/sonic-broadcom.raw.lock.json",
     },
+    tags = ["manual"],
 )

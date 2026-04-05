@@ -164,12 +164,22 @@ endef
 ## Setup overlay fs for dpkg admin directory /var/lib/dpkg
 ###############################################################################
 define SETUP_OVERLAYFS_FOR_DPKG_ADMINDIR
-upperdir=$(shell mktemp -d -p $(DPKG_ADMINDIR_PATH))
-workdir=$(shell mktemp -d -p $(DPKG_ADMINDIR_PATH))
-mergedir=$(shell mktemp -d -p $(DPKG_ADMINDIR_PATH))
-sudo mount -t overlay overlay -olowerdir=/var/lib/dpkg,upperdir=$$upperdir,workdir=$$workdir $$mergedir
-export SONIC_DPKG_ADMINDIR=$$mergedir
-trap "sudo umount $$mergedir && rm -rf $$mergedir $$upperdir $$workdir" EXIT
+mkdir -p $(DPKG_ADMINDIR_PATH)
+mergedir=$$(mktemp -d -p $(DPKG_ADMINDIR_PATH))
+if [ "$(SONIC_DPKG_ADMINDIR_MODE)" = "copy" ]; then
+    sudo cp -a /var/lib/dpkg/. $$mergedir/
+    sudo chown -R $$(id -u):$$(id -g) $$mergedir
+    chmod -R u+w $$mergedir
+    export SONIC_DPKG_ADMINDIR=$$mergedir
+    trap "rm -rf $$mergedir" EXIT
+else
+    upperdir=$$(mktemp -d -p $(DPKG_ADMINDIR_PATH))
+    workdir=$$(mktemp -d -p $(DPKG_ADMINDIR_PATH))
+    chmod 755 $$upperdir $$workdir $$mergedir
+    sudo mount -t overlay overlay -olowerdir=/var/lib/dpkg,upperdir=$$upperdir,workdir=$$workdir $$mergedir
+    export SONIC_DPKG_ADMINDIR=$$mergedir
+    trap "sudo umount $$mergedir && rm -rf $$mergedir $$upperdir $$workdir" EXIT
+fi
 endef
 
 

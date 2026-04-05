@@ -1,0 +1,80 @@
+load("//bazel/sonic:defs.bzl", "sonic_export_to_target_tree", "sonic_oci_image")
+load("//bazel/sonic/private:bridge.bzl", "legacy_artifact_bridge")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_oci_image(
+    name = "image_manifest",
+    legacy_artifact = "docker-sonic-vs.gz",
+    legacy_dockerfile = "platform/vs/docker-sonic-vs/Dockerfile.j2",
+    source_makefiles = [
+        "platform/vs/docker-sonic-vs.mk",
+        "platform/vs/rules.mk",
+    ],
+    base = "//images/oci/docker-swss-layer-bookworm:image",
+    files = [
+        "CONFIGDB_LOAD_SCRIPT",
+        "ARP_UPDATE_SCRIPT",
+        "ARP_UPDATE_VARS_TEMPLATE",
+        "BUFFERS_CONFIG_TEMPLATE",
+        "QOS_CONFIG_TEMPLATE",
+        "SONIC_VERSION",
+        "UPDATE_CHASSISDB_CONFIG_SCRIPT",
+        "COPP_CONFIG_TEMPLATE",
+    ],
+    metadata = {
+        "container_name": "docker-sonic-vs",
+        "legacy_name": "DOCKER_SONIC_VS",
+        "migration_role": "public_vs_service_image",
+        "package_name": "docker-sonic-vs",
+    },
+    notes = [
+        "Concrete bytes are currently produced by a Bazel local bridge over the legacy sonic-slave build path.",
+        "The final hermetic Bazel OCI builder still needs to replace the legacy Dockerfile and Make execution flow.",
+    ],
+)
+
+legacy_artifact_bridge(
+    name = "image",
+    artifact_path = "docker-sonic-vs.gz",
+    docker_platform = "linux/amd64",
+    legacy_target = "target/docker-sonic-vs.gz",
+    make_vars = [
+        "BUILD_SKIP_TEST=y",
+        "SONIC_DPKG_CACHE_METHOD=rwcache",
+        "SONIC_VERSION_CACHE_METHOD=rcache",
+        "SONIC_VERSION_CONTROL_COMPONENTS=web",
+    ],
+    manifest = ":image_manifest",
+    output_name = "docker-sonic-vs.gz",
+    platform = "vs",
+    tags = ["manual"],
+)
+
+genrule(
+    name = "image_lock",
+    srcs = [":image_manifest"],
+    outs = ["docker-sonic-vs.gz.lock.json"],
+    cmd = """
+lock=''
+for f in $(SRCS); do
+  case "$$f" in
+    *.lock.json)
+      lock="$$f"
+      ;;
+  esac
+done
+test -n "$$lock"
+cp "$$lock" "$@"
+""",
+    tags = ["manual"],
+)
+
+sonic_export_to_target_tree(
+    name = "target_tree",
+    exports = {
+        ":image": "target/docker-sonic-vs.gz",
+        ":image_lock": "target/docker-sonic-vs.gz.lock.json",
+    },
+    tags = ["manual"],
+)

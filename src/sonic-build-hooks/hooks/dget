@@ -1,0 +1,274 @@
+#!/bin/bash
+
+. /usr/local/share/buildinfo/scripts/buildinfo_base.sh
+
+REAL_COMMAND=$(get_command dget)
+if [ -z "$REAL_COMMAND" ]; then
+    echo "The command dget does not exist." 1>&2
+    exit 1
+fi
+
+if [ "$SKIP_BUILD_HOOK" == y ]; then
+    $REAL_COMMAND "$@"
+    exit $?
+fi
+
+download_url()
+{
+    local url=$1
+    local dst=$2
+    local wget_command
+    local version=
+    local filename=
+    local cache_file=
+    local proxy_url=
+
+    wget_command=$(get_command wget)
+    if [ -z "$wget_command" ]; then
+        echo "The command wget does not exist." 1>&2
+        exit 1
+    fi
+
+    version=$(lookup_web_version "$url" || true)
+    filename=$(echo "$url" | awk -F"/" '{print $NF}' | cut -d? -f1 | cut -d# -f1)
+    cache_file=$(lookup_cached_web_file "$url" || true)
+
+    if [ -n "$cache_file" ] && [ -f "$cache_file" ]; then
+        cp "$cache_file" "$dst"
+        touch "$cache_file"
+        return 0
+    fi
+
+    if [ -n "$version" ]; then
+        proxy_url="${BUILD_PACKAGES_URL}/${filename}-${version}"
+        if [ "$(check_if_url_exist "$proxy_url")" = y ]; then
+            "$wget_command" --retry-connrefused -O "$dst" "$proxy_url"
+            return 0
+        fi
+    fi
+
+    "$wget_command" --retry-connrefused -O "$dst" "$url"
+}
+
+download_url_direct()
+{
+    local url=$1
+    local dst=$2
+    local wget_command
+
+    wget_command=$(get_command wget)
+    if [ -z "$wget_command" ]; then
+        echo "The command wget does not exist." 1>&2
+        exit 1
+    fi
+
+    "$wget_command" --retry-connrefused -O "$dst" "$url"
+}
+
+extract_dsc_files()
+{
+    local dsc_file=$1
+
+    awk '
+        BEGIN { in_files = 0 }
+        /^Files:/ { in_files = 1; next }
+        in_files && /^[[:alpha:]][[:alnum:]-]*:/ { exit }
+        in_files && /^[[:space:]]+/ && NF >= 3 { print $NF }
+    ' "$dsc_file" | awk '!seen[$0]++'
+}
+
+lookup_dsc_file_metadata()
+{
+    local dsc_file=$1
+    local source_file=$2
+
+    awk -v source_file="$source_file" '
+        BEGIN { in_files = 0 }
+        /^Files:/ { in_files = 1; next }
+        in_files && /^[[:alpha:]][[:alnum:]-]*:/ { exit }
+        in_files && NF >= 3 && $NF == source_file {
+            print $(NF - 2) " " $(NF - 1)
+            exit
+        }
+    ' "$dsc_file"
+}
+
+lookup_cached_web_file()
+{
+    local url=$1
+    local filename=
+    local version=
+
+    version=$(lookup_web_version "$url" || true)
+    [ -n "$version" ] || return 1
+
+    filename=$(echo "$url" | awk -F"/" '{print $NF}' | cut -d? -f1 | cut -d# -f1)
+    echo "${PKG_CACHE_PATH}/web/${filename}-${version}.tgz"
+}
+
+lookup_web_version()
+{
+    local url=$1
+
+    [ -f "$WEB_VERSION_FILE" ] || return 1
+    grep "^${url}=" "$WEB_VERSION_FILE" | awk -F"==" '{print $NF}' | tail -n 1
+}
+
+cache_downloaded_url()
+{
+    local url=$1
+    local src_file=$2
+    local cache_file=
+
+    [ -n "$(get_version_cache_option)" ] || return 0
+    cache_file=$(lookup_cached_web_file "$url" || true)
+    [ -n "$cache_file" ] || return 0
+    [ -f "$src_file" ] || return 0
+
+    mkdir -p "$(dirname "$cache_file")"
+    FLOCK "$cache_file"
+    cp "$src_file" "$cache_file"
+    chmod -f 777 "$cache_file"
+    FUNLOCK "$cache_file"
+}
+
+validate_source_file()
+{
+    local dsc_file=$1
+    local source_file=$2
+    local metadata=
+    local expected_md5=
+    local expected_size=
+    local actual_md5=
+    local actual_size=
+
+    metadata=$(lookup_dsc_file_metadata "$dsc_file" "$source_file")
+    [ -n "$metadata" ] || return 0
+
+    read -r expected_md5 expected_size <<<"$metadata"
+    actual_md5=$(md5sum "$source_file" | cut -d' ' -f1)
+    actual_size=$(stat -c '%s' "$source_file")
+
+    if [ "$actual_md5" = "$expected_md5" ] && [ "$actual_size" = "$expected_size" ]; then
+        return 0
+    fi
+
+    echo "Source file validation failed for ${source_file}" 1>&2
+    echo "  expected md5=${expected_md5} size=${expected_size}" 1>&2
+    echo "  actual   md5=${actual_md5} size=${actual_size}" 1>&2
+    return 1
+}
+
+supports_hooked_download()
+{
+    local positional=("$@")
+    local url_count=0
+
+    for arg in "${positional[@]}"; do
+        if [[ "$arg" == *://* ]]; then
+            ((url_count += 1))
+        elif [[ "$arg" == *.dsc ]]; then
+            :
+        else
+            return 1
+        fi
+    done
+
+    [ "$url_count" -eq 1 ]
+}
+
+extract_requested_name()
+{
+    local positional=("$@")
+
+    for arg in "${positional[@]}"; do
+        if [[ "$arg" != *://* && "$arg" == *.dsc ]]; then
+            echo "$arg"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+download_only=n
+declare -a passthrough_options=()
+declare -a positional=()
+
+while (($#)); do
+    case "$1" in
+        -u|--allow-unauthenticated|-k|--insecure|-q|--quiet)
+            passthrough_options+=("$1")
+            shift
+            ;;
+        -d|--download-only)
+            download_only=y
+            passthrough_options+=("$1")
+            shift
+            ;;
+        -x|--extract)
+            passthrough_options+=("$1")
+            shift
+            ;;
+        -h|--help|-V|--version|--build|--path|--all|--no-cache|--no-conf)
+            exec "$REAL_COMMAND" "$@"
+            ;;
+        --path=*)
+            exec "$REAL_COMMAND" "$@"
+            ;;
+        --)
+            shift
+            while (($#)); do
+                positional+=("$1")
+                shift
+            done
+            ;;
+        -*)
+            exec "$REAL_COMMAND" "$@"
+            ;;
+        *)
+            positional+=("$1")
+            shift
+            ;;
+    esac
+done
+
+if ! supports_hooked_download "${positional[@]}"; then
+    exec "$REAL_COMMAND" "${passthrough_options[@]}" "${positional[@]}"
+fi
+
+requested_name=$(extract_requested_name "${positional[@]}" || true)
+source_url=
+for arg in "${positional[@]}"; do
+    if [[ "$arg" == *://* ]]; then
+        source_url="$arg"
+    fi
+done
+
+if [ -z "$source_url" ]; then
+    exec "$REAL_COMMAND" "${passthrough_options[@]}" "${positional[@]}"
+fi
+
+dsc_file=${requested_name:-$(echo "$source_url" | awk -F"/" '{print $NF}' | cut -d? -f1 | cut -d# -f1)}
+download_url "$source_url" "$dsc_file"
+cache_downloaded_url "$source_url" "$dsc_file"
+
+base_url=${source_url%/*}
+while IFS= read -r source_file; do
+    [ -n "$source_file" ] || continue
+    source_file_url="${base_url}/${source_file}"
+    download_url "$source_file_url" "$source_file"
+    if ! validate_source_file "$dsc_file" "$source_file"; then
+        cached_web_file=$(lookup_cached_web_file "$source_file_url" || true)
+        [ -n "$cached_web_file" ] && rm -f "$cached_web_file"
+        rm -f "$source_file"
+        echo "Retrying ${source_file} from upstream URL ${source_file_url}" 1>&2
+        download_url_direct "$source_file_url" "$source_file"
+        validate_source_file "$dsc_file" "$source_file"
+    fi
+    cache_downloaded_url "$source_file_url" "$source_file"
+done < <(extract_dsc_files "$dsc_file")
+
+if [ "$download_only" != y ]; then
+    dpkg-source -x "$dsc_file"
+fi
