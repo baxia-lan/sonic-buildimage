@@ -1,16 +1,13 @@
 """libnl3 Debian packages — migrated from rules/libnl3.mk.
 
-Version: 3.7.0-0.2+b1sonic1
-Source: Downloaded from Debian pool via @libnl3_source (MODULE.bazel).
-
-In the Make system, libnl3 source is fetched, patched, and built via
-dpkg-buildpackage inside sonic-slave. In Bazel, the source is fetched
-via http_archive in MODULE.bazel, and built as a genrule.
+Source: dget from Debian pool + SONiC patches (src/libnl3/patch/).
+Build: dpkg-buildpackage inside Docker container.
 """
 
 package(default_visibility = ["//visibility:private"])
 
-LIBNL3_VERSION = "3.7.0-0.2+b1sonic1"
+LIBNL3_VERSION = "3.7.0-0.2"
+LIBNL3_VERSION_SONIC = "3.7.0-0.2+b1sonic1"
 
 filegroup(
     name = "patches",
@@ -19,66 +16,70 @@ filegroup(
 
 genrule(
     name = "libnl3_debs",
-    srcs = [
-        "@libnl3_source//:srcs",
-        ":patches",
-    ],
+    srcs = [":patches"],
     outs = [
-        "libnl-3-200_" + LIBNL3_VERSION + "_amd64.deb",
-        "libnl-3-dev_" + LIBNL3_VERSION + "_amd64.deb",
-        "libnl-genl-3-200_" + LIBNL3_VERSION + "_amd64.deb",
-        "libnl-genl-3-dev_" + LIBNL3_VERSION + "_amd64.deb",
-        "libnl-route-3-200_" + LIBNL3_VERSION + "_amd64.deb",
-        "libnl-route-3-dev_" + LIBNL3_VERSION + "_amd64.deb",
-        "libnl-nf-3-200_" + LIBNL3_VERSION + "_amd64.deb",
-        "libnl-nf-3-dev_" + LIBNL3_VERSION + "_amd64.deb",
-        "libnl-cli-3-200_" + LIBNL3_VERSION + "_amd64.deb",
-        "libnl-cli-3-dev_" + LIBNL3_VERSION + "_amd64.deb",
+        "libnl-3-200_" + LIBNL3_VERSION_SONIC + "_amd64.deb",
+        "libnl-3-dev_" + LIBNL3_VERSION_SONIC + "_amd64.deb",
+        "libnl-genl-3-200_" + LIBNL3_VERSION_SONIC + "_amd64.deb",
+        "libnl-genl-3-dev_" + LIBNL3_VERSION_SONIC + "_amd64.deb",
+        "libnl-route-3-200_" + LIBNL3_VERSION_SONIC + "_amd64.deb",
+        "libnl-route-3-dev_" + LIBNL3_VERSION_SONIC + "_amd64.deb",
+        "libnl-nf-3-200_" + LIBNL3_VERSION_SONIC + "_amd64.deb",
+        "libnl-nf-3-dev_" + LIBNL3_VERSION_SONIC + "_amd64.deb",
+        "libnl-cli-3-200_" + LIBNL3_VERSION_SONIC + "_amd64.deb",
+        "libnl-cli-3-dev_" + LIBNL3_VERSION_SONIC + "_amd64.deb",
     ],
     cmd = """
 set -euo pipefail
-WORK=$$(mktemp -d)
-trap 'rm -rf "$$WORK"' EXIT
+FIRST_OUT=$$(echo $(OUTS) | awk '{print $$1}')
+OUT_DIR=$$(cd $$(dirname $$FIRST_OUT) && pwd)
 
-# Copy upstream source from @libnl3_source
-SRC_ROOT=""
-for f in $(locations @libnl3_source//:srcs); do
-  SRC_ROOT=$$(dirname "$$f")
-  break
-done
-cp -a "$$SRC_ROOT" "$$WORK/src"
-
-# Apply SONiC patches
+# Stage patches for Docker
+PATCH_DIR=$$(mktemp -d)
 for p in $(locations :patches); do
-  patch -d "$$WORK/src" -p1 < "$$p" 2>/dev/null || true
+  cp "$$p" "$$PATCH_DIR/" 2>/dev/null || true
 done
 
-# Build (requires dpkg-buildpackage — only works in sonic-slave or Linux)
-if command -v dpkg-buildpackage >/dev/null 2>&1 && [ -d "$$WORK/src/debian" ]; then
-  pushd "$$WORK/src" >/dev/null
-  SOURCE_DATE_EPOCH=0 DPKG_GENSYMBOLS_CHECK_LEVEL=0 \\
-    dpkg-buildpackage -rfakeroot -b -us -uc --admindir /tmp/dpkg-admindir
-  popd >/dev/null
-  mv "$$WORK"/*.deb "$(@D)/"
-else
-  # Create stub debs for analysis/dev on macOS (actual build requires Linux + sonic-slave)
-  for out in $(OUTS); do
-    touch "$$out"
-  done
-fi
+docker run --rm \
+  -v "$$PATCH_DIR:/patches:ro" \
+  -v "$$OUT_DIR:/output" \
+  -e DEBIAN_FRONTEND=noninteractive \
+  -e SOURCE_DATE_EPOCH=0 \
+  debian:bookworm-slim \
+  bash -euo pipefail -c '
+    apt-get update -qq
+    apt-get install -y -qq --no-install-recommends \
+      build-essential dpkg-dev fakeroot debhelper autoconf automake libtool \
+      pkg-config bison flex python3-dev dh-exec devscripts stgit git ca-certificates wget
+    export HOME=/root
+    git config --global user.email build@sonic
+    git config --global user.name sonic
+    cd /tmp
+    # Download Debian source package (dsc + orig + debian)
+    dget -u https://deb.debian.org/debian/pool/main/libn/libnl3/libnl3_3.7.0-0.2.dsc
+    cd libnl3-3.7.0
+    # Apply SONiC patches via stgit
+    git init -q && git add -f . && git commit -qm "initial"
+    stg init
+    stg import -s /patches/series 2>&1 | tail -5
+    # Build
+    DPKG_GENSYMBOLS_CHECK_LEVEL=0 dpkg-buildpackage -rfakeroot -b -us -uc -d 2>&1 | tail -10
+    echo "=== debs ==="
+    ls -lh /tmp/*.deb 2>/dev/null | head -10
+    cp /tmp/*.deb /output/ 2>/dev/null || true
+  '
+
+# Verify
+for out in $(OUTS); do
+  if [ ! -s "$$out" ]; then
+    echo "FAIL: $$out empty"
+    exit 1
+  fi
+done
 """,
-    tags = ["requires-docker"],
+    tags = ["requires-docker", "no-sandbox", "no-cache"],
     visibility = ["//visibility:public"],
 )
 
-alias(
-    name = "libnl3",
-    actual = ":libnl3_debs",
-    visibility = ["//visibility:public"],
-)
-
-alias(
-    name = "libnl3_dev",
-    actual = ":libnl3_debs",
-    visibility = ["//visibility:public"],
-)
+alias(name = "libnl3", actual = ":libnl3_debs", visibility = ["//visibility:public"])
+alias(name = "libnl3_dev", actual = ":libnl3_debs", visibility = ["//visibility:public"])

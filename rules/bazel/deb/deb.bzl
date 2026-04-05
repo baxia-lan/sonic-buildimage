@@ -41,6 +41,7 @@ _COMMON_BUILD_DEPS = " ".join([
     "autoconf-archive", "libgtest-dev", "doxygen", "graphviz",
     "libzmq5-dev", "perl", "libxml-simple-perl", "git",
     "aspell", "aspell-en",
+    "libjansson-dev", "libteam-dev",
 ])
 
 # ── Private implementation ────────────────────────────────────────────────────
@@ -167,8 +168,12 @@ def deb_package_set(
         "    curl --proto \"=https\" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal 2>/dev/null",
         "    export PATH=/root/.cargo/bin:$$PATH",
         "    # Install build deps from Bazel inputs",
-        "    for dep in /deps/*.deb; do [ -s \"$$dep\" ] && dpkg -i \"$$dep\" 2>/dev/null; done",
+        "    echo \"Installing dep debs from /deps/:\"",
+        "    ls /deps/*.deb 2>/dev/null || echo \"No deps\"",
+        "    dpkg -i /deps/*.deb 2>&1 || true",
         "    apt-get install -f -y -qq 2>/dev/null || true",
+        "    echo \"Checking swss headers:\"",
+        "    ls /usr/include/swss/logger.h 2>/dev/null || echo \"swss/logger.h MISSING\"",
         "    cp -a /src /tmp/build-src",
         "    cd /tmp/build-src",
         "    find . -name .git -type f -delete 2>/dev/null || true",
@@ -176,8 +181,7 @@ def deb_package_set(
         "    git config --global user.email build@sonic && git config --global user.name sonic",
         "    git init -q && git add -A . && git commit -qm init 2>/dev/null || true",
         "    for v in 1.10.0 1.11.0 1.12.0 1.13.0 1.14.0 1.15.0 1.16.0; do git tag v$$v 2>/dev/null || true; done",
-        "    PATH=/root/.cargo/bin:$$PATH DEB_BUILD_OPTIONS=nocheck dpkg-buildpackage -rfakeroot -b -us -uc -d -Pnoyangmod,nopython2 2>&1 | tee /tmp/build.log | tail -50",
-        "    grep -i \\\"fatal error\\\" /tmp/build.log | head -5 || true",
+        "    PATH=/root/.cargo/bin:$$PATH DEB_BUILD_OPTIONS=nocheck dpkg-buildpackage -rfakeroot -b -us -uc -d -Pnoyangmod,nopython2 2>&1 | tail -100",
         "    echo \"=== debs produced ===\"",
         "    ls -lh /tmp/*.deb 2>/dev/null || echo \"NO DEBS\"",
         "    cp /tmp/*.deb /output/ 2>/dev/null || true",
