@@ -12,7 +12,7 @@ Build-Depends: debhelper (>= 12), dh-python, bison, cmake, flex, git, gfortran |
 Package-List:
  p4lang-p4c deb devel optional arch=amd64,arm64
 Checksums-Sha1:
- b1008dffbe236d065c5557f2d4629aa9 173732452 p4lang-p4c_1.2.4.2.orig.tar.gz
+ 23dc65d187ea132d4f4fb69ac25f4fba217d9115 173732452 p4lang-p4c_1.2.4.2.orig.tar.gz
  c0a34124633981a8bbd8a67115ea0f311d6a9824 2408 p4lang-p4c_1.2.4.2-2.debian.tar.xz
 Checksums-Sha256:
  117b36ebd0b07d034cd2bb319c7f63be692ea4dda90cc9f58d2015bb8ccf2fb8 173732452 p4lang-p4c_1.2.4.2.orig.tar.gz
