@@ -47,19 +47,6 @@
  
  DIST_SUBDIRS = third_party lib include src generators targets CLI examples \
  bin tests frontends_extra $(MAYBE_PROTO)
---- a/frontends_extra/cpp/Makefile.am
-+++ b/frontends_extra/cpp/Makefile.am
-@@ -1,5 +1,9 @@
- ACLOCAL_AMFLAGS = ${ACLOCAL_FLAGS} -I m4
- 
--SUBDIRS = . example
-+if WITH_RUNTIME_EXAMPLES
-+SUBDIRS = . example
-+else
-+SUBDIRS = .
-+endif
- 
- AM_CPPFLAGS = \
 --- a/proto/Makefile.am
 +++ b/proto/Makefile.am
 @@ -3,8 +3,12 @@
@@ -76,6 +63,24 @@
  
  PROTOFLAGS += -I$(abs_srcdir) -I$(abs_builddir)
  
+--- a/proto/configure.ac
++++ b/proto/configure.ac
+@@ -71,6 +71,14 @@
+
+ AM_CONDITIONAL([WITH_BMV2], [test "$want_bmv2" = yes])
+
++want_runtime_tests=yes
++AC_ARG_ENABLE([runtime-tests],
++    AS_HELP_STRING([--disable-runtime-tests],
++                   [Skip building proto tests that are not installed by the Debian package]),
++    [want_runtime_tests="$enableval"], [])
++
++AM_CONDITIONAL([WITH_RUNTIME_TESTS], [test "$want_runtime_tests" != no])
++
+ with_proto_demo=yes
+ AC_CHECK_LIB([microhttpd], [MHD_start_daemon], [], [
+     AC_MSG_WARN([microhttpd library not found, will not compile demo])
+
 --- a/debian/rules
 +++ b/debian/rules
 @@ -21,7 +21,9 @@

@@ -12,11 +12,11 @@ Build-Depends: automake, build-essential, cmake, curl, debhelper (>= 12), dh-pyt
 Package-List:
  p4lang-bmv2 deb net optional arch=amd64,arm64
 Checksums-Sha1:
- 02b31ef6ad631e3258730d414ec418f19304ccdc 37010979 p4lang-bmv2_1.15.0.orig.tar.gz
+ b4f18e02a0ffe38b1e14eee41e6d97b05d622119 37006020 p4lang-bmv2_1.15.0.orig.tar.gz
  df71edb460c51502cffeeb8a2fd8c1f7969b5288 2492 p4lang-bmv2_1.15.0-7.debian.tar.xz
 Checksums-Sha256:
- 083bb907e45597af8e29ef3b0a92d33d282ba23840ddd5cfb8372d2f030ab415 37010979 p4lang-bmv2_1.15.0.orig.tar.gz
+ 2e97e8b5d67a04b6e701c5d24c557ea3fed4ae27bf8dee3198d7d6df7407ff94 37006020 p4lang-bmv2_1.15.0.orig.tar.gz
  f0e022bd267551b37a2643e88615cb08a236e80e6a12205fa13c06b00768cb41 2492 p4lang-bmv2_1.15.0-7.debian.tar.xz
 Files:
- 967f8387a3a4ba50e6f4b6ea943eaa36 37010979 p4lang-bmv2_1.15.0.orig.tar.gz
+ 223576aea3fb875ddab256d87c2eca93 37006020 p4lang-bmv2_1.15.0.orig.tar.gz
  f4d249b77d4f8d120b229834aac02df5 2492 p4lang-bmv2_1.15.0-7.debian.tar.xz
