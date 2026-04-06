@@ -18,12 +18,21 @@ jobs:
 
       - name: Align submodules to 202405
         run: |
-          cd src/sonic-swss-common && git checkout 36f40a1bae12a4ff28314eaa8223a6fe1b636492
-          cd ../sonic-sairedis && git checkout edd144b643b67c791c99bbca6920531102f2bf84
-          cd SAI && git checkout 408d75b610cb6b8d90e21d3bbd7f84586ebd1e1e && cd ..
-          cd ../sonic-swss && git checkout 6785d6620804cd0b32db7e8adb7e7dad99ae4a78
-          cd ../sonic-dash-api && git checkout 3f6709001e8574743ecf1a44f4cc3eb26b6329d6
-          cd ../sonic-linux-kernel && git checkout feaf559f38133c9fa649a468c5e589641c77de76
+          # Fetch from upstream sonic-net and checkout 202405 commits
+          for mod in sonic-swss-common sonic-sairedis sonic-swss sonic-dash-api sonic-linux-kernel sonic-stp; do
+            if [ -d "src/$mod" ]; then
+              cd "src/$mod"
+              git remote add upstream "https://github.com/sonic-net/$mod.git" 2>/dev/null || true
+              git fetch upstream --tags 2>/dev/null || true
+              cd ../..
+            fi
+          done
+          cd src/sonic-swss-common && git checkout 36f40a1bae12a4ff28314eaa8223a6fe1b636492 && cd ../..
+          cd src/sonic-sairedis && git checkout edd144b643b67c791c99bbca6920531102f2bf84 && cd ../..
+          cd src/sonic-sairedis/SAI && git checkout 408d75b610cb6b8d90e21d3bbd7f84586ebd1e1e && cd ../../..
+          cd src/sonic-swss && git checkout 6785d6620804cd0b32db7e8adb7e7dad99ae4a78 && cd ../..
+          cd src/sonic-dash-api && git checkout 3f6709001e8574743ecf1a44f4cc3eb26b6329d6 && cd ../..
+          cd src/sonic-linux-kernel && git checkout feaf559f38133c9fa649a468c5e589641c77de76 && cd ../..
 
       - name: Install Bazelisk
         run: |
