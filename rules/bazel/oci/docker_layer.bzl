@@ -4,7 +4,11 @@ These genrule wrappers execute apt-get and dpkg operations inside Docker
 containers, enabling the build to work on both Linux and macOS.
 """
 
-_DEBIAN_IMAGE = "debian:bookworm-slim"
+# Pin by digest for reproducibility. Refresh: crane digest debian:bookworm-slim
+_DEBIAN_IMAGE = "debian:bookworm-slim@sha256:f06537653ac770703bc45b4b113475bd402f451e85223f0f2837acbf89ab020a"
+
+# Snapshot mirror for reproducible apt installs.
+_APT_SNAPSHOT_URL = "https://snapshot.debian.org/archive/debian/20260401T000000Z"
 
 def apt_install_layer(
         name,
@@ -56,6 +60,7 @@ docker run --rm \
   -e SOURCE_DATE_EPOCH=0 \
   {image} \
   bash -euo pipefail -c '
+    echo "deb [check-valid-until=no] {snapshot_url} bookworm main" > /etc/apt/sources.list
     apt-get update -qq
     apt-get install -y -qq --no-install-recommends {packages}
     {pip_cmd}
@@ -82,6 +87,7 @@ docker run --rm \
             pip_cmd = pip_cmd,
             post_cmds = post_cmds,
             size_check = size_check,
+            snapshot_url = _APT_SNAPSHOT_URL,
         ),
         tags = ["requires-docker", "no-sandbox", "no-cache"],
         visibility = visibility,

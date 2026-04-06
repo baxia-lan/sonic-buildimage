@@ -23,10 +23,15 @@ Hermeticity contract:
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 
-# Docker image used for building .deb packages.
-# This is a plain Debian image with build-essential pre-installed.
-# In production, this would be the sonic-slave image pinned by digest.
-_BUILD_IMAGE = "debian:bookworm-slim"
+# Docker image pinned by sha256 digest for reproducible builds.
+# Refresh: crane digest debian:bookworm-slim
+_BUILD_IMAGE = "debian:bookworm-slim@sha256:f06537653ac770703bc45b4b113475bd402f451e85223f0f2837acbf89ab020a"
+
+# Snapshot mirror for reproducible apt installs.
+# All builds use the same package versions regardless of build date.
+# To update: change the date, verify builds still pass.
+_APT_SNAPSHOT = "20260401T000000Z"
+_APT_SNAPSHOT_URL = "https://snapshot.debian.org/archive/debian/" + _APT_SNAPSHOT
 
 # Build dependencies installed via apt-get before dpkg-buildpackage.
 # These cover the common Build-Depends for most SONiC C++ packages.
@@ -161,6 +166,8 @@ def deb_package_set(
         "  -e SOURCE_DATE_EPOCH=0 \\",
         "  " + _BUILD_IMAGE + " \\",
         "  bash -euo pipefail -c '",
+        "    # Pin apt to snapshot mirror for reproducible builds",
+        "    echo \"deb [check-valid-until=no] " + _APT_SNAPSHOT_URL + " bookworm main\" > /etc/apt/sources.list",
         "    apt-get update -qq",
         "    apt-get install -y -qq --no-install-recommends " + _COMMON_BUILD_DEPS,
         "    curl -sSL https://raw.githubusercontent.com/zeromq/cppzmq/v4.10.0/zmq.hpp -o /usr/include/zmq.hpp",
