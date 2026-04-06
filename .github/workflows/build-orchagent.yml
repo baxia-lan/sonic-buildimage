@@ -1,0 +1,71 @@
+name: Build docker-orchagent
+
+on:
+  push:
+    branches: [claude]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest  # amd64 native
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Align submodules to 202405
+        run: |
+          cd src/sonic-swss-common && git checkout 36f40a1bae12a4ff28314eaa8223a6fe1b636492
+          cd ../sonic-sairedis && git checkout edd144b643b67c791c99bbca6920531102f2bf84
+          cd SAI && git checkout 408d75b610cb6b8d90e21d3bbd7f84586ebd1e1e && cd ..
+          cd ../sonic-swss && git checkout 6785d6620804cd0b32db7e8adb7e7dad99ae4a78
+          cd ../sonic-dash-api && git checkout 3f6709001e8574743ecf1a44f4cc3eb26b6329d6
+          cd ../sonic-linux-kernel && git checkout feaf559f38133c9fa649a468c5e589641c77de76
+
+      - name: Install Bazelisk
+        run: |
+          curl -Lo /usr/local/bin/bazel https://github.com/bazelbuild/bazelisk/releases/download/v1.19.0/bazelisk-linux-amd64
+          chmod +x /usr/local/bin/bazel
+
+      - name: Build kernel
+        run: |
+          bazel build //src/sonic-linux-kernel:linux_kernel_debs \
+            --spawn_strategy=local --jobs=2
+          ls -lh bazel-bin/src/sonic-linux-kernel/*.deb
+
+      - name: Build orchagent chain
+        run: |
+          bazel build //dockers/docker-orchagent:docker_orchagent \
+            --spawn_strategy=local --jobs=2
+          ls -lh bazel-bin/src/sonic-swss/*.deb
+
+      - name: Build sonic-broadcom.bin
+        run: |
+          bazel build //platform/broadcom:sonic_broadcom_bin \
+            --spawn_strategy=local --jobs=2 \
+            --platforms=//platforms:broadcom_amd64
+          ls -lh bazel-bin/platform/broadcom/sonic_broadcom_bin.bin
+
+      - name: Verify outputs
+        run: |
+          echo "=== Packages ==="
+          find bazel-bin/src -name "*.deb" -size +0 | wc -l
+          echo "deb packages"
+          echo "=== OCI Image ==="
+          ls bazel-bin/dockers/docker-orchagent/docker_orchagent/
+          echo "=== Kernel ==="
+          ls -lh bazel-bin/src/sonic-linux-kernel/*.deb | head -3
+          echo "=== ONIE Image ==="
+          ls -lh bazel-bin/platform/broadcom/sonic_broadcom_bin.bin 2>/dev/null || echo "ONIE image not yet available"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonic-bazel-artifacts
+          path: |
+            bazel-bin/src/sonic-swss/swss_*.deb
+            bazel-bin/dockers/docker-orchagent/docker_orchagent/
+            bazel-bin/src/sonic-linux-kernel/linux-image-*.deb
