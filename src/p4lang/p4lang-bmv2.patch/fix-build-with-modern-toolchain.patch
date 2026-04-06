@@ -1,20 +1,20 @@
 --- a/debian/rules
 +++ b/debian/rules
-@@ -20,14 +20,15 @@
- 
- clean:
- 	@ echo CLEAN
+@@ -23,2 +23,0 @@ clean:
 -	rm -f ../$(upstreampck)
 -	tar czf ../$(upstreampck) --exclude=debian --exclude=.pc .
- 	dh_testdir
- 	dh_auto_clean
- 	dh_clean
- 
- override_dh_auto_configure:
+@@ -30,1 +28,4 @@ override_dh_auto_configure:
+-	dh_auto_configure -- --with-pdfixed --with-thrift --with-nanomsg --with-pi
 +	# A lowercase top-level "version" file shadows the C++17 <version> header.
 +	# The project already uses the uppercase VERSION file for version discovery.
 +	rm -f version
- 	dh_auto_configure -- --with-pdfixed --with-thrift --with-nanomsg --with-pi
- 
- override_dh_auto_install:
- 	make DESTDIR=$(CURDIR)/debian/p4lang-bmv2 install
++	dh_auto_configure -- --with-pdfixed --with-thrift --with-nanomsg --with-pi
+@@ -33,1 +34,2 @@ override_dh_auto_install:
+-	make DESTDIR=$(CURDIR)/debian/p4lang-bmv2 install
++	# Recursive installs in thrift_src inherit a broken jobserver from debhelper.
++	env MAKEFLAGS= $(MAKE) -j1 DESTDIR=$(CURDIR)/debian/p4lang-bmv2 install
+@@ -36,2 +38,2 @@ override_dh_auto_install:
+-	make -C targets/simple_switch_grpc/ -j$(nproc)
+-	make -C targets/simple_switch_grpc/ DESTDIR=$(CURDIR)/debian/p4lang-bmv2 install
++	env MAKEFLAGS= $(MAKE) -j1 -C targets/simple_switch_grpc/
++	env MAKEFLAGS= $(MAKE) -j1 -C targets/simple_switch_grpc/ DESTDIR=$(CURDIR)/debian/p4lang-bmv2 install

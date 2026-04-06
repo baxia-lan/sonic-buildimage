@@ -129,16 +129,9 @@
                   tests/Makefile])
 --- a/debian/rules
 +++ b/debian/rules
-@@ -21,8 +21,10 @@
- 
- override_dh_auto_configure:
- 	# A lowercase top-level "version" file shadows the C++17 <version> header.
- 	# The project already uses the uppercase VERSION file for version discovery.
- 	rm -f version
+@@ -28,1 +28,3 @@
 -	dh_auto_configure -- --with-pdfixed --with-thrift --with-nanomsg --with-pi
 +	dh_auto_configure -- --with-pdfixed --with-thrift --with-nanomsg --with-pi \
 +		--disable-runtime-tests \
 +		--disable-runtime-examples
- 
- override_dh_auto_install:
  	make DESTDIR=$(CURDIR)/debian/p4lang-bmv2 install
