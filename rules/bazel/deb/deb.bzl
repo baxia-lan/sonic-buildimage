@@ -41,7 +41,7 @@ _COMMON_BUILD_DEPS = " ".join([
     "autoconf-archive", "libgtest-dev", "doxygen", "graphviz",
     "libzmq5-dev", "perl", "libxml-simple-perl", "git",
     "aspell", "aspell-en",
-    "libjansson-dev", "libteam-dev",
+    "libjansson-dev", "libteam-dev", "libjemalloc-dev",
 ])
 
 # ── Private implementation ────────────────────────────────────────────────────
@@ -170,8 +170,9 @@ def deb_package_set(
         "    # Install build deps from Bazel inputs",
         "    echo \"Installing dep debs from /deps/:\"",
         "    ls /deps/*.deb 2>/dev/null || echo \"No deps\"",
-        "    dpkg -i /deps/*.deb 2>&1 || true",
+        "    dpkg --force-overwrite --force-depends -i /deps/*.deb 2>&1 || true",
         "    apt-get install -f -y -qq 2>/dev/null || true",
+        "    ldconfig",
         "    echo \"Checking swss headers:\"",
         "    ls /usr/include/swss/logger.h 2>/dev/null || echo \"swss/logger.h MISSING\"",
         "    cp -a /src /tmp/build-src",
@@ -181,7 +182,7 @@ def deb_package_set(
         "    git config --global user.email build@sonic && git config --global user.name sonic",
         "    git init -q && git add -A . && git commit -qm init 2>/dev/null || true",
         "    for v in 1.10.0 1.11.0 1.12.0 1.13.0 1.14.0 1.15.0 1.16.0; do git tag v$$v 2>/dev/null || true; done",
-        "    PATH=/root/.cargo/bin:$$PATH DEB_BUILD_OPTIONS=nocheck dpkg-buildpackage -rfakeroot -b -us -uc -d -Pnoyangmod,nopython2 2>&1 | tail -100",
+        "    PATH=/root/.cargo/bin:$$PATH DEB_BUILD_OPTIONS=nocheck DEB_BUILD_MAINT_OPTIONS=noopt dpkg-buildpackage -rfakeroot -b -us -uc -d -Pnoyangmod,nopython2 -j2 2>&1 | tail -100",
         "    echo \"=== debs produced ===\"",
         "    ls -lh /tmp/*.deb 2>/dev/null || echo \"NO DEBS\"",
         "    cp /tmp/*.deb /output/ 2>/dev/null || true",
