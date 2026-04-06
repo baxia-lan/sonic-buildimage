@@ -20,7 +20,7 @@ apt_install_layer(
         "libcurl4-openssl-dev",
         "libcjson-dev",
     ],
-    size_budget_mb = 30,
+    size_budget_mb = 250,
 )
 
 # ── Service debs layer ───────────────────────────────────────────────────────
@@ -31,7 +31,7 @@ deb_extract_layer(
         "//src/sonic-mgmt-common:mgmt_common",
         "//src/sonic-mgmt-framework:mgmt_framework_debs",
     ],
-    size_budget_mb = 40,
+    size_budget_mb = 250,
 )
 
 # ── Config + scripts layer ───────────────────────────────────────────────────

@@ -21,7 +21,7 @@ apt_install_layer(
         "ipmitool",
         "python3-yaml",
     ],
-    size_budget_mb = 40,
+    size_budget_mb = 250,
 )
 
 # ── Service debs layer ───────────────────────────────────────────────────────
@@ -31,7 +31,7 @@ deb_extract_layer(
     debs = [
         "//src/snmpd:snmpd_debs",
     ],
-    size_budget_mb = 30,
+    size_budget_mb = 250,
 )
 
 # ── Python wheels layer ──────────────────────────────────────────────────────

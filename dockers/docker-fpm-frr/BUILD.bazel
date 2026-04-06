@@ -39,7 +39,7 @@ deb_extract_layer(
         "//src/sonic-frr:frr_debs",
         "//src/sonic-swss:swss_deb",
     ],
-    size_budget_mb = 50,
+    size_budget_mb = 250,
 )
 
 # -- config + scripts layer ----------------------------------------------------

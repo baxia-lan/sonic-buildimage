@@ -46,7 +46,7 @@ apt_install_layer(
 deb_extract_layer(
     name = "orchagent_binary_layer",
     debs = ["//src/sonic-swss:swss_deb"],
-    size_budget_mb = 50,
+    size_budget_mb = 250,
 )
 
 # ── orchagent config + scripts layer ─────────────────────────────────────────

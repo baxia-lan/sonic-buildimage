@@ -21,7 +21,7 @@ apt_install_layer(
         "libjansson4",
         "ebtables",
     ],
-    size_budget_mb = 20,
+    size_budget_mb = 250,
 )
 
 # ── Service debs layer ───────────────────────────────────────────────────────

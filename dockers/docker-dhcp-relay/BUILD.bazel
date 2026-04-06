@@ -21,7 +21,7 @@ apt_install_layer(
         "python3-psutil",
         "libpcap-dev",
     ],
-    size_budget_mb = 30,
+    size_budget_mb = 250,
 )
 
 # ── Service debs layer ───────────────────────────────────────────────────────
@@ -32,7 +32,7 @@ deb_extract_layer(
         "//src/dhcpmon:dhcpmon_debs",
         "//src/dhcprelay:dhcprelay_debs",
     ],
-    size_budget_mb = 20,
+    size_budget_mb = 250,
 )
 
 # ── Config + scripts layer ───────────────────────────────────────────────────

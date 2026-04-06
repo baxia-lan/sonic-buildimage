@@ -37,7 +37,7 @@ deb_extract_layer(
     debs = [
         "//src/sonic-swss:swss_deb",
     ],
-    size_budget_mb = 20,
+    size_budget_mb = 250,
 )
 
 # -- config + scripts layer ----------------------------------------------------

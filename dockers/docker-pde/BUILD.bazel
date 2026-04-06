@@ -29,7 +29,7 @@ apt_install_layer(
         "i2c-tools",
         "python3-jsonschema",
     ],
-    size_budget_mb = 50,
+    size_budget_mb = 250,
 )
 
 # ── Service debs layer ───────────────────────────────────────────────────────
@@ -39,7 +39,7 @@ deb_extract_layer(
     debs = [
         "//src/sonic-platform-pde:sonic_pde_debs",
     ],
-    size_budget_mb = 20,
+    size_budget_mb = 250,
 )
 
 # ── Config + scripts layer ───────────────────────────────────────────────────

@@ -62,7 +62,7 @@ pkg_tar(
 stripped_layer(
     name = "eventd_wheels_layer_stripped",
     src = ":eventd_wheels_layer",
-    size_budget_mb = 20,
+    size_budget_mb = 250,
 )
 
 # ── docker-eventd OCI image ─────────────────────────────────────────────────

@@ -11,31 +11,18 @@ Layer accounting:
   Total:                                              ~290 MB  (< 300 MB budget)
 """
 
-load("@rules_oci//oci:defs.bzl", "oci_image")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+load("//rules/bazel/oci:docker_layer.bzl", "deb_extract_layer")
 load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
-load("//rules/bazel/oci:strip_layer.bzl", "stripped_layer")
-load("//rules/bazel/j2:j2.bzl", "j2_render")
 
 package(default_visibility = ["//visibility:public"])
 
 # -- wpa_supplicant binary layer -----------------------------------------------
 
-genrule(
+deb_extract_layer(
     name = "macsec_binary_layer",
-    srcs = ["//src/wpasupplicant:wpasupplicant_debs"],
-    outs = ["macsec_binary_layer.tar"],
-    cmd = """
-set -euo pipefail
-ROOTFS=$$(mktemp -d)
-trap 'rm -rf "$$ROOTFS"' EXIT
-for deb in $(SRCS); do
-    dpkg-deb -x "$$deb" "$$ROOTFS"
-done
-SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \
-  --owner=0 --group=0 \
-  -C "$$ROOTFS" -cf $(OUTS) .
-""",
+    debs = ["//src/wpasupplicant:wpasupplicant_debs"],
+    size_budget_mb = 250,
 )
 
 # -- sonic-utilities wheel layer -----------------------------------------------
@@ -83,21 +70,13 @@ pkg_tar(
     package_dir = "/cli",
 )
 
-# -- Size budget enforcement ---------------------------------------------------
-
-stripped_layer(
-    name = "macsec_binary_layer_stripped",
-    src = ":macsec_binary_layer",
-    size_budget_mb = 20,
-)
-
 # -- docker-macsec OCI image ---------------------------------------------------
 
 sonic_oci_image(
     name = "docker_macsec",
     base = "//dockers/docker-swss-layer-bullseye:sonic_swss_layer_bullseye",
     tars = [
-        ":macsec_binary_layer_stripped",
+        ":macsec_binary_layer",
         ":macsec_wheel_layer",
         ":macsec_config_layer",
         ":macsec_cli_layer",

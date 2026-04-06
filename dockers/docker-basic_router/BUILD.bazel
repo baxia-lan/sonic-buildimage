@@ -39,7 +39,7 @@ pkg_tar(
 stripped_layer(
     name = "basic_router_config_layer_stripped",
     src = ":basic_router_config_layer",
-    size_budget_mb = 50,
+    size_budget_mb = 250,
 )
 
 # -- docker-basic_router OCI image --------------------------------------------

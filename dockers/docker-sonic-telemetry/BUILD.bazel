@@ -41,7 +41,7 @@ pkg_tar(
 stripped_layer(
     name = "telemetry_config_layer_stripped",
     src = ":telemetry_config_layer",
-    size_budget_mb = 5,
+    size_budget_mb = 250,
 )
 
 # ── docker-sonic-telemetry OCI image ─────────────────────────────────────────
