@@ -4,8 +4,7 @@ These genrule wrappers execute apt-get and dpkg operations inside Docker
 containers, enabling the build to work on both Linux and macOS.
 """
 
-# Pin by digest for reproducibility. Refresh: crane digest debian:bookworm-slim
-_DEBIAN_IMAGE = "debian:bookworm-slim@sha256:f06537653ac770703bc45b4b113475bd402f451e85223f0f2837acbf89ab020a"
+_DEBIAN_IMAGE = "debian:bookworm-slim"
 
 # Snapshot mirror for reproducible apt installs.
 _APT_SNAPSHOT_URL = "https://snapshot.debian.org/archive/debian/20260401T000000Z"
@@ -54,7 +53,7 @@ OUT=$$(cd $$(dirname $(OUTS)) && pwd)/$$(basename $(OUTS))
 mkdir -p $$(dirname "$$OUT")
 touch "$$OUT"
 
-docker run --rm \
+docker run --rm --platform linux/amd64 \
   -v "$$OUT:/output/layer.tar" \
   -e DEBIAN_FRONTEND=noninteractive \
   -e SOURCE_DATE_EPOCH=0 \
@@ -149,7 +148,7 @@ for deb in $$DEBS; do
   cp "$$deb" "$$DEB_DIR/" 2>/dev/null || true
 done
 
-docker run --rm \
+docker run --rm --platform linux/amd64 \
   -v "$$DEB_DIR:/debs:ro" \
   -v "$$OUT:/output/layer.tar" \
   -e SOURCE_DATE_EPOCH=0 \

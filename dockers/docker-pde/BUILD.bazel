@@ -6,54 +6,40 @@ Provides platform diagnostic tools and test utilities.
 
 load("@rules_oci//oci:defs.bzl", "oci_image")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+load("//rules/bazel/oci:docker_layer.bzl", "apt_install_layer", "deb_extract_layer")
 load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
-load("//rules/bazel/oci:strip_layer.bzl", "stripped_layer")
 
 package(default_visibility = ["//visibility:public"])
 
 # ── Apt packages layer ───────────────────────────────────────────────────────
 
-genrule(
+apt_install_layer(
     name = "pde_apt_layer",
-    srcs = [],
-    outs = ["pde_apt_layer.tar"],
-    cmd = """
-set -euo pipefail
-ROOTFS=$$(mktemp -d)
-trap 'rm -rf "$$ROOTFS"' EXIT
-
-apt-get -y install --no-install-recommends \
-  -o Dir::Cache=$$ROOTFS/var/cache/apt \
-  -o Dir::State=$$ROOTFS/var/lib/apt \
-  ipmitool telnet busybox kmod bzip2 curl ioping openssl \
-  bc sysstat i2c-tools python3-jsonschema
-
-rm -rf $$ROOTFS/var/cache $$ROOTFS/var/lib/apt
-SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \
-  --owner=0 --group=0 \
-  -C "$$ROOTFS" -cf $(OUTS) .
-""",
+    packages = [
+        "ipmitool",
+        "telnet",
+        "busybox",
+        "kmod",
+        "bzip2",
+        "curl",
+        "ioping",
+        "openssl",
+        "bc",
+        "sysstat",
+        "i2c-tools",
+        "python3-jsonschema",
+    ],
+    size_budget_mb = 50,
 )
 
 # ── Service debs layer ───────────────────────────────────────────────────────
 
-genrule(
+deb_extract_layer(
     name = "pde_binary_layer",
-    srcs = [
+    debs = [
         "//src/sonic-platform-pde:sonic_pde_debs",
     ],
-    outs = ["pde_binary_layer.tar"],
-    cmd = """
-set -euo pipefail
-ROOTFS=$$(mktemp -d)
-trap 'rm -rf "$$ROOTFS"' EXIT
-for deb in $(SRCS); do
-    dpkg-deb -x "$$deb" "$$ROOTFS"
-done
-SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \
-  --owner=0 --group=0 \
-  -C "$$ROOTFS" -cf $(OUTS) .
-""",
+    size_budget_mb = 20,
 )
 
 # ── Config + scripts layer ───────────────────────────────────────────────────
@@ -79,28 +65,14 @@ pkg_tar(
     mode = "0755",
 )
 
-# ── Size budget enforcement ──────────────────────────────────────────────────
-
-stripped_layer(
-    name = "pde_apt_layer_stripped",
-    src = ":pde_apt_layer",
-    size_budget_mb = 50,
-)
-
-stripped_layer(
-    name = "pde_binary_layer_stripped",
-    src = ":pde_binary_layer",
-    size_budget_mb = 20,
-)
-
 # ── docker-pde OCI image ────────────────────────────────────────────────────
 
 sonic_oci_image(
     name = "docker_pde",
     base = "//dockers/sonic-common-layer:sonic_common_layer",
     tars = [
-        ":pde_apt_layer_stripped",
-        ":pde_binary_layer_stripped",
+        ":pde_apt_layer",
+        ":pde_binary_layer",
         ":pde_config_layer",
     ],
     env = {

@@ -13,33 +13,19 @@ Layer accounting:
 
 load("@rules_oci//oci:defs.bzl", "oci_image")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+load("//rules/bazel/oci:docker_layer.bzl", "apt_install_layer")
 load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
-load("//rules/bazel/oci:strip_layer.bzl", "stripped_layer")
-load("//rules/bazel/j2:j2.bzl", "j2_render")
 
 package(default_visibility = ["//visibility:public"])
 
 # -- apt runtime packages layer ------------------------------------------------
 
-genrule(
+apt_install_layer(
     name = "iccpd_apt_layer",
-    srcs = [],
-    outs = ["iccpd_apt_layer.tar"],
-    cmd = """
-set -euo pipefail
-ROOTFS=$$(mktemp -d)
-trap 'rm -rf "$$ROOTFS"' EXIT
-
-apt-get -y install --no-install-recommends \
-  -o Dir::Cache=$$ROOTFS/var/cache/apt \
-  -o Dir::State=$$ROOTFS/var/lib/apt \
-  iptables
-
-rm -rf $$ROOTFS/var/cache $$ROOTFS/var/lib/apt
-SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \
-  --owner=0 --group=0 \
-  -C "$$ROOTFS" -cf $(OUTS) .
-""",
+    packages = [
+        "iptables",
+    ],
+    size_budget_mb = 250,
 )
 
 # -- config + scripts layer ----------------------------------------------------
@@ -61,21 +47,13 @@ pkg_tar(
     mode = "0755",
 )
 
-# -- Size budget enforcement ---------------------------------------------------
-
-stripped_layer(
-    name = "iccpd_apt_layer_stripped",
-    src = ":iccpd_apt_layer",
-    size_budget_mb = 10,
-)
-
 # -- docker-iccpd OCI image ---------------------------------------------------
 
 sonic_oci_image(
     name = "docker_iccpd",
     base = "//dockers/docker-swss-layer-bullseye:sonic_swss_layer_bullseye",
     tars = [
-        ":iccpd_apt_layer_stripped",
+        ":iccpd_apt_layer",
         ":iccpd_config_layer",
     ],
     env = {

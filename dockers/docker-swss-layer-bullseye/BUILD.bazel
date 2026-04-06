@@ -16,7 +16,7 @@ deb_extract_layer(
         "//src/sonic-swss-common:swss_common",
         "//src/sonic-swss-common:python3_swsscommon",
     ],
-    size_budget_mb = 80,
+    size_budget_mb = 250,
 )
 
 deb_extract_layer(

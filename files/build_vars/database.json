@@ -1,4 +1,18 @@
 {
     "CONTAINER_NAME": "database",
-    "ENABLE_ASAN": "n"
+    "ENABLE_ASAN": "n",
+    "INSTANCES": {
+        "redis": {
+            "hostname": "127.0.0.1",
+            "port": "6379",
+            "unix_socket_path": "/var/run/redis/redis.sock"
+        }
+    },
+    "DEVICE_METADATA": {
+        "localhost": {
+            "hostname": "sonic",
+            "platform": "x86_64-broadcom_common",
+            "switch_type": ""
+        }
+    }
 }

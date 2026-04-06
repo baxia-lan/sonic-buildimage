@@ -6,77 +6,32 @@ Provides snmpd plus the sonic-snmpagent Python wheel.
 
 load("@rules_oci//oci:defs.bzl", "oci_image")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+load("//rules/bazel/oci:docker_layer.bzl", "apt_install_layer", "deb_extract_layer")
 load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
-load("//rules/bazel/oci:strip_layer.bzl", "stripped_layer")
-load("//rules/bazel/j2:j2.bzl", "j2_render")
 
 package(default_visibility = ["//visibility:public"])
 
 # ── Jinja2 templates rendered at build time ──────────────────────────────────
 
-j2_render(
-    name = "supervisord_conf",
-    template = "supervisord.conf.j2",
-    vars = "//files/build_vars:snmp.json",
-    output = "supervisord.conf",
-)
-
-j2_render(
-    name = "snmpd_conf",
-    template = "snmpd.conf.j2",
-    vars = "//files/build_vars:snmp.json",
-    output = "snmpd.conf",
-)
-
-j2_render(
-    name = "sys_description",
-    template = "sysDescription.j2",
-    vars = "//files/build_vars:snmp.json",
-    output = "sysDescription",
-)
-
 # ── Apt packages layer ───────────────────────────────────────────────────────
 
-genrule(
+apt_install_layer(
     name = "snmp_apt_layer",
-    srcs = [],
-    outs = ["snmp_apt_layer.tar"],
-    cmd = """
-set -euo pipefail
-ROOTFS=$$(mktemp -d)
-trap 'rm -rf "$$ROOTFS"' EXIT
-
-apt-get -y install --no-install-recommends \
-  -o Dir::Cache=$$ROOTFS/var/cache/apt \
-  -o Dir::State=$$ROOTFS/var/lib/apt \
-  ipmitool python3-yaml
-
-rm -rf $$ROOTFS/var/cache $$ROOTFS/var/lib/apt
-SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \
-  --owner=0 --group=0 \
-  -C "$$ROOTFS" -cf $(OUTS) .
-""",
+    packages = [
+        "ipmitool",
+        "python3-yaml",
+    ],
+    size_budget_mb = 40,
 )
 
 # ── Service debs layer ───────────────────────────────────────────────────────
 
-genrule(
+deb_extract_layer(
     name = "snmp_binary_layer",
-    srcs = [
+    debs = [
         "//src/snmpd:snmpd_debs",
     ],
-    outs = ["snmp_binary_layer.tar"],
-    cmd = """
-set -euo pipefail
-ROOTFS=$$(mktemp -d)
-trap 'rm -rf "$$ROOTFS"' EXIT
-for deb in $(SRCS); do
-    dpkg-deb -x "$$deb" "$$ROOTFS"
-done
-SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \
-  --owner=0 --group=0 \
-  -C "$$ROOTFS" -cf $(OUTS) .
-""",
+    size_budget_mb = 30,
 )
 
 # ── Python wheels layer ──────────────────────────────────────────────────────
@@ -123,28 +78,14 @@ pkg_tar(
     mode = "0755",
 )
 
-# ── Size budget enforcement ──────────────────────────────────────────────────
-
-stripped_layer(
-    name = "snmp_apt_layer_stripped",
-    src = ":snmp_apt_layer",
-    size_budget_mb = 40,
-)
-
-stripped_layer(
-    name = "snmp_binary_layer_stripped",
-    src = ":snmp_binary_layer",
-    size_budget_mb = 30,
-)
-
 # ── docker-snmp OCI image ───────────────────────────────────────────────────
 
 sonic_oci_image(
     name = "docker_snmp",
     base = "//dockers/sonic-common-layer:sonic_common_layer",
     tars = [
-        ":snmp_apt_layer_stripped",
-        ":snmp_binary_layer_stripped",
+        ":snmp_apt_layer",
+        ":snmp_binary_layer",
         ":snmp_wheels_layer",
         ":snmp_config_layer",
     ],

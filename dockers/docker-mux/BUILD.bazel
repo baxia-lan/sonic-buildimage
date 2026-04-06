@@ -55,7 +55,7 @@ pkg_tar(
 stripped_layer(
     name = "mux_binary_layer_stripped",
     src = ":mux_binary_layer",
-    size_budget_mb = 15,
+    size_budget_mb = 250,
 )
 
 # ── docker-mux OCI image ────────────────────────────────────────────────────

@@ -30,7 +30,7 @@ def _j2_render_impl(ctx):
     args.add(template.path)
     if vars_file:
         args.add("--vars", vars_file.path)
-    args.add("--undefined", "strict")
+    args.add("--undefined", ctx.attr.undefined_behavior)
     args.add("-o", output.path)
 
     inputs = [template]
@@ -63,6 +63,11 @@ j2_render = rule(
         "output": attr.output(
             mandatory = True,
             doc = "Output file path.",
+        ),
+        "undefined_behavior": attr.string(
+            default = "strict",
+            values = ["strict", "undefined"],
+            doc = "How to handle undefined variables: strict (error) or undefined (empty string).",
         ),
         "_j2cli": attr.label(
             default = "//tools:j2cli",

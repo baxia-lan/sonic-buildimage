@@ -23,9 +23,10 @@ Hermeticity contract:
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 
-# Docker image pinned by sha256 digest for reproducible builds.
-# Refresh: crane digest debian:bookworm-slim
-_BUILD_IMAGE = "debian:bookworm-slim@sha256:f06537653ac770703bc45b4b113475bd402f451e85223f0f2837acbf89ab020a"
+# Docker image for building .deb packages.
+# On CI (amd64 native), this runs natively. On macOS arm64, --platform linux/amd64
+# forces qemu emulation to produce amd64 .deb packages.
+_BUILD_IMAGE = "debian:bookworm-slim"
 
 # Snapshot mirror for reproducible apt installs.
 # All builds use the same package versions regardless of build date.
@@ -158,7 +159,7 @@ def deb_package_set(
         "DEPS_DIR=$$(mktemp -d)",
         "find . -path './bazel-out/*/bin/src/*' -name '*.deb' -size +0 2>/dev/null | while IFS= read -r f; do cp \"$$f\" \"$$DEPS_DIR/\" 2>/dev/null; done || true",
         "echo \"Dep debs found: $$(ls $$DEPS_DIR/*.deb 2>/dev/null | wc -l)\"",
-        "docker run --rm \\",
+        "docker run --rm --platform linux/amd64 \\",
         "  -v \"$$SRC_DIR:/src:ro\" \\",
         "  -v \"$$OUT_DIR:/output\" \\",
         "  -v \"$$DEPS_DIR:/deps:ro\" \\",

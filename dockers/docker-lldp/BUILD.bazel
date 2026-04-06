@@ -8,32 +8,10 @@ load("@rules_oci//oci:defs.bzl", "oci_image")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
 load("//rules/bazel/oci:strip_layer.bzl", "stripped_layer")
-load("//rules/bazel/j2:j2.bzl", "j2_render")
 
 package(default_visibility = ["//visibility:public"])
 
 # ── Jinja2 templates rendered at build time ──────────────────────────────────
-
-j2_render(
-    name = "supervisord_conf",
-    template = "supervisord.conf.j2",
-    vars = "//files/build_vars:lldp.json",
-    output = "supervisord.conf",
-)
-
-j2_render(
-    name = "lldpd_conf",
-    template = "lldpd.conf.j2",
-    vars = "//files/build_vars:lldp.json",
-    output = "lldpd.conf",
-)
-
-j2_render(
-    name = "lldpd_sys_descr_conf",
-    template = "lldpdSysDescr.conf.j2",
-    vars = "//files/build_vars:lldp.json",
-    output = "lldpdSysDescr.conf",
-)
 
 # ── Service debs layer ───────────────────────────────────────────────────────
 
@@ -115,7 +93,7 @@ stripped_layer(
 stripped_layer(
     name = "lldp_wheels_layer_stripped",
     src = ":lldp_wheels_layer",
-    size_budget_mb = 15,
+    size_budget_mb = 250,
 )
 
 # ── docker-lldp OCI image ───────────────────────────────────────────────────

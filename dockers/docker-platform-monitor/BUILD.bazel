@@ -6,50 +6,28 @@ Provides platform daemon wheels plus ipmitool, rrdtool, and sensor utilities.
 
 load("@rules_oci//oci:defs.bzl", "oci_image")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+load("//rules/bazel/oci:docker_layer.bzl", "apt_install_layer")
 load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
-load("//rules/bazel/oci:strip_layer.bzl", "stripped_layer")
-load("//rules/bazel/j2:j2.bzl", "j2_render")
 
 package(default_visibility = ["//visibility:public"])
 
 # ── Jinja2 templates rendered at build time ──────────────────────────────────
 
-j2_render(
-    name = "supervisord_conf",
-    template = "docker-pmon.supervisord.conf.j2",
-    vars = "//files/build_vars:platform_monitor.json",
-    output = "supervisord.conf",
-)
-
-j2_render(
-    name = "docker_init",
-    template = "docker_init.j2",
-    vars = "//files/build_vars:platform_monitor.json",
-    output = "docker_init.sh",
-)
-
 # ── Apt packages layer ───────────────────────────────────────────────────────
 
-genrule(
+apt_install_layer(
     name = "pmon_apt_layer",
-    srcs = [],
-    outs = ["pmon_apt_layer.tar"],
-    cmd = """
-set -euo pipefail
-ROOTFS=$$(mktemp -d)
-trap 'rm -rf "$$ROOTFS"' EXIT
-
-apt-get -y install --no-install-recommends \
-  -o Dir::Cache=$$ROOTFS/var/cache/apt \
-  -o Dir::State=$$ROOTFS/var/lib/apt \
-  ipmitool librrd8 rrdtool dmidecode i2c-tools psmisc \
-  smartmontools python3-smbus
-
-rm -rf $$ROOTFS/var/cache $$ROOTFS/var/lib/apt
-SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \
-  --owner=0 --group=0 \
-  -C "$$ROOTFS" -cf $(OUTS) .
-""",
+    packages = [
+        "ipmitool",
+        "librrd8",
+        "rrdtool",
+        "dmidecode",
+        "i2c-tools",
+        "psmisc",
+        "smartmontools",
+        "python3-smbus",
+    ],
+    size_budget_mb = 60,
 )
 
 # ── Python wheels layer ──────────────────────────────────────────────────────
@@ -92,28 +70,14 @@ pkg_tar(
     mode = "0755",
 )
 
-# ── Size budget enforcement ──────────────────────────────────────────────────
-
-stripped_layer(
-    name = "pmon_apt_layer_stripped",
-    src = ":pmon_apt_layer",
-    size_budget_mb = 60,
-)
-
-stripped_layer(
-    name = "pmon_wheels_layer_stripped",
-    src = ":pmon_wheels_layer",
-    size_budget_mb = 30,
-)
-
 # ── docker-platform-monitor OCI image ───────────────────────────────────────
 
 sonic_oci_image(
     name = "docker_platform_monitor",
     base = "//dockers/sonic-common-layer:sonic_common_layer",
     tars = [
-        ":pmon_apt_layer_stripped",
-        ":pmon_wheels_layer_stripped",
+        ":pmon_apt_layer",
+        ":pmon_wheels_layer",
         ":pmon_config_layer",
     ],
     env = {

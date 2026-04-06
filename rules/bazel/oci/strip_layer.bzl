@@ -56,14 +56,12 @@ rm -rf "$WORK"/var/cache/apt \
        "$WORK"/var/lib/apt/lists \
        "$WORK"/var/log/*.log 2>/dev/null || true
 
-# Produce deterministic output tar
-SOURCE_DATE_EPOCH=0 tar \\
-  --sort=name \\
-  --mtime=@0 \\
-  --owner=0 --group=0 \\
-  -C "$WORK" \\
-  -cf {output} \\
-  .
+# Produce deterministic output tar (--sort may not be available on macOS)
+if tar --sort=name -cf /dev/null --files-from /dev/null 2>/dev/null; then
+  SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 --owner=0 --group=0 -C "$WORK" -cf {output} .
+else
+  SOURCE_DATE_EPOCH=0 tar -cf {output} -C "$WORK" .
+fi
 
 # Size budget enforcement
 SIZE_MB=$(( $(stat -f%z {output} 2>/dev/null || stat -c%s {output}) / 1048576 ))
