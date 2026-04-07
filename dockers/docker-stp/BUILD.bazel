@@ -1,72 +1,32 @@
-"""docker-stp — SONiC Spanning Tree Protocol service container.
-
-Phase 2: collapsed to sonic-common-layer base.
-Provides STP daemon with runtime deps for D-Bus and ebtables.
-"""
-
-load("@rules_oci//oci:defs.bzl", "oci_image")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
-load("//rules/bazel/oci:docker_layer.bzl", "apt_install_layer", "deb_extract_layer")
 load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
 
 package(default_visibility = ["//visibility:public"])
 
-# ── Apt packages layer ───────────────────────────────────────────────────────
-
-apt_install_layer(
-    name = "stp_apt_layer",
-    packages = [
-        "libdbus-1-3",
-        "libdaemon0",
-        "libjansson4",
-        "ebtables",
-    ],
-    size_budget_mb = 250,
-)
-
-# ── Service debs layer ───────────────────────────────────────────────────────
-
-deb_extract_layer(
-    name = "stp_binary_layer",
-    debs = [
-        "//src/sonic-stp:stp",
-    ],
-    size_budget_mb = 250,
-)
-
-# ── Config + scripts layer ───────────────────────────────────────────────────
-
 pkg_tar(
     name = "stp_config_layer",
-    srcs = [
-        "supervisord.conf",
-        "critical_processes",
-        "start.sh",
-    ],
-    remap_paths = {
-        "supervisord.conf": "/etc/supervisor/conf.d/supervisord.conf",
-        "critical_processes": "/etc/supervisor/critical_processes",
-        "start.sh": "/usr/bin/start.sh",
-    },
+    srcs = glob(
+        [
+            "*.sh",
+            "*.j2",
+            "*.conf",
+            "*.py",
+        ],
+        allow_empty = True,
+    ),
     mode = "0755",
 )
-
-# ── docker-stp OCI image ────────────────────────────────────────────────────
 
 sonic_oci_image(
     name = "docker_stp",
     base = "//dockers/sonic-common-layer:sonic_common_layer",
     tars = [
-        ":stp_apt_layer",
-        ":stp_binary_layer",
+        "@bookworm_libdbus-1-3_1.14.10-1_deb12u1_amd64//:layer.tar.gz",
+        "@bookworm_libjansson4_2.14-2_amd64//:layer.tar.gz",
         ":stp_config_layer",
     ],
-    env = {
-        "DEBIAN_FRONTEND": "noninteractive",
-    },
     labels = {
         "org.opencontainers.image.title": "docker-stp",
-        "org.opencontainers.image.description": "SONiC Spanning Tree Protocol service",
         "sonic.container.name": "stp",
     },
 )

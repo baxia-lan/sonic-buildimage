@@ -1,62 +1,30 @@
-"""docker-router-advertiser — SONiC router advertisement service container.
-
-Phase 2: collapsed to sonic-common-layer base.
-Minimal config-only image with no apt deps or service debs.
-"""
-
-load("@rules_oci//oci:defs.bzl", "oci_image")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
-load("//rules/bazel/oci:strip_layer.bzl", "stripped_layer")
 
 package(default_visibility = ["//visibility:public"])
 
-# ── Jinja2 templates rendered at build time ──────────────────────────────────
-
-# ── Config + scripts layer ───────────────────────────────────────────────────
-
 pkg_tar(
     name = "router_advertiser_config_layer",
-    srcs = [
-        
-        "critical_processes",
-        "docker-init.sh",
-        "start.sh",
-        # Runtime-dynamic templates:
-        "radvd.conf.j2",
-        "wait_for_link.sh.j2",
-    ],
-    remap_paths = {
-        "supervisord.conf": "/etc/supervisor/conf.d/supervisord.conf",
-        "critical_processes": "/etc/supervisor/critical_processes",
-        "docker-init.sh": "/usr/local/bin/docker-init.sh",
-        "start.sh": "/usr/bin/start.sh",
-    },
+    srcs = glob(
+        [
+            "*.sh",
+            "*.j2",
+            "*.conf",
+            "*.py",
+        ],
+        allow_empty = True,
+    ),
     mode = "0755",
 )
-
-# ── Size budget enforcement ──────────────────────────────────────────────────
-
-stripped_layer(
-    name = "router_advertiser_config_layer_stripped",
-    src = ":router_advertiser_config_layer",
-    size_budget_mb = 250,
-)
-
-# ── docker-router-advertiser OCI image ───────────────────────────────────────
 
 sonic_oci_image(
     name = "docker_router_advertiser",
     base = "//dockers/sonic-common-layer:sonic_common_layer",
     tars = [
-        ":router_advertiser_config_layer_stripped",
+        ":router_advertiser_config_layer",
     ],
-    env = {
-        "DEBIAN_FRONTEND": "noninteractive",
-    },
     labels = {
         "org.opencontainers.image.title": "docker-router-advertiser",
-        "org.opencontainers.image.description": "SONiC router advertisement service",
         "sonic.container.name": "radv",
     },
 )

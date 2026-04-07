@@ -57,3 +57,13 @@ packages:
   - python3-protobuf
   - python3-netifaces
   - python3-yaml
+  - ebtables
+  - ndppd
+  - dmidecode
+  - logrotate
+  - ifupdown
+  - net-tools
+  - ipmitool
+  - pciutils
+  - libteam-utils
+  - python3-pip
