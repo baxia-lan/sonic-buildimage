@@ -54,3 +54,6 @@ build:armhf --platforms=//platforms:linux_armhf
 build:debug --compilation_mode=dbg
 build:debug --strip=never
 build:debug --sandbox_debug
+
+# Bazel 8 compat: allow empty globs (Bazel 7 default)
+build --noincompatible_disallow_empty_glob
