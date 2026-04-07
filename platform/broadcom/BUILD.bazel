@@ -12,15 +12,18 @@ load("//rules/bazel/onie:rootfs.bzl", "sonic_rootfs_image")
 package(default_visibility = ["//visibility:public"])
 
 # ── Service images (hermetic, build locally) ──────────────────────────────────
+# Use the OCI image targets (directories with blobs/) for layer deduplication.
+# Shared base layers are stored once in the rootfs regardless of how many
+# services use them.
 HERMETIC_SERVICE_IMAGES = [
-    "//dockers/docker-database:docker_database_tarball",
-    "//dockers/docker-teamd:docker_teamd_tarball",
-    "//dockers/docker-nat:docker_nat_tarball",
-    "//dockers/docker-sflow:docker_sflow_tarball",
-    "//dockers/docker-stp:docker_stp_tarball",
-    "//dockers/docker-iccpd:docker_iccpd_tarball",
-    "//dockers/docker-router-advertiser:docker_router_advertiser_tarball",
-    "//dockers/docker-basic_router:docker_basic_router_tarball",
+    "//dockers/docker-database:docker_database",
+    "//dockers/docker-teamd:docker_teamd",
+    "//dockers/docker-nat:docker_nat",
+    "//dockers/docker-sflow:docker_sflow",
+    "//dockers/docker-stp:docker_stp",
+    "//dockers/docker-iccpd:docker_iccpd",
+    "//dockers/docker-router-advertiser:docker_router_advertiser",
+    "//dockers/docker-basic_router:docker_basic_router",
 ]
 
 # ── Stub kernel for local builds ──────────────────────────────────────────────
@@ -62,7 +65,7 @@ onie_image(
 
 # ── Full rootfs (CI, all services) ───────────────────────────────────────────
 FULL_SERVICE_IMAGES = HERMETIC_SERVICE_IMAGES + [
-    "//dockers/docker-orchagent:docker_orchagent_tarball",
+    "//dockers/docker-orchagent:docker_orchagent",
 ]
 
 sonic_rootfs_image(
