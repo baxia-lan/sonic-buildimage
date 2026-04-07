@@ -167,8 +167,6 @@ def deb_package_set(
         "  -e SOURCE_DATE_EPOCH=0 \\",
         "  " + _BUILD_IMAGE + " \\",
         "  bash -euo pipefail -c '",
-        "    # Pin apt to snapshot mirror for reproducible builds",
-        "    echo \"deb [check-valid-until=no] " + _APT_SNAPSHOT_URL + " bookworm main\" > /etc/apt/sources.list",
         "    apt-get update -qq",
         "    apt-get install -y -qq --no-install-recommends " + _COMMON_BUILD_DEPS,
         "    curl -sSL https://raw.githubusercontent.com/zeromq/cppzmq/v4.10.0/zmq.hpp -o /usr/include/zmq.hpp",

@@ -59,7 +59,6 @@ docker run --rm --platform linux/amd64 \
   -e SOURCE_DATE_EPOCH=0 \
   {image} \
   bash -euo pipefail -c '
-    echo "deb [check-valid-until=no] {snapshot_url} bookworm main" > /etc/apt/sources.list
     apt-get update -qq
     apt-get install -y -qq --no-install-recommends {packages}
     {pip_cmd}
