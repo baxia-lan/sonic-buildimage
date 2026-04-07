@@ -31,9 +31,11 @@ trap 'rm -rf "$WORK"' EXIT
 cp "$KERNEL" "$WORK/vmlinuz"
 cp "$ROOTFS" "$WORK/fs.squashfs"
 
-for mod in "${MODULES[@]}"; do
-    cp "$mod" "$WORK/$(basename "$mod")"
-done
+if [ ${#MODULES[@]} -gt 0 ]; then
+    for mod in "${MODULES[@]}"; do
+        cp "$mod" "$WORK/$(basename "$mod")"
+    done
+fi
 
 # Create metadata
 cat > "$WORK/machine.conf" <<EOF
@@ -44,10 +46,13 @@ EOF
 
 # Create the self-extracting archive
 PAYLOAD="$WORK/payload.tar.gz"
-SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \
-    --owner=0 --group=0 \
-    -czf "$PAYLOAD" -C "$WORK" \
-    vmlinuz fs.squashfs machine.conf
+# Create payload (--sort may not be available on macOS)
+if tar --sort=name -cf /dev/null --files-from /dev/null 2>/dev/null; then
+    SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 --owner=0 --group=0 \
+        -czf "$PAYLOAD" -C "$WORK" vmlinuz fs.squashfs machine.conf
+else
+    SOURCE_DATE_EPOCH=0 tar -czf "$PAYLOAD" -C "$WORK" vmlinuz fs.squashfs machine.conf
+fi
 
 # Prepend the installer header
 cat installer/install.sh "$PAYLOAD" > "$OUTPUT"
