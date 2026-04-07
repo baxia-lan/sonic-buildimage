@@ -60,6 +60,8 @@ apt.install(
     manifest = "//apt:bookworm.yaml",
 )
 use_repo(apt, "bookworm")
+# NOTE: Individual package repos need to be imported via use_repo when referenced.
+# Run: bazel mod tidy  (after adding @bookworm_<pkg> refs to BUILD files)
 
 # ── Python toolchain ─────────────────────────────────────────────────────────
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
