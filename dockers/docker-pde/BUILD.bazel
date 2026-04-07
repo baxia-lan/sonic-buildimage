@@ -1,67 +1,42 @@
-"""docker-pde — SONiC Platform Diagnostic Environment (PDE) container.
+"""docker-pde — SONiC Platform Diagnostic Environment (PDE) container (hermetic apt)."""
 
-Phase 2: collapsed to sonic-common-layer base.
-Provides platform diagnostic tools and test utilities.
-"""
-
-load("@rules_oci//oci:defs.bzl", "oci_image")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
-load("//rules/bazel/oci:docker_layer.bzl", "apt_install_layer", "deb_extract_layer")
 load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
+load("//rules/bazel/oci:sonic_docker.bzl", "slim_apt_layer")
 
 package(default_visibility = ["//visibility:public"])
 
-# ── Apt packages layer ───────────────────────────────────────────────────────
+# ── Apt packages layer (hermetic @bookworm) ─────────────────────────────────
 
-apt_install_layer(
-    name = "pde_apt_layer",
-    packages = [
-        "ipmitool",
-        "telnet",
-        "busybox",
-        "kmod",
-        "bzip2",
-        "curl",
-        "ioping",
-        "openssl",
-        "bc",
-        "sysstat",
-        "i2c-tools",
-        "python3-jsonschema",
+slim_apt_layer(
+    name = "pde_apt_slim",
+    srcs = [
+        "@bookworm_iproute2_6.1.0-3_amd64//:data",
+        "@bookworm_pciutils_1-3.9.0-4_amd64//:data",
     ],
-    size_budget_mb = 250,
 )
+
+# TODO: Add hermetic @bookworm packages for: ipmitool, telnet, busybox,
+#       kmod, bzip2, curl, ioping, openssl, bc, sysstat, i2c-tools,
+#       python3-jsonschema when they are declared in MODULE.bazel.
 
 # ── Service debs layer ───────────────────────────────────────────────────────
-
-deb_extract_layer(
-    name = "pde_binary_layer",
-    debs = [
-        "//src/sonic-platform-pde:sonic_pde_debs",
-    ],
-    size_budget_mb = 250,
-)
+# TODO: Convert //src/sonic-platform-pde:sonic_pde_debs to hermetic layer
+#       once the submodule BUILD is migrated.
 
 # ── Config + scripts layer ───────────────────────────────────────────────────
 
 pkg_tar(
     name = "pde_config_layer",
-    srcs = [
-        "supervisord.conf",
-        "bench.sh",
-        "docker_init.sh",
-        "stress-sfp-i2c.py",
-        "syncd_init_common.sh",
-        "syseeprom.py",
-    ],
-    remap_paths = {
-        "supervisord.conf": "/etc/supervisor/conf.d/supervisord.conf",
-        "bench.sh": "/usr/local/bin/bench.sh",
-        "docker_init.sh": "/usr/local/bin/docker_init.sh",
-        "stress-sfp-i2c.py": "/usr/local/bin/stress-sfp-i2c.py",
-        "syncd_init_common.sh": "/usr/local/bin/syncd_init_common.sh",
-        "syseeprom.py": "/usr/local/bin/syseeprom.py",
-    },
+    srcs = glob(
+        [
+            "*.sh",
+            "*.j2",
+            "*.conf",
+            "*.py",
+        ],
+        allow_empty = True,
+    ),
     mode = "0755",
 )
 
@@ -71,16 +46,11 @@ sonic_oci_image(
     name = "docker_pde",
     base = "//dockers/sonic-common-layer:sonic_common_layer",
     tars = [
-        ":pde_apt_layer",
-        ":pde_binary_layer",
+        ":pde_apt_slim",
         ":pde_config_layer",
     ],
-    env = {
-        "DEBIAN_FRONTEND": "noninteractive",
-    },
     labels = {
         "org.opencontainers.image.title": "docker-pde",
-        "org.opencontainers.image.description": "SONiC Platform Diagnostic Environment",
         "sonic.container.name": "pde",
     },
 )

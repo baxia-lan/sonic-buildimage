@@ -1,30 +1,24 @@
-"""docker-snmp — SONiC SNMP agent service container.
+"""docker-snmp — SONiC SNMP agent service container (hermetic apt + custom .debs)."""
 
-Phase 2: collapsed to sonic-common-layer base.
-Provides snmpd plus the sonic-snmpagent Python wheel.
-"""
-
-load("@rules_oci//oci:defs.bzl", "oci_image")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
-load("//rules/bazel/oci:docker_layer.bzl", "apt_install_layer", "deb_extract_layer")
+load("//rules/bazel/oci:docker_layer.bzl", "deb_extract_layer")
 load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
+load("//rules/bazel/oci:sonic_docker.bzl", "slim_apt_layer")
 
 package(default_visibility = ["//visibility:public"])
 
-# ── Jinja2 templates rendered at build time ──────────────────────────────────
+# ── Apt packages layer (hermetic @bookworm) ─────────────────────────────────
 
-# ── Apt packages layer ───────────────────────────────────────────────────────
-
-apt_install_layer(
-    name = "snmp_apt_layer",
-    packages = [
-        "ipmitool",
-        "python3-yaml",
+slim_apt_layer(
+    name = "snmp_apt_slim",
+    srcs = [
+        "@bookworm_python3-yaml_6.0-3-p-b2_amd64//:data",
     ],
-    size_budget_mb = 250,
 )
 
 # ── Service debs layer ───────────────────────────────────────────────────────
+# TODO: Convert //src/snmpd:snmpd_debs to hermetic @bookworm packages
+#       once snmpd is declared in MODULE.bazel.
 
 deb_extract_layer(
     name = "snmp_binary_layer",
@@ -34,47 +28,20 @@ deb_extract_layer(
     size_budget_mb = 250,
 )
 
-# ── Python wheels layer ──────────────────────────────────────────────────────
-
-genrule(
-    name = "snmp_wheels_layer",
-    srcs = [
-        "//src/sonic-snmpagent:sonic_snmpagent_wheel",
-    ],
-    outs = ["snmp_wheels_layer.tar"],
-    cmd = """
-set -euo pipefail
-ROOTFS=$$(mktemp -d)
-trap 'rm -rf "$$ROOTFS"' EXIT
-pip3 install --no-cache-dir --no-deps --prefix=$$ROOTFS/usr/local $(SRCS)
-SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \
-  --owner=0 --group=0 \
-  -C "$$ROOTFS" -cf $(OUTS) .
-""",
-)
-
 # ── Config + scripts layer ───────────────────────────────────────────────────
 
 pkg_tar(
     name = "snmp_config_layer",
-    srcs = [
-        ":supervisord_conf",
-        ":snmpd_conf",
-        ":sys_description",
-        "critical_processes",
-        "docker-snmp-init.sh",
-        "snmp_yml_to_configdb.py",
-        "start.sh",
-    ],
-    remap_paths = {
-        "supervisord.conf": "/etc/supervisor/conf.d/supervisord.conf",
-        "critical_processes": "/etc/supervisor/critical_processes",
-        "snmpd.conf": "/etc/snmp/snmpd.conf",
-        "sysDescription": "/etc/sonic/sysDescription",
-        "docker-snmp-init.sh": "/usr/local/bin/docker-snmp-init.sh",
-        "snmp_yml_to_configdb.py": "/usr/local/bin/snmp_yml_to_configdb.py",
-        "start.sh": "/usr/bin/start.sh",
-    },
+    srcs = glob(
+        [
+            "*.sh",
+            "*.j2",
+            "*.conf",
+            "*.py",
+            "critical_processes",
+        ],
+        allow_empty = True,
+    ),
     mode = "0755",
 )
 
@@ -84,17 +51,12 @@ sonic_oci_image(
     name = "docker_snmp",
     base = "//dockers/sonic-common-layer:sonic_common_layer",
     tars = [
-        ":snmp_apt_layer",
+        ":snmp_apt_slim",
         ":snmp_binary_layer",
-        ":snmp_wheels_layer",
         ":snmp_config_layer",
     ],
-    env = {
-        "DEBIAN_FRONTEND": "noninteractive",
-    },
     labels = {
         "org.opencontainers.image.title": "docker-snmp",
-        "org.opencontainers.image.description": "SONiC SNMP agent service",
         "sonic.container.name": "snmp",
     },
 )

@@ -1,64 +1,35 @@
-"""docker-dhcp-relay — SONiC DHCP relay service container.
+"""docker-dhcp-relay — SONiC DHCP relay service container (hermetic)."""
 
-Phase 2: collapsed to sonic-common-layer base.
-Provides dhcpmon and dhcprelay binaries plus relay config scripts.
-"""
-
-load("@rules_oci//oci:defs.bzl", "oci_image")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
-load("//rules/bazel/oci:docker_layer.bzl", "apt_install_layer", "deb_extract_layer")
 load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
+load("//rules/bazel/oci:sonic_docker.bzl", "slim_apt_layer")
 
 package(default_visibility = ["//visibility:public"])
 
-# ── Jinja2 templates rendered at build time ──────────────────────────────────
+# ── Apt packages layer (hermetic @bookworm) ─────────────────────────────────
 
-# ── Apt packages layer ───────────────────────────────────────────────────────
-
-apt_install_layer(
-    name = "dhcp_relay_apt_layer",
-    packages = [
-        "python3-psutil",
-        "libpcap-dev",
+slim_apt_layer(
+    name = "dhcp_relay_apt_slim",
+    srcs = [
+        "@bookworm_iproute2_6.1.0-3_amd64//:data",
+        "@bookworm_python3-netifaces_0.11.0-2-p-b1_amd64//:data",
     ],
-    size_budget_mb = 250,
-)
-
-# ── Service debs layer ───────────────────────────────────────────────────────
-
-deb_extract_layer(
-    name = "dhcp_relay_binary_layer",
-    debs = [
-        "//src/dhcpmon:dhcpmon_debs",
-        "//src/dhcprelay:dhcprelay_debs",
-    ],
-    size_budget_mb = 250,
 )
 
 # ── Config + scripts layer ───────────────────────────────────────────────────
 
 pkg_tar(
     name = "dhcp_relay_config_layer",
-    srcs = [
-        ":supervisord_conf",
-        "critical_processes",
-        "docker_init.sh",
-        "start.sh",
-        # Runtime-dynamic templates:
-        "dhcp-relay.monitors.j2",
-        "dhcp-relay.programs.j2",
-        "dhcpv4-relay.agents.j2",
-        "dhcpv4-sonic-relay.agents.j2",
-        "dhcpv6-relay.agents.j2",
-        "port-name-alias-map.txt.j2",
-        "wait_for_intf.sh.j2",
-    ],
-    remap_paths = {
-        "supervisord.conf": "/etc/supervisor/conf.d/supervisord.conf",
-        "critical_processes": "/etc/supervisor/critical_processes",
-        "docker_init.sh": "/usr/local/bin/docker_init.sh",
-        "start.sh": "/usr/bin/start.sh",
-    },
+    srcs = glob(
+        [
+            "*.sh",
+            "*.j2",
+            "*.conf",
+            "*.py",
+            "critical_processes",
+        ],
+        allow_empty = True,
+    ),
     mode = "0755",
 )
 
@@ -68,16 +39,11 @@ sonic_oci_image(
     name = "docker_dhcp_relay",
     base = "//dockers/sonic-common-layer:sonic_common_layer",
     tars = [
-        ":dhcp_relay_apt_layer",
-        ":dhcp_relay_binary_layer",
+        ":dhcp_relay_apt_slim",
         ":dhcp_relay_config_layer",
     ],
-    env = {
-        "DEBIAN_FRONTEND": "noninteractive",
-    },
     labels = {
         "org.opencontainers.image.title": "docker-dhcp-relay",
-        "org.opencontainers.image.description": "SONiC DHCP relay service",
         "sonic.container.name": "dhcp_relay",
     },
 )

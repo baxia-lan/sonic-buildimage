@@ -1,72 +1,34 @@
-"""docker-platform-monitor — SONiC platform monitoring (pmon) service container.
+"""docker-platform-monitor — SONiC platform monitoring (pmon) service container (hermetic)."""
 
-Phase 2: collapsed to sonic-common-layer base.
-Provides platform daemon wheels plus ipmitool, rrdtool, and sensor utilities.
-"""
-
-load("@rules_oci//oci:defs.bzl", "oci_image")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
-load("//rules/bazel/oci:docker_layer.bzl", "apt_install_layer")
 load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
+load("//rules/bazel/oci:sonic_docker.bzl", "slim_apt_layer")
 
 package(default_visibility = ["//visibility:public"])
 
-# ── Jinja2 templates rendered at build time ──────────────────────────────────
+# ── Apt packages layer (hermetic @bookworm) ─────────────────────────────────
 
-# ── Apt packages layer ───────────────────────────────────────────────────────
-
-apt_install_layer(
-    name = "pmon_apt_layer",
-    packages = [
-        "ipmitool",
-        "librrd8",
-        "rrdtool",
-        "dmidecode",
-        "i2c-tools",
-        "psmisc",
-        "smartmontools",
-        "python3-smbus",
-    ],
-    size_budget_mb = 60,
-)
-
-# ── Python wheels layer ──────────────────────────────────────────────────────
-
-genrule(
-    name = "pmon_wheels_layer",
+slim_apt_layer(
+    name = "pmon_apt_slim",
     srcs = [
-        "//src/sonic-platform-daemons:sonic_platform_daemons_wheel",
+        "@bookworm_pciutils_1-3.9.0-4_amd64//:data",
     ],
-    outs = ["pmon_wheels_layer.tar"],
-    cmd = """
-set -euo pipefail
-ROOTFS=$$(mktemp -d)
-trap 'rm -rf "$$ROOTFS"' EXIT
-pip3 install --no-cache-dir --no-deps --prefix=$$ROOTFS/usr/local $(SRCS)
-SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \
-  --owner=0 --group=0 \
-  -C "$$ROOTFS" -cf $(OUTS) .
-""",
 )
 
 # ── Config + scripts layer ───────────────────────────────────────────────────
 
 pkg_tar(
     name = "pmon_config_layer",
-    srcs = [
-        ":supervisord_conf",
-        ":docker_init",
-        "critical_processes",
-        "delay.py",
-        "lm-sensors.sh",
-    ],
-    remap_paths = {
-        "supervisord.conf": "/etc/supervisor/conf.d/supervisord.conf",
-        "critical_processes": "/etc/supervisor/critical_processes",
-        "docker_init.sh": "/usr/local/bin/docker_init.sh",
-        "delay.py": "/usr/local/bin/delay.py",
-        "lm-sensors.sh": "/usr/bin/lm-sensors.sh",
-    },
+    srcs = glob(
+        [
+            "*.sh",
+            "*.j2",
+            "*.conf",
+            "*.py",
+            "critical_processes",
+        ],
+        allow_empty = True,
+    ),
     mode = "0755",
 )
 
@@ -76,16 +38,11 @@ sonic_oci_image(
     name = "docker_platform_monitor",
     base = "//dockers/sonic-common-layer:sonic_common_layer",
     tars = [
-        ":pmon_apt_layer",
-        ":pmon_wheels_layer",
+        ":pmon_apt_slim",
         ":pmon_config_layer",
     ],
-    env = {
-        "DEBIAN_FRONTEND": "noninteractive",
-    },
     labels = {
         "org.opencontainers.image.title": "docker-platform-monitor",
-        "org.opencontainers.image.description": "SONiC platform monitoring service",
         "sonic.container.name": "pmon",
     },
 )

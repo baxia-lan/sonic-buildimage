@@ -63,15 +63,31 @@ onie_image(
     version = "0.0.0-bazel-minimal",
 )
 
-# ── Full rootfs (CI, all services) ───────────────────────────────────────────
-FULL_SERVICE_IMAGES = HERMETIC_SERVICE_IMAGES + [
+# ── Local full build (stub kernel + orchagent via Docker genrules) ─────────────
+LOCAL_FULL_IMAGES = HERMETIC_SERVICE_IMAGES + [
     "//dockers/docker-orchagent:docker_orchagent",
 ]
 
 sonic_rootfs_image(
+    name = "sonic_broadcom_rootfs_local",
+    platform = "broadcom",
+    service_images = LOCAL_FULL_IMAGES,
+)
+
+onie_image(
+    name = "sonic_broadcom_local",
+    rootfs = ":sonic_broadcom_rootfs_local",
+    kernel = ":stub_kernel",
+    platform = "broadcom",
+    machine = "x86_64-broadcom_common",
+    version = "0.0.0-bazel-local",
+)
+
+# ── Full rootfs (CI, all services + real kernel) ──────────────────────────────
+sonic_rootfs_image(
     name = "sonic_broadcom_rootfs",
     platform = "broadcom",
-    service_images = FULL_SERVICE_IMAGES,
+    service_images = LOCAL_FULL_IMAGES,
 )
 
 # ── Full ONIE image (CI with real kernel) ─────────────────────────────────────

@@ -1,8 +1,4 @@
-"""docker-sonic-bmp — SONiC BMP (BGP Monitoring Protocol) service container.
-
-Phase 2: collapsed to sonic-common-layer base.
-Provides the BMP daemon binary.
-"""
+"""docker-sonic-bmp — SONiC BMP (BGP Monitoring Protocol) service container (hermetic apt + custom .deb)."""
 
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 load("//rules/bazel/oci:docker_layer.bzl", "deb_extract_layer")
@@ -11,6 +7,8 @@ load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
 package(default_visibility = ["//visibility:public"])
 
 # ── Service debs layer ───────────────────────────────────────────────────────
+# TODO: Convert //src/sonic-bmp:sonic_bmp to hermetic @bookworm package
+#       once sonic-bmp is declared in MODULE.bazel.
 
 deb_extract_layer(
     name = "bmp_binary_layer",
@@ -24,16 +22,16 @@ deb_extract_layer(
 
 pkg_tar(
     name = "bmp_config_layer",
-    srcs = [
-        "supervisord.conf",
-        "critical_processes",
-        "bmp.sh",
-    ],
-    remap_paths = {
-        "supervisord.conf": "/etc/supervisor/conf.d/supervisord.conf",
-        "critical_processes": "/etc/supervisor/critical_processes",
-        "bmp.sh": "/usr/bin/bmp.sh",
-    },
+    srcs = glob(
+        [
+            "*.sh",
+            "*.j2",
+            "*.conf",
+            "*.py",
+            "critical_processes",
+        ],
+        allow_empty = True,
+    ),
     mode = "0755",
 )
 
@@ -46,12 +44,8 @@ sonic_oci_image(
         ":bmp_binary_layer",
         ":bmp_config_layer",
     ],
-    env = {
-        "DEBIAN_FRONTEND": "noninteractive",
-    },
     labels = {
         "org.opencontainers.image.title": "docker-sonic-bmp",
-        "org.opencontainers.image.description": "SONiC BMP daemon service",
         "sonic.container.name": "bmp",
     },
 )

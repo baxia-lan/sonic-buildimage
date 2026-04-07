@@ -1,55 +1,33 @@
-"""docker-sonic-mgmt-framework — SONiC management framework (REST) service container.
+"""docker-sonic-mgmt-framework — SONiC management framework (REST) service container (hermetic)."""
 
-Phase 2: collapsed to sonic-common-layer base.
-Provides the management REST server and related libraries.
-"""
-
-load("@rules_oci//oci:defs.bzl", "oci_image")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
-load("//rules/bazel/oci:docker_layer.bzl", "apt_install_layer", "deb_extract_layer")
 load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
+load("//rules/bazel/oci:sonic_docker.bzl", "slim_apt_layer")
 
 package(default_visibility = ["//visibility:public"])
 
-# ── Apt packages layer ───────────────────────────────────────────────────────
+# ── Apt packages layer (hermetic @bookworm) ─────────────────────────────────
 
-apt_install_layer(
-    name = "mgmt_framework_apt_layer",
-    packages = [
-        "libxml2",
-        "libcurl4-openssl-dev",
-        "libcjson-dev",
+slim_apt_layer(
+    name = "mgmt_framework_apt_slim",
+    srcs = [
+        "@bookworm_libjansson4_2.14-2_amd64//:data",
     ],
-    size_budget_mb = 250,
-)
-
-# ── Service debs layer ───────────────────────────────────────────────────────
-
-deb_extract_layer(
-    name = "mgmt_framework_binary_layer",
-    debs = [
-        "//src/sonic-mgmt-common:mgmt_common",
-        "//src/sonic-mgmt-framework:mgmt_framework_debs",
-    ],
-    size_budget_mb = 250,
 )
 
 # ── Config + scripts layer ───────────────────────────────────────────────────
 
 pkg_tar(
     name = "mgmt_framework_config_layer",
-    srcs = [
-        "supervisord.conf",
-        "rest-server.sh",
-        "start.sh",
-        # Runtime-dynamic template:
-        "mgmt_vars.j2",
-    ],
-    remap_paths = {
-        "supervisord.conf": "/etc/supervisor/conf.d/supervisord.conf",
-        "rest-server.sh": "/usr/bin/rest-server.sh",
-        "start.sh": "/usr/bin/start.sh",
-    },
+    srcs = glob(
+        [
+            "*.sh",
+            "*.j2",
+            "*.conf",
+            "*.py",
+        ],
+        allow_empty = True,
+    ),
     mode = "0755",
 )
 
@@ -59,16 +37,11 @@ sonic_oci_image(
     name = "docker_sonic_mgmt_framework",
     base = "//dockers/sonic-common-layer:sonic_common_layer",
     tars = [
-        ":mgmt_framework_apt_layer",
-        ":mgmt_framework_binary_layer",
+        ":mgmt_framework_apt_slim",
         ":mgmt_framework_config_layer",
     ],
-    env = {
-        "DEBIAN_FRONTEND": "noninteractive",
-    },
     labels = {
         "org.opencontainers.image.title": "docker-sonic-mgmt-framework",
-        "org.opencontainers.image.description": "SONiC management framework REST service",
         "sonic.container.name": "mgmt-framework",
     },
 )
