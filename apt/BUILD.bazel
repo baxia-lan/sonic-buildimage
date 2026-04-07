@@ -1,0 +1,8 @@
+"""Debian package manifest and lockfile for hermetic builds."""
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "bookworm.yaml",
+    "bookworm.lock.json",
+])

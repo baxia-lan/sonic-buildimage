@@ -1,0 +1,1 @@
+{"version": 1, "packages": {}, "note": "Run: bazel run @rules_distroless//apt:lock -- --manifest apt/bookworm.yaml --lock apt/bookworm.lock.json"}

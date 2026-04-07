@@ -1,0 +1,37 @@
+"""Hermetic GCC C/C++ toolchain for SONiC builds.
+
+Uses pre-built GCC 12.5.0 with sysroot from Debian packages.
+No host compiler or apt-get needed at build time.
+"""
+
+load("@rules_cc//cc/toolchains:cc_toolchain.bzl", "cc_toolchain")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_toolchain(
+    name = "gcc_toolchain",
+    tool_map = "//toolchains/gcc/tools:tool_map",
+    args = [
+        "//toolchains/gcc/args:c_compile",
+        "//toolchains/gcc/args:cpp_compile",
+        "//toolchains/gcc/args:link",
+    ],
+    enabled_features = ["external_include_paths"],
+)
+
+toolchain(
+    name = "host_gcc_toolchain",
+    exec_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    toolchain = ":gcc_toolchain",
+    toolchain_type = "@rules_cc//cc:toolchain_type",
+)
+
+# ── SONiC slave toolchain type (for dpkg-buildpackage actions) ────────────────
+toolchain_type(name = "sonic_slave_toolchain_type")

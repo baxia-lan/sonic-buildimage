@@ -1,83 +1,56 @@
-# SONiC Buildimage — Bazel flags
-# Applies to all `bazel build`, `bazel test`, `bazel run` invocations.
+# SONiC Buildimage — Bazel 8 flags
+# Hermetic build: no host tools, no network in build actions.
 
-# ── Hermeticity (non-negotiable) ─────────────────────────────────────────────
+# ── Hermeticity ──────────────────────────────────────────────────────────────
 build --incompatible_strict_action_env=true
 build --sandbox_default_allow_network=false
-# Explicit PATH so strict_action_env doesn't break shell tools in genrules.
 build --action_env=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-# Reproducible packaging timestamps.
 build --action_env=SOURCE_DATE_EPOCH=0
-# No accidental host env leaking into builds.
 build --action_env=USER=bazel
-# Allow Docker CLI to find its socket in genrules.
-# HOME is needed for Docker config; DOCKER_HOST for the socket.
 build --action_env=HOME
 build --action_env=DOCKER_HOST
 
 # ── Sandbox ──────────────────────────────────────────────────────────────────
 build --spawn_strategy=sandboxed
-# Show full command lines for failed actions.
 build --verbose_failures
-
-# ── Platform defaults ─────────────────────────────────────────────────────────
-build --enable_platform_specific_config
-# Default build platform: amd64. Override with --platforms=//platforms:arm64, etc.
-build --platforms=//platforms:linux_amd64
 
 # ── C++ toolchain ─────────────────────────────────────────────────────────────
 build --incompatible_enable_cc_toolchain_resolution
 
+# ── Platform ─────────────────────────────────────────────────────────────────
+build --enable_platform_specific_config
+build --platforms=//platforms:linux_amd64
+
 # ── Output ────────────────────────────────────────────────────────────────────
-# Show build progress.
 build --show_progress_rate_limit=5
-# Timestamp each action log line.
 build --show_timestamps
 
-# ── Test ─────────────────────────────────────────────────────────────────────
+# ── Test ──────────────────────────────────────────────────────────────────────
 test --test_output=errors
 test --test_timeout=300
 
-# ── CI config (activate with --config=ci) ────────────────────────────────────
-# Uses GCS bucket as remote cache. Set up:
-#   1. Create GCS bucket: gsutil mb gs://sonic-bazel-cache
-#   2. Auth: gcloud auth application-default login
-#   3. Build: bazel build --config=ci //...
+# ── CI (--config=ci) ─────────────────────────────────────────────────────────
 build:ci --remote_cache=https://storage.googleapis.com/sonic-bazel-cache
 build:ci --google_default_credentials
 build:ci --remote_upload_local_results=true
 build:ci --remote_download_toplevel
 build:ci --jobs=64
 build:ci --noshow_progress
-build:ci --show_result=0
 
-# ── Remote Build Execution (activate with --config=rbe) ──────────────────────
-# Uses GCP Cloud Build or BuildBuddy for remote execution.
-# Set up:
-#   1. Create RBE instance in GCP project
-#   2. bazel build --config=rbe --remote_instance_name=projects/$PROJECT_ID/instances/default_instance //...
+# ── Remote Build Execution (--config=rbe) ─────────────────────────────────────
 build:rbe --config=ci
 build:rbe --remote_executor=grpcs://remotebuildexecution.googleapis.com
 build:rbe --jobs=200
-build:rbe --strategy=remote
-build:rbe --experimental_docker_use_customized_images
-build:rbe --experimental_docker_network=off
 
-# ── BuildBuddy (alternative remote cache/execution) ──────────────────────────
-# Simpler setup than GCP RBE. Free tier available.
-# Set up: export BB_API_KEY=<your-key>
-#   bazel build --config=buildbuddy //...
-build:buildbuddy --bes_results_url=https://app.buildbuddy.io/invocation/
-build:buildbuddy --bes_backend=grpcs://remote.buildbuddy.io
-build:buildbuddy --remote_cache=grpcs://remote.buildbuddy.io
-build:buildbuddy --remote_timeout=3600
-build:buildbuddy --remote_header=x-buildbuddy-api-key=
+# ── Local dev on macOS (genrules need Docker for Linux tools) ─────────────────
+build:local --spawn_strategy=local
+build:local --jobs=2
 
-# ── Debug config (--config=debug) ─────────────────────────────────────────────
+# ── Cross-compilation ────────────────────────────────────────────────────────
+build:arm64 --platforms=//platforms:linux_arm64
+build:armhf --platforms=//platforms:linux_armhf
+
+# ── Debug ─────────────────────────────────────────────────────────────────────
 build:debug --compilation_mode=dbg
 build:debug --strip=never
 build:debug --sandbox_debug
-
-# ── Cross-compilation configs ─────────────────────────────────────────────────
-build:arm64 --platforms=//platforms:linux_arm64
-build:armhf --platforms=//platforms:linux_armhf
