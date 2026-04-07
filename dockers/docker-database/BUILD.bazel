@@ -1,31 +1,13 @@
-"""docker-database — SONiC Redis database service container."""
+"""docker-database — SONiC Redis database service (hermetic)."""
 
-load("@rules_oci//oci:defs.bzl", "oci_image")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
-load("//rules/bazel/oci:docker_layer.bzl", "apt_install_layer", "deb_extract_layer")
 load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
 
 package(default_visibility = ["//visibility:public"])
 
-apt_install_layer(
-    name = "database_apt_layer",
-    packages = ["redis-server", "redis-tools"],
-    size_budget_mb = 250,
-)
-
-deb_extract_layer(
-    name = "database_binary_layer",
-    debs = [
-        "//src/sonic-swss-common:sonic_db_cli",
-        "//src/sonic-dash-api:sonic_dash_api",
-    ],
-    size_budget_mb = 250,
-)
-
-# Database templates need runtime config — include as .j2, rendered at container start
 pkg_tar(
     name = "database_config_layer",
-    srcs = glob(["*.sh", "*.j2", "flush_*"]),
+    srcs = glob(["*.sh", "*.j2", "flush_*"], allow_empty = True),
     mode = "0755",
 )
 
@@ -33,8 +15,7 @@ sonic_oci_image(
     name = "docker_database",
     base = "//dockers/sonic-common-layer:sonic_common_layer",
     tars = [
-        ":database_apt_layer",
-        ":database_binary_layer",
+        "@bookworm_redis-server_5-7.0.15-1_deb12u6_amd64//:layer.tar.gz",
         ":database_config_layer",
     ],
     labels = {
