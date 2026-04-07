@@ -10,8 +10,8 @@ Hermetic build system using:
 module(
     name = "sonic_buildimage",
     version = "0.0.0",
-    compatibility_level = 1,
     bazel_compatibility = [">=8.0.0"],
+    compatibility_level = 1,
 )
 
 # ── Core ──────────────────────────────────────────────────────────────────────
@@ -55,20 +55,17 @@ register_toolchains("//toolchains/gcc:host_gcc_toolchain")
 # All runtime and build-time Debian packages resolved from pinned snapshots.
 # No apt-get runs during build actions.
 apt = use_extension("@rules_distroless//apt:extensions.bzl", "apt")
-
-apt.sources_list(
+apt.install(
     name = "bookworm",
-    lock = "//apt:bookworm.lock.json",
     manifest = "//apt:bookworm.yaml",
 )
-
 use_repo(apt, "bookworm")
 
 # ── Python toolchain ─────────────────────────────────────────────────────────
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
 python.toolchain(
-    python_version = "3.11",
     is_default = True,
+    python_version = "3.11",
 )
 use_repo(python, "python_3_11", "python_versions")
 
@@ -86,7 +83,6 @@ go_sdk.download(version = "1.23.3")
 
 # ── OCI base image pulls (pinned by digest) ──────────────────────────────────
 oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
-
 oci.pull(
     name = "distroless_base_debian12",
     digest = "sha256:937c7eaaf6f3f2d38a1f8c4aeff326f0c56e4593ea152e9e8f74d976dde52f56",
@@ -94,11 +90,10 @@ oci.pull(
     platforms = ["linux/amd64"],
 )
 use_repo(oci, "distroless_base_debian12")
-
 oci.pull(
     name = "debian_bookworm_slim",
     digest = "sha256:f06537653ac770703bc45b4b113475bd402f451e85223f0f2837acbf89ab020a",
     image = "index.docker.io/library/debian",
     platforms = ["linux/amd64"],
 )
-use_repo(oci, "debian_bookworm_slim")
+use_repo(oci, "debian_bookworm_slim", "debian_bookworm_slim_linux_amd64", "distroless_base_debian12_linux_amd64")

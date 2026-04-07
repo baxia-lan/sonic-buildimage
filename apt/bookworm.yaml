@@ -1,55 +1,23 @@
-# Debian Bookworm package manifest for SONiC hermetic builds.
-# All packages resolved at fetch time from pinned snapshot mirrors.
-# No apt-get runs during build actions.
-#
-# To regenerate the lockfile:
-#   bazel run @rules_distroless//apt:lock -- \
-#     --manifest apt/bookworm.yaml \
-#     --lock apt/bookworm.lock.json
-
 version: 1
 
 sources:
-  - channel: bookworm
+  - channel: bookworm main
     url: https://snapshot.debian.org/archive/debian/20260401T000000Z
-  - channel: bookworm-security
+  - channel: bookworm-security main
     url: https://snapshot.debian.org/archive/debian-security/20260401T000000Z
 
 archs:
   - amd64
 
 packages:
-  # ── Build tools ──────────────────────────────────────────────────────────
-  - build-essential
-  - dpkg-dev
-  - fakeroot
-  - debhelper
-  - cmake
-  - autoconf
-  - automake
-  - libtool
-  - pkg-config
-  - dh-exec
-  - git
-  - stgit
-  - quilt
-  - swig
-  - bison
-  - flex
-  - doxygen
-  - graphviz
-  - perl
-  - dh-python
-  - devscripts
-
-  # ── C/C++ toolchain sysroot ──────────────────────────────────────────────
+  # C/C++ sysroot
   - libc6-dev
   - libgcc-12-dev
   - libstdc++-12-dev
   - libstdc++6
   - linux-libc-dev
 
-  # ── SONiC C++ build dependencies ────────────────────────────────────────
+  # SONiC C++ build deps
   - libnl-3-dev
   - libnl-genl-3-dev
   - libnl-route-3-dev
@@ -67,19 +35,12 @@ packages:
   - libgtest-dev
   - libgmock-dev
   - uuid-dev
-  - libclang-dev
   - libjemalloc-dev
   - libelf-dev
   - libssl-dev
 
-  # ── Python ──────────────────────────────────────────────────────────────
-  - python3-dev
-  - python3-pip
-  - python3-jinja2
-
-  # ── Runtime packages for OCI layers ─────────────────────────────────────
+  # Runtime packages for OCI layers
   - iproute2
-  - net-tools
   - redis-server
   - redis-tools
   - rsyslog
@@ -92,30 +53,7 @@ packages:
   - tcpdump
   - arping
   - ndisc6
-  - ndppd
-  - dmidecode
-  - ebtables
-  - ipmitool
-  - pciutils
+  - python3
   - python3-protobuf
   - python3-netifaces
   - python3-yaml
-  - ifupdown
-  - logrotate
-  - supervisor
-
-  # ── Kernel build ────────────────────────────────────────────────────────
-  - bc
-  - rsync
-  - kmod
-  - cpio
-  - dwarves
-  - xz-utils
-  - lz4
-  - zstd
-  - kernel-wedge
-  - python3-dacite
-  - wget
-  - ca-certificates
-  - aspell
-  - aspell-en
