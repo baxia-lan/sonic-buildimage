@@ -1,16 +1,16 @@
 """sonic-common-layer — shared base for all SONiC service containers.
 
-HERMETIC: All packages from rules_distroless, resolved at fetch time.
+HERMETIC: All packages from rules_distroless + slim_apt_layer for size reduction.
 No Docker, no apt-get at build time.
 """
 
-load("@rules_oci//oci:defs.bzl", "oci_image")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
+load("//rules/bazel/oci:sonic_docker.bzl", "slim_apt_layer")
 
 package(default_visibility = ["//visibility:public"])
 
-# ── Supervisord config skeleton ───────────────────────────────────────────────
+# ── Supervisord config ────────────────────────────────────────────────────────
 pkg_tar(
     name = "supervisord_skel_layer",
     srcs = [
@@ -31,30 +31,37 @@ pkg_tar(
     mode = "0644",
 )
 
-# ── Runtime packages from rules_distroless (hermetic, no Docker) ──────────────
-# Each @bookworm_*_amd64//:layer.tar.gz is a pre-resolved Debian package.
+# ── Runtime packages — slimmed (strip ELF, remove man/doc/locale/pycache) ─────
+# slim_apt_layer merges all @bookworm package tarballs and applies:
+#   - ELF symbol stripping (~30-50% size reduction on .so files)
+#   - Locale pruning to en_US.UTF-8 only (~20-35 MB saved)
+#   - Man page + doc removal (~5-20 MB saved)
+#   - Python __pycache__ removal (~1-3 MB saved)
+slim_apt_layer(
+    name = "common_apt_slim_layer",
+    srcs = [
+        "@bookworm_iproute2_6.1.0-3_amd64//:data",
+        "@bookworm_redis-tools_5-7.0.15-1_deb12u6_amd64//:data",
+        "@bookworm_rsyslog_8.2302.0-1-p-deb12u1_amd64//:data",
+        "@bookworm_procps_2-4.0.2-3_amd64//:data",
+        "@bookworm_jq_1.6-2.1-p-deb12u1_amd64//:data",
+        "@bookworm_iputils-ping_3-20221126-1-p-deb12u1_amd64//:data",
+        "@bookworm_libzmq5_4.3.4-6_amd64//:data",
+        "@bookworm_libjansson4_2.14-2_amd64//:data",
+        "@bookworm_libdbus-1-3_1.14.10-1_deb12u1_amd64//:data",
+        "@bookworm_libssl3_3.0.18-1_deb12u2_amd64//:data",
+        "@bookworm_python3.11-minimal_3.11.2-6-p-deb12u6_amd64//:data",
+        "@bookworm_libpython3.11-minimal_3.11.2-6-p-deb12u6_amd64//:data",
+        "@bookworm_libpython3.11-stdlib_3.11.2-6-p-deb12u6_amd64//:data",
+    ],
+)
 
+# ── OCI image ─────────────────────────────────────────────────────────────────
 sonic_oci_image(
     name = "sonic_common_layer",
     base = "@distroless_base_debian12",
     tars = [
-        # Core runtime
-        "@bookworm_iproute2_6.1.0-3_amd64//:layer.tar.gz",
-        "@bookworm_redis-tools_5-7.0.15-1_deb12u6_amd64//:layer.tar.gz",
-        "@bookworm_rsyslog_8.2302.0-1-p-deb12u1_amd64//:layer.tar.gz",
-        "@bookworm_procps_2-4.0.2-3_amd64//:layer.tar.gz",
-        "@bookworm_jq_1.6-2.1-p-deb12u1_amd64//:layer.tar.gz",
-        "@bookworm_iputils-ping_3-20221126-1-p-deb12u1_amd64//:layer.tar.gz",
-        # Libraries
-        "@bookworm_libzmq5_4.3.4-6_amd64//:layer.tar.gz",
-        "@bookworm_libjansson4_2.14-2_amd64//:layer.tar.gz",
-        "@bookworm_libdbus-1-3_1.14.10-1_deb12u1_amd64//:layer.tar.gz",
-        "@bookworm_libssl3_3.0.18-1_deb12u2_amd64//:layer.tar.gz",
-        # Python
-        "@bookworm_python3.11-minimal_3.11.2-6-p-deb12u6_amd64//:layer.tar.gz",
-        "@bookworm_libpython3.11-minimal_3.11.2-6-p-deb12u6_amd64//:layer.tar.gz",
-        "@bookworm_libpython3.11-stdlib_3.11.2-6-p-deb12u6_amd64//:layer.tar.gz",
-        # Config
+        ":common_apt_slim_layer",
         ":supervisord_skel_layer",
         ":rsyslog_layer",
     ],
@@ -64,6 +71,6 @@ sonic_oci_image(
     },
     labels = {
         "org.opencontainers.image.title": "sonic-common-layer",
-        "org.opencontainers.image.description": "Shared SONiC service base layer (hermetic)",
+        "org.opencontainers.image.description": "Shared SONiC service base layer (hermetic, slimmed)",
     },
 )
