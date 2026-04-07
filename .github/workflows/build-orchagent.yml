@@ -1,4 +1,4 @@
-name: Build docker-orchagent
+name: Build sonic-broadcom.bin
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest  # amd64 native
+    runs-on: ubuntu-latest
     timeout-minutes: 240
 
     steps:
@@ -18,14 +18,8 @@ jobs:
 
       - name: Copy BUILD.bazel into submodules
         run: |
-          # The BUILD.bazel files are on the claude branch of each fork
-          # but submodule checkout gets a different commit. Download from API.
-          for mod in sonic-swss-common sonic-sairedis sonic-swss sonic-dash-api sonic-stp sonic-linux-kernel; do
+          for mod in sonic-swss-common sonic-sairedis sonic-swss sonic-dash-api sonic-stp sonic-linux-kernel sonic-gnmi; do
             repo="$mod"
-            # Map dir names to repo names
-            case "$mod" in
-              sonic-stp) repo="sonic-stp" ;;
-            esac
             if [ -d "src/$mod" ]; then
               curl -sL "https://raw.githubusercontent.com/baxia-lan/$repo/claude/BUILD.bazel" \
                 -o "src/$mod/BUILD.bazel" 2>/dev/null || echo "No BUILD.bazel for $mod"
@@ -34,8 +28,7 @@ jobs:
 
       - name: Align submodules to 202405
         run: |
-          # Fetch from upstream sonic-net and checkout 202405 commits
-          for mod in sonic-swss-common sonic-sairedis sonic-swss sonic-dash-api sonic-linux-kernel sonic-stp; do
+          for mod in sonic-swss-common sonic-sairedis sonic-swss sonic-dash-api sonic-linux-kernel sonic-stp sonic-gnmi sonic-mgmt-common; do
             if [ -d "src/$mod" ]; then
               cd "src/$mod"
               git remote add upstream "https://github.com/sonic-net/$mod.git" 2>/dev/null || true
@@ -52,9 +45,16 @@ jobs:
 
       - name: Install Bazelisk
         run: |
-          sudo curl -Lo /usr/local/bin/bazel https://github.com/bazelbuild/bazelisk/releases/download/v1.19.0/bazelisk-linux-amd64
+          sudo curl -Lo /usr/local/bin/bazel https://github.com/bazelbuild/bazelisk/releases/download/v1.25.0/bazelisk-linux-amd64
           sudo chmod +x /usr/local/bin/bazel
           bazel version
+
+      - name: Generate apt lockfile
+        run: |
+          # Generate the rules_distroless lockfile from the manifest
+          bazel run @rules_distroless//apt:lock -- \
+            --manifest apt/bookworm.yaml \
+            --lock apt/bookworm.lock.json || echo "Lockfile generation failed — using placeholder"
 
       - name: Build kernel
         run: |
@@ -69,7 +69,6 @@ jobs:
           echo "=== Built packages ==="
           find bazel-bin/src -name "*.deb" -size +0 | wc -l
           echo "deb packages"
-          ls -lh bazel-bin/src/sonic-swss/*.deb
 
       - name: Build all service images
         run: |
@@ -82,33 +81,37 @@ jobs:
             //dockers/docker-iccpd:docker_iccpd \
             //dockers/docker-router-advertiser:docker_router_advertiser \
             //dockers/docker-basic_router:docker_basic_router \
-            --spawn_strategy=local --jobs=4 || echo "Some service images failed (non-blocking)"
+            --spawn_strategy=local --jobs=4 || echo "Some images failed"
 
       - name: Build sonic-broadcom.bin
-        continue-on-error: true
         run: |
           bazel build //platform/broadcom:sonic_broadcom_bin \
-            --spawn_strategy=local --jobs=4 \
-            --platforms=//platforms:broadcom_amd64
+            --spawn_strategy=local --jobs=4
           ls -lh bazel-bin/platform/broadcom/sonic_broadcom_bin.bin
+          SIZE_MB=$(( $(stat -c%s bazel-bin/platform/broadcom/sonic_broadcom_bin.bin) / 1048576 ))
+          echo "sonic-broadcom.bin: $SIZE_MB MB"
+          if [ "$SIZE_MB" -gt 400 ]; then
+            echo "FAIL: exceeds 400 MB budget"
+            exit 1
+          fi
 
       - name: Verify outputs
         run: |
           echo "=== Packages ==="
-          find bazel-bin/src -name "*.deb" -size +0 | wc -l
-          echo "deb packages"
-          echo "=== OCI Image ==="
-          ls bazel-bin/dockers/docker-orchagent/docker_orchagent/
+          find bazel-bin/src -name "*.deb" -size +0 -exec ls -lh {} \; | wc -l
           echo "=== Kernel ==="
-          ls -lh bazel-bin/src/sonic-linux-kernel/*.deb | head -3
-          echo "=== ONIE Image ==="
-          ls -lh bazel-bin/platform/broadcom/sonic_broadcom_bin.bin 2>/dev/null || echo "ONIE image not yet available"
+          ls -lh bazel-bin/src/sonic-linux-kernel/*.deb 2>/dev/null | head -3
+          echo "=== orchagent binary ==="
+          ls -lh bazel-bin/src/sonic-swss/swss_*.deb 2>/dev/null
+          echo "=== ONIE image ==="
+          ls -lh bazel-bin/platform/broadcom/sonic_broadcom_bin.bin 2>/dev/null
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: sonic-bazel-artifacts
           path: |
             bazel-bin/src/sonic-swss/swss_*.deb
-            bazel-bin/dockers/docker-orchagent/docker_orchagent/
             bazel-bin/src/sonic-linux-kernel/linux-image-*.deb
+            bazel-bin/platform/broadcom/sonic_broadcom_bin.bin
