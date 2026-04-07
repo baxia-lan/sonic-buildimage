@@ -1,46 +1,20 @@
-"""docker-platform-monitor — SONiC platform monitoring (pmon) service container (hermetic)."""
+"""docker-platform-monitor — SONiC platform monitoring (pmon) (hermetic)."""
 
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
-load("//rules/bazel/oci:sonic_docker.bzl", "slim_apt_layer")
 
 package(default_visibility = ["//visibility:public"])
 
-# ── Apt packages layer (hermetic @bookworm) ─────────────────────────────────
-
-slim_apt_layer(
-    name = "pmon_apt_slim",
-    srcs = [
-        "@bookworm_pciutils_1-3.9.0-4_amd64//:data",
-    ],
-)
-
-# ── Config + scripts layer ───────────────────────────────────────────────────
-
 pkg_tar(
     name = "pmon_config_layer",
-    srcs = glob(
-        [
-            "*.sh",
-            "*.j2",
-            "*.conf",
-            "*.py",
-            "critical_processes",
-        ],
-        allow_empty = True,
-    ),
+    srcs = glob(["*.sh", "*.j2", "*.conf", "*.py", "critical_processes"], allow_empty = True),
     mode = "0755",
 )
-
-# ── docker-platform-monitor OCI image ───────────────────────────────────────
 
 sonic_oci_image(
     name = "docker_platform_monitor",
     base = "//dockers/sonic-common-layer:sonic_common_layer",
-    tars = [
-        ":pmon_apt_slim",
-        ":pmon_config_layer",
-    ],
+    tars = [":pmon_config_layer"],
     labels = {
         "org.opencontainers.image.title": "docker-platform-monitor",
         "sonic.container.name": "pmon",
