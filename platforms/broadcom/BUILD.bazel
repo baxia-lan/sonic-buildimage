@@ -1,5 +1,5 @@
 load("//installers:data.bzl", "BROADCOM_PLATFORM")
-load("//platforms:defs.bzl", "sonic_platform_manifest")
+load("//platforms:defs.bzl", "sonic_platform_manifest", "sonic_platform_prepare_targets")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -7,3 +7,5 @@ sonic_platform_manifest(
     name = "platform",
     data = BROADCOM_PLATFORM,
 )
+
+sonic_platform_prepare_targets(BROADCOM_PLATFORM)

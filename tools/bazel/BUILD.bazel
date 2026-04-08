@@ -1,5 +1,9 @@
 exports_files(
-    ["bazelw"],
+    [
+        "bazelw",
+        "configure_platform.sh",
+        "init_workspace.sh",
+    ],
     visibility = ["//visibility:public"],
 )
 
@@ -17,6 +21,12 @@ sh_binary(
 )
 
 sh_binary(
+    name = "build_deb_package",
+    srcs = ["build_deb_package.sh"],
+    visibility = ["//visibility:public"],
+)
+
+sh_binary(
     name = "build_review_docker_archive",
     srcs = ["build_review_docker_archive.sh"],
     visibility = ["//visibility:public"],
@@ -25,5 +35,17 @@ sh_binary(
 sh_binary(
     name = "export_target_tree",
     srcs = ["export_target_tree.sh"],
+    visibility = ["//visibility:public"],
+)
+
+sh_binary(
+    name = "configure_platform",
+    srcs = ["configure_platform.sh"],
+    visibility = ["//visibility:public"],
+)
+
+sh_binary(
+    name = "init_workspace",
+    srcs = ["init_workspace.sh"],
     visibility = ["//visibility:public"],
 )
