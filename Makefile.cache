@@ -108,7 +108,7 @@ endif
 # It includes common files like .platform, rules/functions, Makefile.cache etc.
 # NOTE: slave.mk is intentionally NOT included here; see SONIC_CACHE_RECIPE_VER above.
 SONIC_COMMON_FILES_LIST :=  $(if $(wildcard cache.skip.common),, .platform rules/functions Makefile.cache)
-SONIC_DEVICE_FILES_LIST := $(shell git ls-files -s device | grep -v ^120000 | grep -Eo device.*)
+SONIC_DEVICE_FILES_LIST := $(shell /usr/bin/git -C $(PROJECT_ROOT) ls-files -s -- device | grep -v ^120000 | grep -Eo device.*)
 SONIC_COMMON_FLAGS_LIST :=  $(SONIC_CACHE_RECIPE_VER) \
                             $(CONFIGURED_PLATFORM) \
                             $(CONFIGURED_ARCH) \
@@ -248,9 +248,9 @@ endef
 #  $(1)   => target name
 define GET_MODIFIED_FILES
 	$(eval $(1)_FILES_MODIFIED := $(foreach dfile,$($(1)_MOD_DEP_PKGS),$(if $($(dfile)_FILES_MODIFIED),$(dfile))) \
-                                  $(if $($(1)_DEP_FILES), $(shell cat $($(1)_MOD_DEP_FILE) | xargs git status -s)) \
-                                  $(if $($(1)_SMDEP_PATHS), $(foreach path,$($(1)_SMDEP_PATHS), \
-                                        $(shell cd $(path) &&  git status --ignore-submodules=all -s -uno .))) )
+	                                  $(if $($(1)_DEP_FILES), $(shell cat $($(1)_MOD_DEP_FILE) | xargs /usr/bin/git -C $(PROJECT_ROOT) status -s --)) \
+	                                  $(if $($(1)_SMDEP_PATHS), $(foreach path,$($(1)_SMDEP_PATHS), \
+	                                        $(shell /usr/bin/git -C $(PROJECT_ROOT)/$(path) status --ignore-submodules=all -s -uno .))) )
 
 endef
 
@@ -411,12 +411,12 @@ endef
 RFS_DEP_FILES := $(wildcard \
 	$(addprefix scripts/, build_debian_base_system.sh prepare_debian_image_buildinfo.sh build_mirror_config.sh) \
 	$(addprefix $(IMAGE_DISTRO_DEBS_PATH)/,$(INITRAMFS_TOOLS) $(LINUX_KERNEL)) \
-	$(shell git ls-files files/initramfs-tools) \
-	$(shell git ls-files files/image_config) \
-	$(shell git ls-files files/apparmor) \
-	$(shell git ls-files files/apt) \
-	$(shell git ls-files files/sshd) \
-	$(shell git ls-files files/dhcp) \
+	$(shell /usr/bin/git -C $(PROJECT_ROOT) ls-files -- files/initramfs-tools) \
+	$(shell /usr/bin/git -C $(PROJECT_ROOT) ls-files -- files/image_config) \
+	$(shell /usr/bin/git -C $(PROJECT_ROOT) ls-files -- files/apparmor) \
+	$(shell /usr/bin/git -C $(PROJECT_ROOT) ls-files -- files/apt) \
+	$(shell /usr/bin/git -C $(PROJECT_ROOT) ls-files -- files/sshd) \
+	$(shell /usr/bin/git -C $(PROJECT_ROOT) ls-files -- files/dhcp) \
 	src/sonic-build-hooks/buildinfo/trusted.gpg.d \
 	platform/$(CONFIGURED_PLATFORM)/modules  \
 	files/docker/docker.service.conf \
