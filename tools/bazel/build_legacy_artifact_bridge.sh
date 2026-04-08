@@ -104,16 +104,47 @@ if [[ -z "${artifact_component}" ]]; then
 fi
 
 bridge_cache_generation="${SONIC_BAZEL_LEGACY_BRIDGE_CACHE_GEN:-v2}"
-relative_target_dir=".bazel-legacy-target/bridge-${bridge_cache_generation}-$(sanitize_path_component "${platform}")-${bldenv}-${docker_platform_component}-${artifact_component}"
-target_dir="${workspace_root}/${relative_target_dir}"
 saved_platform="${tmpdir}/saved.platform"
 saved_arch="${tmpdir}/saved.arch"
 restore_platform=0
 restore_arch=0
 helper_make_vars="${tmpdir}/make_vars.txt"
 helper_script="${tmpdir}/run_in_helper.sh"
-helper_target_dir="${relative_target_dir}"
 keep_debug_dirs="${SONIC_BAZEL_LEGACY_BRIDGE_KEEP_WORKDIR:-0}"
+
+source_fingerprint="$(
+    python3 - "${workspace_root}" <<'PY'
+import hashlib
+import pathlib
+import subprocess
+import sys
+
+root = pathlib.Path(sys.argv[1])
+files = subprocess.check_output(
+    ["git", "-C", str(root), "ls-files", "-z"],
+    stderr=subprocess.DEVNULL,
+)
+h = hashlib.sha256()
+for raw_path in files.split(b"\0"):
+    if not raw_path:
+        continue
+    rel_path = raw_path.decode("utf-8")
+    abs_path = root / rel_path
+    if not abs_path.is_file():
+        continue
+    h.update(rel_path.encode("utf-8"))
+    h.update(b"\0")
+    with abs_path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    h.update(b"\0")
+print(h.hexdigest())
+PY
+)"
+source_fingerprint_component="${source_fingerprint:0:16}"
+relative_target_dir=".bazel-legacy-target/bridge-${bridge_cache_generation}-$(sanitize_path_component "${platform}")-${bldenv}-${docker_platform_component}-${artifact_component}-${source_fingerprint_component}"
+target_dir="${workspace_root}/${relative_target_dir}"
+helper_target_dir="${relative_target_dir}"
 
 resolve_host_tool() {
     local tool="$1"
@@ -181,14 +212,11 @@ if [[ -z "${host_docker}" ]]; then
     exit 1
 fi
 
-helper_image="${SONIC_BAZEL_LEGACY_BRIDGE_HELPER_IMAGE:-}"
-if [[ -z "${helper_image}" ]]; then
-    preferred_helper_image="sonic-bazel-legacy-bridge-helper:bookworm"
-    if "${host_docker}" image inspect "${preferred_helper_image}" >/dev/null 2>&1; then
-        helper_image="${preferred_helper_image}"
-    else
-        helper_image="debian:bookworm"
-    fi
+helper_image="${SONIC_BAZEL_LEGACY_BRIDGE_HELPER_IMAGE:-sonic-bazel-legacy-bridge-helper:bookworm}"
+if ! "${host_docker}" image inspect "${helper_image}" >/dev/null 2>&1; then
+    echo "legacy bridge helper image not found: ${helper_image}" >&2
+    echo "build it first with ./tools/bazel/build_legacy_bridge_helper_image.sh" >&2
+    exit 1
 fi
 
 build_target="${legacy_target}"
@@ -210,7 +238,7 @@ fi
 if [[ "${workspace_gid}" == "0" ]]; then
     workspace_gid="${SONIC_BAZEL_LEGACY_BRIDGE_FALLBACK_GID:-1000}"
 fi
-bridge_cache_source="${workspace_root}/.cache/legacy-bridge/artifacts-v2"
+bridge_cache_source="${workspace_root}/.cache/legacy-bridge/artifacts-v2-${bridge_cache_generation}-${source_fingerprint_component}"
 mkdir -p "${target_dir}" "${bridge_cache_source}"
 
 cat > "${helper_script}" <<'EOF'
@@ -219,24 +247,10 @@ set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 
-apt-get update
-apt-get install -y --no-install-recommends \
-    bash \
-    ca-certificates \
-    coreutils \
-    curl \
-    docker.io \
-    gawk \
-    git \
-    jq \
-    kmod \
-    make \
-    passwd \
-    python3 \
-    python3-pip \
-    sudo \
-    wget
-python3 -m pip install --break-system-packages --no-cache-dir jinjanator
+if ! command -v j2 >/dev/null 2>&1; then
+    echo "required helper tool missing: j2" >&2
+    exit 1
+fi
 
 if getent group "${BRIDGE_WORKSPACE_GID}" >/dev/null; then
     workspace_group="$(getent group "${BRIDGE_WORKSPACE_GID}" | cut -d: -f1)"
@@ -267,6 +281,8 @@ usermod -aG "${socket_group}" "${workspace_user}"
 chown -R "${BRIDGE_WORKSPACE_UID}:${BRIDGE_WORKSPACE_GID}" /bridge-tmp
 chmod +x /bridge-tmp/run_make_in_helper.sh
 
+printf '%s\n' "${BRIDGE_SOURCE_FINGERPRINT}" > "${BRIDGE_TARGET_DIR}/.source-fingerprint"
+
 user_home="$(getent passwd "${workspace_user}" | cut -d: -f6)"
 sudo -u "${workspace_user}" env \
     BRIDGE_BLDENV="${BRIDGE_BLDENV}" \
@@ -274,6 +290,7 @@ sudo -u "${workspace_user}" env \
     BRIDGE_CACHE_SOURCE="${BRIDGE_CACHE_SOURCE}" \
     BRIDGE_DOCKER_DEFAULT_PLATFORM="${BRIDGE_DOCKER_DEFAULT_PLATFORM}" \
     BRIDGE_PLATFORM="${BRIDGE_PLATFORM}" \
+    BRIDGE_SOURCE_FINGERPRINT="${BRIDGE_SOURCE_FINGERPRINT}" \
     BRIDGE_TARGET_DIR="${BRIDGE_TARGET_DIR}" \
     BRIDGE_WORKSPACE_ROOT="${BRIDGE_WORKSPACE_ROOT}" \
     HOME="${user_home}" \
@@ -326,6 +343,7 @@ chmod +x "${helper_script}" "${tmpdir}/run_make_in_helper.sh"
         -e BRIDGE_CACHE_SOURCE="${bridge_cache_source}" \
         -e BRIDGE_DOCKER_DEFAULT_PLATFORM="${docker_platform}" \
         -e BRIDGE_PLATFORM="${platform}" \
+        -e BRIDGE_SOURCE_FINGERPRINT="${source_fingerprint}" \
         -e BRIDGE_TARGET_DIR="${helper_target_dir}" \
         -e BRIDGE_WORKSPACE_UID="${workspace_uid}" \
         -e BRIDGE_WORKSPACE_GID="${workspace_gid}" \

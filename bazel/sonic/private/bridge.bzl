@@ -40,6 +40,7 @@ def _legacy_artifact_bridge_impl(ctx):
         execution_requirements = {
             "local": "1",
             "no-sandbox": "1",
+            "no-cache": "1",
         },
     )
 
@@ -50,7 +51,7 @@ _legacy_artifact_bridge = rule(
     attrs = {
         "artifact_path": attr.string(mandatory = True),
         "bldenv": attr.string(default = "bookworm"),
-        "bridge_cache_generation": attr.string(default = "v7"),
+        "bridge_cache_generation": attr.string(default = "v8"),
         "docker_platform": attr.string(mandatory = True),
         "legacy_target": attr.string(mandatory = True),
         "make_vars": attr.string_list(),
