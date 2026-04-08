@@ -14,6 +14,7 @@ sonic_installer_manifest(
 legacy_artifact_bridge(
     name = "onie",
     artifact_path = "sonic-broadcom.bin",
+    bldenv = "trixie",
     docker_platform = "linux/amd64",
     legacy_target = "target/sonic-broadcom.bin",
     make_vars = [
@@ -63,6 +64,7 @@ sonic_installer_manifest(
 legacy_artifact_bridge(
     name = "aboot",
     artifact_path = "sonic-aboot-broadcom.swi",
+    bldenv = "trixie",
     docker_platform = "linux/amd64",
     legacy_target = "target/sonic-aboot-broadcom.swi",
     make_vars = [
