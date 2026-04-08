@@ -58,6 +58,10 @@ jobs:
 
       - name: Build kernel
         run: |
+          # Verify the cpupower fix is in the BUILD.bazel
+          grep "popd" src/sonic-linux-kernel/BUILD.bazel && echo "popd fix present" || echo "WARNING: popd fix missing"
+          # Clean to avoid cached failures
+          bazel clean 2>/dev/null || true
           bazel build //src/sonic-linux-kernel:linux_kernel_debs \
             --spawn_strategy=local --jobs=4
           ls -lh bazel-bin/src/sonic-linux-kernel/*.deb
