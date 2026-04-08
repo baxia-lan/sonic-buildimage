@@ -21,10 +21,16 @@ jobs:
           for mod in sonic-swss-common sonic-sairedis sonic-swss sonic-dash-api sonic-stp sonic-linux-kernel sonic-gnmi; do
             repo="$mod"
             if [ -d "src/$mod" ]; then
-              curl -sL "https://raw.githubusercontent.com/baxia-lan/$repo/claude/BUILD.bazel" \
+              # Cache-bust: add timestamp to URL
+              curl -sL "https://raw.githubusercontent.com/baxia-lan/$repo/claude/BUILD.bazel?t=$(date +%s)" \
+                -H "Cache-Control: no-cache" \
                 -o "src/$mod/BUILD.bazel" 2>/dev/null || echo "No BUILD.bazel for $mod"
+              echo "$mod BUILD.bazel: $(head -1 src/$mod/BUILD.bazel 2>/dev/null)"
             fi
           done
+          # Verify kernel fix
+          echo "Kernel cpupower fix check:"
+          grep "popd.*touch" src/sonic-linux-kernel/BUILD.bazel || echo "WARNING: cpupower fix NOT found!"
 
       - name: Align submodules to 202405
         run: |
