@@ -129,9 +129,15 @@
                   tests/Makefile])
 --- a/debian/rules
 +++ b/debian/rules
-@@ -28,1 +28,3 @@
+@@ -28,7 +28,9 @@ override_dh_auto_configure:
+ 	# A lowercase top-level "version" file shadows the C++17 <version> header.
+ 	# The project already uses the uppercase VERSION file for version discovery.
+ 	rm -f version
 -	dh_auto_configure -- --with-pdfixed --with-thrift --with-nanomsg --with-pi
 +	dh_auto_configure -- --with-pdfixed --with-thrift --with-nanomsg --with-pi \
 +		--disable-runtime-tests \
 +		--disable-runtime-examples
+ 
+ override_dh_auto_install:
+ 	# Recursive installs in thrift_src inherit a broken jobserver from debhelper.
  	make DESTDIR=$(CURDIR)/debian/p4lang-bmv2 install

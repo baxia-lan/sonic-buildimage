@@ -80,10 +80,12 @@ cleanup() {
 trap cleanup EXIT
 
 mkdir -p \
+    "${context_dir}/constants" \
     "${context_dir}/orchagent" \
     "${context_dir}/files" \
     "${context_dir}/redis-dump-load" \
     "${context_dir}/scapy" \
+    "${context_dir}/sonic-config-engine" \
     "${context_dir}/sonic-py-common" \
     "${context_dir}/sonic-swss-common" \
     "${context_dir}/review"
@@ -108,6 +110,9 @@ copy_input() {
         */files/build_templates/arp_update_vars.j2|files/build_templates/arp_update_vars.j2)
             dest="${context_dir}/files/arp_update_vars.j2"
             ;;
+        */files/image_config/constants/constants.yml|files/image_config/constants/constants.yml)
+            dest="${context_dir}/constants/constants.yml"
+            ;;
         */src/scapy/*)
             rel="${src#*/src/scapy/}"
             dest="${context_dir}/scapy/${rel}"
@@ -131,6 +136,14 @@ copy_input() {
         src/sonic-py-common/*)
             rel="${src#src/sonic-py-common/}"
             dest="${context_dir}/sonic-py-common/${rel}"
+            ;;
+        */src/sonic-config-engine/*)
+            rel="${src#*/src/sonic-config-engine/}"
+            dest="${context_dir}/sonic-config-engine/${rel}"
+            ;;
+        src/sonic-config-engine/*)
+            rel="${src#src/sonic-config-engine/}"
+            dest="${context_dir}/sonic-config-engine/${rel}"
             ;;
         */src/sonic-swss-common/*)
             rel="${src#*/src/sonic-swss-common/}"
@@ -165,19 +178,33 @@ set -euo pipefail
 cat <<'BANNER'
 SONiC Bazel review image: docker-orchagent
 This is a Phase 1 concrete archive built by Bazel for review.
-It packages the current docker-orchagent scripts/templates and key runtime tools,
+It now includes a local sonic-cfggen path and a generated docker-init.real.sh,
 but it is not runtime-parity-complete with the legacy SONiC image yet.
 BANNER
 
+if [[ "${SONIC_BAZEL_REVIEW_REAL_INIT:-0}" == "1" ]]; then
+    exec /usr/bin/docker-init.real.sh "$@"
+fi
+
 exec tail -f /dev/null
+EOF
+
+cat > "${context_dir}/review/sonic_yang_cfg_generator.py" <<'EOF'
+class SonicYangCfgDbGenerator:
+    def __init__(self, *args, **kwargs):
+        raise RuntimeError(
+            "sonic_yang_cfg_generator is not available in the Bazel review image. "
+            "The review image supports non-YANG sonic-cfggen rendering paths only."
+        )
 EOF
 
 cat > "${context_dir}/review/MIGRATION_STAGE.txt" <<'EOF'
 docker-orchagent review image
 
 - Built by Bazel as a concrete docker archive (.gz)
-- Carries orchagent scripts, templates, local scapy install, local swsscommon/sonic-db-cli, and local sonic-py-common
-- Does not yet include full SWSS/SAI runtime parity or config-engine rendering
+- Carries orchagent scripts/templates, local sonic-cfggen/config-engine, local scapy install, local swsscommon/sonic-db-cli, and local sonic-py-common
+- Generates docker-init.real.sh from docker-init.j2 during image build
+- Does not yet include full SWSS/SAI runtime parity or a booted CONFIG_DB/Redis environment
 - Intended for image layout and dependency review before full hermetic migration
 EOF
 
@@ -226,7 +253,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \\
     ndppd \\
     pciutils \\
     pkg-config \\
+    python3-bitarray \\
+    python3-jinja2 \\
+    python3-lxml \\
     python3 \\
+    python3-netaddr \\
     python3-natsort \\
     python3-netifaces \\
     python3-packaging \\
@@ -244,14 +275,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \\
  && rm -rf /var/lib/apt/lists/*
 
 COPY orchagent /opt/sonic/docker-orchagent-src
+COPY constants/constants.yml /etc/sonic/constants.yml
 COPY files/arp_update /usr/bin/arp_update
 COPY files/arp_update_vars.j2 /usr/share/sonic/templates/arp_update_vars.j2
 COPY redis-dump-load /opt/sonic/redis-dump-load-src
 COPY scapy /opt/sonic/scapy-src
+COPY sonic-config-engine /opt/sonic/sonic-config-engine-src
 COPY sonic-py-common /opt/sonic/sonic-py-common-src
 COPY sonic-swss-common /opt/sonic/sonic-swss-common-src
 COPY review/docker-init.sh /usr/bin/docker-init.sh
 COPY review/MIGRATION_STAGE.txt /opt/sonic/review/MIGRATION_STAGE.txt
+COPY review/sonic_yang_cfg_generator.py /opt/sonic/review/sonic_yang_cfg_generator.py
 
 RUN mkdir -p \\
     /etc/sonic \\
@@ -280,6 +314,15 @@ RUN mkdir -p \\
  && python3 -m pip install --break-system-packages --no-cache-dir --no-deps /opt/sonic/redis-dump-load-src \\
  && python3 -m pip install --break-system-packages --no-cache-dir --no-deps /opt/sonic/sonic-py-common-src \\
  && python3 -m pip install --break-system-packages --no-cache-dir --no-deps /opt/sonic/scapy-src \\
+ && mv /opt/sonic/sonic-config-engine-src/sonic_yang_cfg_generator.py /opt/sonic/sonic-config-engine-src/sonic_yang_cfg_generator.py.upstream \\
+ && cp /opt/sonic/review/sonic_yang_cfg_generator.py /opt/sonic/sonic-config-engine-src/sonic_yang_cfg_generator.py \\
+ && printf '%s\n' \\
+    '#!/usr/bin/env bash' \\
+    'set -euo pipefail' \\
+    'export PYTHONPATH="/opt/sonic/sonic-config-engine-src:\${PYTHONPATH:-}"' \\
+    'exec python3 /opt/sonic/sonic-config-engine-src/sonic-cfggen "\$@"' \\
+    > /usr/local/bin/sonic-cfggen \\
+ && chmod 755 /usr/local/bin/sonic-cfggen \\
  && cp /opt/sonic/docker-orchagent-src/arp_update.conf /usr/share/sonic/templates/ \\
  && cp /opt/sonic/docker-orchagent-src/ndppd.conf /usr/share/sonic/templates/ \\
  && cp /opt/sonic/docker-orchagent-src/tunnel_packet_handler.conf /usr/share/sonic/templates/ \\
@@ -289,6 +332,24 @@ RUN mkdir -p \\
  && cp /opt/sonic/docker-orchagent-src/swssconfig.sh /usr/bin/ \\
  && cp /opt/sonic/docker-orchagent-src/buffermgrd.sh /usr/bin/ \\
  && find /opt/sonic/docker-orchagent-src -maxdepth 1 -name '*.j2' -exec cp {} /usr/share/sonic/templates/ \; \\
+ && /usr/local/bin/sonic-cfggen -a '{"ENABLE_ASAN":"n"}' -t /opt/sonic/docker-orchagent-src/docker-init.j2,/usr/bin/docker-init.real.sh \\
+ && chmod 755 /usr/bin/docker-init.real.sh \\
+ && /bin/bash -n /usr/bin/docker-init.real.sh \\
+ && rm -rf /opt/sonic/sonic-config-engine-src/tests \\
+ && find /opt/sonic/sonic-config-engine-src -type d -name __pycache__ -prune -exec rm -rf {} + \\
+ && find /opt/sonic/sonic-config-engine-src -type f -name '*.pyc' -delete \\
+ && rm -f \\
+    /opt/sonic/sonic-config-engine-src/.gitignore \\
+    /opt/sonic/sonic-config-engine-src/MANIFEST.in \\
+    /opt/sonic/sonic-config-engine-src/setup.cfg \\
+    /opt/sonic/sonic-config-engine-src/setup.py \\
+    /opt/sonic/sonic-config-engine-src/sonic-acl-extension.yang \\
+    /opt/sonic/sonic-config-engine-src/sonic_yang_cfg_generator.py.upstream \\
+ && strip --strip-unneeded \\
+    /usr/bin/sonic-db-cli \\
+    /usr/bin/swssloglevel \\
+    /usr/local/lib/libswsscommon.so.0.0.0 \\
+    /usr/local/lib/python3.11/dist-packages/swsscommon/_swsscommon.so || true \\
  && apt-get purge -y --auto-remove \\
     autoconf \\
     autoconf-archive \\
@@ -306,11 +367,30 @@ RUN mkdir -p \\
     m4 \\
     nlohmann-json3-dev \\
     pkg-config \\
+    python3-pip \\
+    python3-wheel \\
     swig \\
     uuid-dev \\
     libzmq3-dev \\
  && apt-get clean \\
- && rm -rf /var/lib/apt/lists/* /opt/sonic/redis-dump-load-src /opt/sonic/scapy-src /opt/sonic/sonic-py-common-src /opt/sonic/sonic-swss-common-src /root/.cache/pip \\
+ && rm -rf \\
+    /root/.cache/pip \\
+    /usr/share/bash-completion \\
+    /usr/share/bug \\
+    /usr/share/doc \\
+    /usr/share/ieee-data \\
+    /usr/share/lintian \\
+    /usr/share/man \\
+    /var/cache/apt \\
+    /var/lib/apt/lists/* \\
+    /opt/sonic/redis-dump-load-src \\
+    /opt/sonic/scapy-src \\
+    /opt/sonic/sonic-py-common-src \\
+    /opt/sonic/sonic-swss-common-src \\
+ && find /usr/lib/python3/dist-packages -type d -name __pycache__ -prune -exec rm -rf {} + \\
+ && find /usr/local/lib/python3.11/dist-packages -type d -name __pycache__ -prune -exec rm -rf {} + \\
+ && find /usr/lib/python3/dist-packages -type f -name '*.pyc' -delete \\
+ && find /usr/local/lib/python3.11/dist-packages -type f -name '*.pyc' -delete \\
  && chmod +x \\
     /usr/bin/arp_update \\
     /usr/bin/buffermgrd.sh \\

@@ -2,22 +2,26 @@ SHELL = /bin/bash
 .ONESHELL:
 .SHELLFLAGS += -xe
 
+MAKE_SERIAL = env MAKEFLAGS= MFLAGS= $(MAKE) -j1
+
 MAIN_TARGET = libsai_$(DASH_SAI_VERSION)_$(CONFIGURED_ARCH).deb
 DERIVED_TARGETS = libsai-dev_$(DASH_SAI_VERSION)_$(CONFIGURED_ARCH).deb
 
 CURRENT_DIR=$(shell pwd)
-PIPELINE_DIR=$(CURRENT_DIR)/DASH/dash-pipeline
+DASH_DIR ?= $(CURRENT_DIR)/DASH
+PIPELINE_DIR=$(DASH_DIR)/dash-pipeline
 P4_MAIN=bmv2/dash_pipeline.p4
 P4_OUTDIR=bmv2/dash_pipeline.bmv2
 
 
 $(addprefix $(DEST)/, $(MAIN_TARGET)): $(DEST)/% :
 # Remove any stale files
-	rm -rf DASH
+	if [[ ! -d $(DASH_DIR)/.git ]]; then
+		git clone https://github.com/sonic-net/DASH.git $(DASH_DIR)
+	fi
 
-	git clone https://github.com/sonic-net/DASH.git DASH
-
-	pushd DASH/dash-pipeline
+	pushd $(PIPELINE_DIR)
+	git rev-parse --verify $(DASH_SAI_COMMIT) >/dev/null 2>&1 || git fetch origin $(DASH_SAI_COMMIT)
 	git checkout $(DASH_SAI_COMMIT)
 	git submodule update --init
 
@@ -31,7 +35,7 @@ $(addprefix $(DEST)/, $(MAIN_TARGET)): $(DEST)/% :
 # Generate SAI files
 	sudo ln -sf $(PIPELINE_DIR)/SAI /SAI
 	pushd SAI
-	make
+	$(MAKE_SERIAL)
 	popd
 
 # Compile sai meta
@@ -40,20 +44,19 @@ $(addprefix $(DEST)/, $(MAIN_TARGET)): $(DEST)/% :
 	sed -i.bak '/checkstructs.sh/d' SAI/SAI/meta/Makefile
 	sed -i.bak "/.\/saimetadatatest >\/dev\/null/d" SAI/SAI/meta/Makefile
 	pushd SAI/SAI/meta/
-	CFLAGS=-Wdangling-pointer=1 make all libsaimetadata.so
+	MAKEFLAGS= MFLAGS= CFLAGS=-Wdangling-pointer=1 $(MAKE) -j1 all libsaimetadata.so
 	popd
 
 # Compile sai library
 	pushd SAI/lib
-	make
+	$(MAKE_SERIAL)
 	popd
 
 	pushd SAI/debian
-	make
+	$(MAKE_SERIAL)
 	mv $(DERIVED_TARGETS) $* $(DEST)/
 	popd
 
 	popd
 
 $(addprefix $(DEST)/, $(DERIVED_TARGETS)): $(DEST)/% : $(DEST)/$(MAIN_TARGET)
-

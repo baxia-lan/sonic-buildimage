@@ -32,3 +32,16 @@ filegroup(
         "sonic-py-common/sonic_py_common/**",
     ]),
 )
+
+filegroup(
+    name = "sonic_config_engine_review_srcs",
+    srcs = glob(
+        ["sonic-config-engine/**"],
+        exclude = [
+            "sonic-config-engine/**/__pycache__/**",
+            "sonic-config-engine/**/*.pyc",
+            "sonic-config-engine/BUILD",
+            "sonic-config-engine/BUILD.bazel",
+        ],
+    ),
+)

@@ -2,6 +2,8 @@ SHELL = /bin/bash
 .ONESHELL:
 .SHELLFLAGS += -xe
 
+P4LANG_BUILD_JOBS ?= 4
+
 P4LANG_TARGET = p4lang-pi_$(P4LANG_PI_VERSION_FULL)_$(CONFIGURED_ARCH).deb
 
 $(addprefix $(DEST)/, $(P4LANG_TARGET)): $(DEST)/% :
@@ -18,9 +20,9 @@ $(addprefix $(DEST)/, $(P4LANG_TARGET)): $(DEST)/% :
 	patch -p1 -i ../p4lang-pi.patch/fix-jobserver-build.patch
 	patch -p1 -i ../p4lang-pi.patch/trim-runtime-only-build.patch
 ifeq ($(CROSS_BUILD_ENVIRON), y)
-	dpkg-buildpackage -us -uc -b -a$(CONFIGURED_ARCH) -Pcross,nocheck -j$(SONIC_CONFIG_MAKE_JOBS) --admindir $(SONIC_DPKG_ADMINDIR)
+	dpkg-buildpackage -us -uc -b -a$(CONFIGURED_ARCH) -Pcross,nocheck -j$(P4LANG_BUILD_JOBS) --admindir $(SONIC_DPKG_ADMINDIR)
 else
-	dpkg-buildpackage -us -uc -b -j$(SONIC_CONFIG_MAKE_JOBS) --admindir $(SONIC_DPKG_ADMINDIR)
+	dpkg-buildpackage -us -uc -b -j$(P4LANG_BUILD_JOBS) --admindir $(SONIC_DPKG_ADMINDIR)
 endif
 	popd
 	mv $* $(DEST)/
@@ -41,9 +43,9 @@ $(addprefix $(DEST)/, $(P4LANG_BMV2_TARGET)): $(DEST)/% :
 	patch -p1 -i ../p4lang-bmv2.patch/fix-build-with-modern-toolchain.patch
 	patch -p1 -i ../p4lang-bmv2.patch/trim-runtime-only-build.patch
 ifeq ($(CROSS_BUILD_ENVIRON), y)
-	dpkg-buildpackage -us -uc -b -a$(CONFIGURED_ARCH) -Pcross,nocheck -j$(SONIC_CONFIG_MAKE_JOBS) --admindir $(SONIC_DPKG_ADMINDIR)
+	dpkg-buildpackage -us -uc -b -a$(CONFIGURED_ARCH) -Pcross,nocheck -j$(P4LANG_BUILD_JOBS) --admindir $(SONIC_DPKG_ADMINDIR)
 else
-	dpkg-buildpackage -us -uc -b -j$(SONIC_CONFIG_MAKE_JOBS) --admindir $(SONIC_DPKG_ADMINDIR)
+	dpkg-buildpackage -us -uc -b -j$(P4LANG_BUILD_JOBS) --admindir $(SONIC_DPKG_ADMINDIR)
 endif
 	popd
 	mv $* $(DEST)/
@@ -63,9 +65,9 @@ $(addprefix $(DEST)/, $(P4LANG_P4C_TARGET)): $(DEST)/% :
 	patch -p1 -i ../p4lang-p4c.patch/fix-build-for-boost-1.83.patch
 	patch -p1 -i ../p4lang-p4c.patch/trim-runtime-only-build.patch
 ifeq ($(CROSS_BUILD_ENVIRON), y)
-	dpkg-buildpackage -us -uc -b -a$(CONFIGURED_ARCH) -Pcross,nocheck -j$(SONIC_CONFIG_MAKE_JOBS) --admindir $(SONIC_DPKG_ADMINDIR)
+	dpkg-buildpackage -us -uc -b -a$(CONFIGURED_ARCH) -Pcross,nocheck -j$(P4LANG_BUILD_JOBS) --admindir $(SONIC_DPKG_ADMINDIR)
 else
-	dpkg-buildpackage -us -uc -b -j$(SONIC_CONFIG_MAKE_JOBS) --admindir $(SONIC_DPKG_ADMINDIR)
+	dpkg-buildpackage -us -uc -b -j$(P4LANG_BUILD_JOBS) --admindir $(SONIC_DPKG_ADMINDIR)
 endif
 	popd
 	mv $* $(DEST)/

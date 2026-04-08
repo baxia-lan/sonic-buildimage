@@ -10,15 +10,19 @@ $(addprefix $(DEST)/, $(MAIN_TARGET)): $(DEST)/% :
 	rm -rf ./socat-1.7.4.1
 
 	# Get source package
-	wget -NO socat_$(SOCAT_VERSION).dsc "$(BUILD_PUBLIC_URL)/debian/socat_1.7.4.1-3.dsc"
-	wget -NO socat_$(SOCAT_VERSION).debian.tar.xz "$(BUILD_PUBLIC_URL)/debian/socat_1.7.4.1-3.debian.tar.xz"
-	wget -NO socat_1.7.4.1.orig.tar.gz "$(BUILD_PUBLIC_URL)/debian/socat_1.7.4.1.orig.tar.gz"
+	test -f socat_$(SOCAT_VERSION).dsc || curl -fsSL --retry 3 --retry-delay 2 -o socat_$(SOCAT_VERSION).dsc "$(BUILD_PUBLIC_URL)/debian/socat_1.7.4.1-3.dsc"
+	test -f socat_$(SOCAT_VERSION).debian.tar.xz || curl -fsSL --retry 3 --retry-delay 2 -o socat_$(SOCAT_VERSION).debian.tar.xz "$(BUILD_PUBLIC_URL)/debian/socat_1.7.4.1-3.debian.tar.xz"
+	test -f socat_1.7.4.1.orig.tar.gz || curl -fsSL --retry 3 --retry-delay 2 -o socat_1.7.4.1.orig.tar.gz "$(BUILD_PUBLIC_URL)/debian/socat_1.7.4.1.orig.tar.gz"
 
 	dpkg-source -x socat_$(SOCAT_VERSION).dsc
 
 	# Build source and Debian packages
 	pushd socat-1.7.4.1
 	patch -p0 < ../patch/enable_readline.patch
+	if ! grep -q '^override_dh_installexamples:' debian/rules; then
+		sed -i '/^%:/i override_dh_installexamples:\n\trm -rf debian\/socat\/usr\/share\/doc\/socat\/examples\n\tdh_installexamples\n' debian/rules
+		sed -i 's/^\.PHONY: override_dh_auto_test$$/.PHONY: override_dh_auto_test override_dh_installexamples/' debian/rules
+	fi
 ifeq ($(CROSS_BUILD_ENVIRON), y)
 	dpkg-buildpackage -rfakeroot -b -us -uc -a$(CONFIGURED_ARCH) -Pcross,nocheck -j$(SONIC_CONFIG_MAKE_JOBS) --admindir $(SONIC_DPKG_ADMINDIR)
 else
@@ -30,4 +34,3 @@ endif
 	mv $(DERIVED_TARGETS) $* $(DEST)/
 
 $(addprefix $(DEST)/, $(DERIVED_TARGETS)): $(DEST)/% : $(DEST)/$(MAIN_TARGET)
-

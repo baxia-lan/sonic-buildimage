@@ -41,7 +41,10 @@ legacy_artifact_bridge(
     legacy_target = "target/docker-sonic-vs.gz",
     make_vars = [
         "BUILD_SKIP_TEST=y",
+        "SONIC_CONFIG_MAKE_JOBS=4",
+        "SONIC_DEVICE_DATA_VS_SCOPE=minimal",
         "SONIC_DPKG_CACHE_METHOD=rwcache",
+        "SONIC_CONFIG_USE_NATIVE_DOCKERD_FOR_BUILD=y",
         "SONIC_VERSION_CACHE_METHOD=rcache",
         "SONIC_VERSION_CONTROL_COMPONENTS=web",
     ],

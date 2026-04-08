@@ -39,9 +39,11 @@ genrule(
     srcs = [
         "//dockers/docker-orchagent:review_srcs",
         "//files:build_templates/arp_update_vars.j2",
+        "//files:image_config/constants/constants.yml",
         "//files:scripts/arp_update",
         "//src:redis_dump_load_review_srcs",
         "//src:scapy_review_srcs",
+        "//src:sonic_config_engine_review_srcs",
         "//src:sonic_py_common_review_srcs",
         "//src/sonic-swss-common:review_srcs",
         "//src/sonic-swss-common/tests:review_srcs",

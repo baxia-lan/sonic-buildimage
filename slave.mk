@@ -70,6 +70,26 @@ ifeq ($(CONFIGURED_ARCH),arm64)
 endif
 endif
 
+DOCKER_TARGET_PLATFORM :=
+ifeq ($(CONFIGURED_ARCH),amd64)
+DOCKER_TARGET_PLATFORM := linux/amd64
+else
+ifeq ($(CONFIGURED_ARCH),arm64)
+DOCKER_TARGET_PLATFORM := linux/arm64
+else
+ifeq ($(CONFIGURED_ARCH),armhf)
+DOCKER_TARGET_PLATFORM := linux/arm/v7
+endif
+endif
+endif
+
+DOCKER_BUILD_PLATFORM_ARG :=
+ifeq ($(SONIC_CONFIG_USE_NATIVE_DOCKERD_FOR_BUILD),y)
+ifneq ($(DOCKER_TARGET_PLATFORM),)
+DOCKER_BUILD_PLATFORM_ARG := --platform=$(DOCKER_TARGET_PLATFORM)
+endif
+endif
+
 IMAGE_DISTRO := trixie
 IMAGE_DISTRO_DEBS_PATH = $(TARGET_PATH)/debs/$(IMAGE_DISTRO)
 IMAGE_DISTRO_FILES_PATH = $(TARGET_PATH)/files/$(IMAGE_DISTRO)
@@ -1087,12 +1107,16 @@ endif
 
 # start docker daemon
 docker-start :
+ifeq ($(SONIC_CONFIG_USE_NATIVE_DOCKERD_FOR_BUILD),y)
+	$(Q)docker info > /dev/null
+else
 	$(Q)sudo sed -i 's/--storage-driver=vfs/--storage-driver=$(SONIC_SLAVE_DOCKER_DRIVER)/' /etc/default/docker
 	$(Q)sudo sed -i -e '/http_proxy/d' -e '/https_proxy/d' /etc/default/docker
 	$(Q)sudo bash -c "{ echo \"export http_proxy=$$http_proxy\"; \
 	            echo \"export https_proxy=$$https_proxy\"; \
 	            echo \"export no_proxy=$$no_proxy\"; } >> /etc/default/docker"
 	$(Q)test x$(SONIC_CONFIG_USE_NATIVE_DOCKERD_FOR_BUILD) != x"y" && sudo service docker status &> /dev/null || ( sudo service docker start &> /dev/null && ./scripts/wait_for_docker.sh 60 )
+endif
 
 # targets for building simple docker images that do not depend on any debian packages
 $(addprefix $(TARGET_PATH)/, $(SONIC_SIMPLE_DOCKER_IMAGES)) : $(TARGET_PATH)/%.gz : .platform docker-start $$(addsuffix -load,$$(addprefix $(TARGET_PATH)/,$$($$*.gz_LOAD_DOCKERS)))
@@ -1106,7 +1130,7 @@ $(addprefix $(TARGET_PATH)/, $(SONIC_SIMPLE_DOCKER_IMAGES)) : $(TARGET_PATH)/%.g
 	DBGOPT='$(DBGOPT)' \
 	scripts/prepare_docker_buildinfo.sh $* $($*.gz_PATH)/Dockerfile $(CONFIGURED_ARCH) $(TARGET_DOCKERFILE)/Dockerfile.buildinfo $(LOG)
 	docker info $(LOG)
-	docker build $(DOCKER_NO_CACHE_FLAG) \
+	docker build $(DOCKER_BUILD_PLATFORM_ARG) $(DOCKER_NO_CACHE_FLAG) \
 		--build-arg http_proxy=$(HTTP_PROXY) \
 		--build-arg https_proxy=$(HTTPS_PROXY) \
 		--build-arg no_proxy=$(NO_PROXY) \
@@ -1275,7 +1299,7 @@ $(addprefix $(TARGET_PATH)/, $(DOCKER_IMAGES)) : $(TARGET_PATH)/%.gz : .platform
 		DBGOPT='$(DBGOPT)' \
 		scripts/prepare_docker_buildinfo.sh $* $($*.gz_PATH)/Dockerfile $(CONFIGURED_ARCH) $(LOG)
 		docker info $(LOG)
-		docker build $(DOCKER_NO_CACHE_FLAG) \
+		docker build $(DOCKER_BUILD_PLATFORM_ARG) $(DOCKER_NO_CACHE_FLAG) \
 			--build-arg http_proxy=$(HTTP_PROXY) \
 			--build-arg https_proxy=$(HTTPS_PROXY) \
 			--build-arg no_proxy=$(NO_PROXY) \
@@ -1345,7 +1369,7 @@ $(addprefix $(TARGET_PATH)/, $(DOCKER_DBG_IMAGES)) : $(TARGET_PATH)/%-$(DBG_IMAG
 		DBGOPT='$(DBGOPT)' \
 		scripts/prepare_docker_buildinfo.sh $*-dbg $($*.gz_PATH)/Dockerfile-dbg $(CONFIGURED_ARCH) $(LOG)
 		docker info $(LOG)
-		docker build \
+		docker build $(DOCKER_BUILD_PLATFORM_ARG) \
 			$(DOCKER_NO_CACHE_FLAG) \
 			--build-arg http_proxy=$(HTTP_PROXY) \
 			--build-arg https_proxy=$(HTTPS_PROXY) \

@@ -1,6 +1,7 @@
 exports_files(
     [
         "build_templates/arp_update_vars.j2",
+        "image_config/constants/constants.yml",
         "scripts/arp_update",
     ],
     visibility = ["//visibility:public"],

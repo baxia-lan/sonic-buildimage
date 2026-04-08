@@ -86,7 +86,9 @@ workspace_marker="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1
 workspace_root="$(dirname "${workspace_marker}")"
 export HOME="${HOME:-$(dirname "${workspace_root}")}"
 export PATH="/Applications/Docker.app/Contents/Resources/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"
-tmpdir="$(mktemp -d)"
+bridge_tmp_root="${SONIC_BAZEL_LEGACY_BRIDGE_TMPDIR_ROOT:-${workspace_root}/.cache/legacy-bridge/tmp-host}"
+mkdir -p "${bridge_tmp_root}"
+tmpdir="$(mktemp -d "${bridge_tmp_root}/tmp.XXXXXX")"
 sanitize_path_component() {
     printf '%s' "$1" | tr '/: ' '---' | tr -cd 'A-Za-z0-9._-'
 }
@@ -96,7 +98,13 @@ if [[ -n "${docker_platform}" ]]; then
     docker_platform_component="$(sanitize_path_component "${docker_platform}")"
 fi
 
-relative_target_dir=".bazel-legacy-target/bridge-$(sanitize_path_component "${platform}")-${bldenv}-${docker_platform_component}"
+artifact_component="$(sanitize_path_component "${artifact_path}")"
+if [[ -z "${artifact_component}" ]]; then
+    artifact_component="$(sanitize_path_component "${legacy_target}")"
+fi
+
+bridge_cache_generation="${SONIC_BAZEL_LEGACY_BRIDGE_CACHE_GEN:-v2}"
+relative_target_dir=".bazel-legacy-target/bridge-${bridge_cache_generation}-$(sanitize_path_component "${platform}")-${bldenv}-${docker_platform_component}-${artifact_component}"
 target_dir="${workspace_root}/${relative_target_dir}"
 saved_platform="${tmpdir}/saved.platform"
 saved_arch="${tmpdir}/saved.arch"
@@ -194,8 +202,14 @@ fi
 
 printf '%s\n' "${make_vars[@]-}" > "${helper_make_vars}"
 
-workspace_uid="$(stat -f '%u' "${workspace_root}" 2>/dev/null || stat -c '%u' "${workspace_root}")"
-workspace_gid="$(stat -f '%g' "${workspace_root}" 2>/dev/null || stat -c '%g' "${workspace_root}")"
+workspace_uid="${SONIC_BAZEL_LEGACY_BRIDGE_WORKSPACE_UID:-$(python3 -c 'import os,sys; print(os.stat(sys.argv[1]).st_uid)' "${workspace_root}")}"
+workspace_gid="${SONIC_BAZEL_LEGACY_BRIDGE_WORKSPACE_GID:-$(python3 -c 'import os,sys; print(os.stat(sys.argv[1]).st_gid)' "${workspace_root}")}"
+if [[ "${workspace_uid}" == "0" ]]; then
+    workspace_uid="${SONIC_BAZEL_LEGACY_BRIDGE_FALLBACK_UID:-1000}"
+fi
+if [[ "${workspace_gid}" == "0" ]]; then
+    workspace_gid="${SONIC_BAZEL_LEGACY_BRIDGE_FALLBACK_GID:-1000}"
+fi
 bridge_cache_source="${workspace_root}/.cache/legacy-bridge/artifacts-v2"
 mkdir -p "${target_dir}" "${bridge_cache_source}"
 

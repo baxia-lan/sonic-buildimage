@@ -18,6 +18,7 @@ legacy_artifact_bridge(
     legacy_target = "target/sonic-broadcom.bin",
     make_vars = [
         "BUILD_SKIP_TEST=y",
+        "SONIC_CONFIG_MAKE_JOBS=4",
         "SONIC_DPKG_CACHE_METHOD=rwcache",
         "SONIC_VERSION_CACHE_METHOD=rcache",
         "SONIC_VERSION_CONTROL_COMPONENTS=web",
@@ -66,6 +67,7 @@ legacy_artifact_bridge(
     legacy_target = "target/sonic-aboot-broadcom.swi",
     make_vars = [
         "BUILD_SKIP_TEST=y",
+        "SONIC_CONFIG_MAKE_JOBS=4",
         "SONIC_DPKG_CACHE_METHOD=rwcache",
         "SONIC_VERSION_CACHE_METHOD=rcache",
         "SONIC_VERSION_CONTROL_COMPONENTS=web",

@@ -17,7 +17,7 @@
 # build can use up to ~8GB RAM (dpkg-buildpackage with nproc make jobs).
 # Override with a fixed number if needed, e.g. SONIC_CONFIG_BUILD_JOBS = 1
 # for sequential builds or higher values on machines with more RAM.
-SONIC_CONFIG_BUILD_JOBS = $(shell \
+SONIC_CONFIG_BUILD_JOBS ?= $(shell \
 	cores=$$(nproc 2>/dev/null || echo 4); \
 	host_ram=$$(awk '/^MemTotal/ {printf "%d", $$2/1048576}' /proc/meminfo 2>/dev/null || echo 8); \
 	ram_gb=$$host_ram; \
@@ -36,7 +36,7 @@ SONIC_CONFIG_BUILD_JOBS = $(shell \
 
 # SONIC_CONFIG_MAKE_JOBS - set number of parallel make jobs per package.
 # Corresponding -j argument will be passed to make/dpkg commands that build separate packages
-SONIC_CONFIG_MAKE_JOBS = $(shell nproc)
+SONIC_CONFIG_MAKE_JOBS ?= $(shell nproc)
 
 # SONIC_BUILD_MEMORY - set memory limit for the build container.
 # When set, passes --memory and --memory-swap flags to docker run.

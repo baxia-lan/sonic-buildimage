@@ -5,6 +5,14 @@
 This file is the execution playbook for the SONiC buildimage Bazel migration.
 `AGENTS.md` defines the non-negotiable rules. This file turns those rules into
 an implementation plan, delivery sequence, and validation ladder.
+The repo-local Codex operating layer for this playbook lives under:
+
+- `.codex/` for project-scoped Codex config and named agent roles
+- `.agents/skills/` for repeatable migration workflows
+- `ops/tasks/` for task packs, templates, and the current execution plan
+
+Use [ops/tasks/PLAN.md](ops/tasks/PLAN.md) as the current task-pack view of the
+phase plan below.
 
 ## Problem Statement
 

@@ -19,6 +19,18 @@ ARCH=$3
 DOCKERFILE_TARGET=$4
 DISTRO=$5
 
+DOCKER_RUN_PLATFORM_ARG=
+case "${ARCH}" in
+    amd64)
+        DOCKER_RUN_PLATFORM_ARG="--platform=linux/amd64"
+        ;;
+    arm64)
+        DOCKER_RUN_PLATFORM_ARG="--platform=linux/arm64"
+        ;;
+    armhf)
+        DOCKER_RUN_PLATFORM_ARG="--platform=linux/arm/v7"
+        ;;
+esac
 
 [ -z "$BUILD_SLAVE" ] && BUILD_SLAVE=n
 [ -z "$DOCKERFILE_TARGET" ] && DOCKERFILE_TARGET=$DOCKERFILE
@@ -36,9 +48,12 @@ if [ -z "$DISTRO" ]; then
     if [ -z "$DOCKER_BASE_IMAGE" ]; then
         DOCKER_BASE_IMAGE=$(grep "^FROM" $DOCKERFILE | head -n 1 | awk '{print $2}')
     fi
-    DISTRO=$(docker run --rm --entrypoint "" $DOCKER_BASE_IMAGE cat /etc/os-release | grep VERSION_CODENAME | cut -d= -f2)
+    DISTRO=$(echo "$DOCKER_BASE_IMAGE" | grep -Eo 'jessie|stretch|buster|bullseye|bookworm|trixie' | tail -n 1)
     if [ -z "$DISTRO" ]; then
-        DISTRO=$(docker run --rm --entrypoint "" $DOCKER_BASE_IMAGE cat /etc/apt/sources.list | grep deb.debian.org | awk '{print $3}')
+        DISTRO=$(docker run --rm ${DOCKER_RUN_PLATFORM_ARG} --entrypoint "" $DOCKER_BASE_IMAGE cat /etc/os-release | grep VERSION_CODENAME | cut -d= -f2)
+    fi
+    if [ -z "$DISTRO" ]; then
+        DISTRO=$(docker run --rm ${DOCKER_RUN_PLATFORM_ARG} --entrypoint "" $DOCKER_BASE_IMAGE cat /etc/apt/sources.list | grep deb.debian.org | awk '{print $3}')
         [ -z "$DISTRO" ] && DISTRO=jessie
     fi
 fi
@@ -173,4 +188,3 @@ else
 	# Delete the cache file if version cache is disabled.
 	rm -f ${DOCKER_PATH}/vcache/cache.tgz
 fi
-

@@ -9,7 +9,7 @@
  	dh_testdir
  	dh_auto_clean
  	dh_clean
-@@ -29,17 +27,17 @@
+@@ -29,19 +27,21 @@
  		-DCMAKE_BUILD_TYPE=RELEASE \
  		-DCMAKE_INSTALL_PREFIX=/usr \
  		-DENABLE_BMV2=ON \
@@ -31,3 +31,10 @@
 -		-DENABLE_TEST_TOOLS=ON \
 +		-DENABLE_TEST_TOOLS=OFF \
  		-DENABLE_GMP=ON
+ 
++override_dh_auto_build:
++	dh_auto_build --builddirectory=build/ -- -j1
+ 
+ override_dh_auto_install:
+-	dh_auto_install --builddirectory=build/ -- DESTDIR=$(CURDIR)/debian/p4lang-p4c install
++	dh_auto_install --builddirectory=build/ -- -j1 DESTDIR=$(CURDIR)/debian/p4lang-p4c install

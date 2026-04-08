@@ -32,6 +32,9 @@ def _legacy_artifact_bridge_impl(ctx):
         outputs = [output],
         arguments = [args],
         tools = [ctx.executable._builder],
+        env = {
+            "SONIC_BAZEL_LEGACY_BRIDGE_CACHE_GEN": ctx.attr.bridge_cache_generation,
+        },
         mnemonic = "SonicLegacyArtifactBridge",
         progress_message = "Building legacy SONiC artifact %s via Bazel bridge" % ctx.label,
         execution_requirements = {
@@ -47,6 +50,7 @@ _legacy_artifact_bridge = rule(
     attrs = {
         "artifact_path": attr.string(mandatory = True),
         "bldenv": attr.string(default = "bookworm"),
+        "bridge_cache_generation": attr.string(default = "v7"),
         "docker_platform": attr.string(mandatory = True),
         "legacy_target": attr.string(mandatory = True),
         "make_vars": attr.string_list(),

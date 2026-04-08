@@ -117,6 +117,10 @@ htmlcov/
 # Dev tools
 .vscode/
 .idea/
+.cache/bazel/
+.cache/bazelisk/
+bazel-*
+.bazeliskrc
 
 # Debian mirror Sources
 sources.list.*

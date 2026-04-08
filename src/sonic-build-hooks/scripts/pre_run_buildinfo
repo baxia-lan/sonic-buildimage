@@ -42,7 +42,8 @@ if [ "$ENABLE_VERSION_CONTROL_DEB" == "y" ] && [ -f $VERSION_DEB_PREFERENCE ]; t
 fi
 
 if [ ! -z "$(get_version_cache_option)" ]; then
-    DISTRO=${DISTRO} apt-get update && apt-get install -y rsync
+    DISTRO=${DISTRO} apt-get update && apt-get install -y rsync || \
+        (sleep 2 && DISTRO=${DISTRO} apt-get update && apt-get install -y rsync)
 fi
 
 exit 0

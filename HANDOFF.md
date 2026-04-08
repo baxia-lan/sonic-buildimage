@@ -14,6 +14,11 @@ This path produces a real Docker archive:
 - current review image contents include local-source `scapy`,
   `sonic-py-common`, `redis-dump-load`, and locally built
   `swsscommon` / `sonic-db-cli` / `swssloglevel`
+- current review image contents also include local-source
+  `sonic-cfggen` / `sonic-config-engine`, `/etc/sonic/constants.yml`,
+  and a generated `/usr/bin/docker-init.real.sh`
+- current review image prunes non-runtime `sonic-config-engine` tests/docs and
+  strips the locally built `swsscommon` runtime binaries
 
 This is a concrete artifact for review. It is not the final hermetic SONiC
 runtime image yet.
@@ -68,17 +73,23 @@ Outputs:
 - the container contains `/usr/bin/orchagent.sh`
 - the container contains `/usr/share/sonic/templates/arp_update.conf`
 - the container contains `/usr/share/sonic/templates/arp_update_vars.j2`
-- the container imports `swsscommon`, `sonic_py_common`, `scapy`, and `redisdl`
+- the container contains `/etc/sonic/constants.yml`
+- the container imports `jinja2`, `netaddr`, `lxml`, `swsscommon`,
+  `sonic_py_common`, `scapy`, and `redisdl`
 - `sonic-db-cli -h` runs in the container
 - `swssloglevel -h` runs in the container
-- current artifact size is about `93M` compressed and `300MB` loaded
-- current artifact SHA256 is `bd439ce593217a2394407644c4a2765c0ef6dc873e0a76dc77a0855cb2caf209`
+- `sonic-cfggen` renders `docker-init.j2` in the container
+- `/usr/bin/docker-init.real.sh` exists and passes `/bin/bash -n`
+- `supervisord` remains present at `/usr/bin/supervisord`
+- current artifact size is about `84M` compressed and `260MB` loaded
+- current artifact SHA256 is `0ba7ba451d099e7e99a4d37e0f064215ac67afc6665fba3ec002988731874f64`
 
 ## Known Gaps
 
 - the concrete image builder still depends on Docker Buildx
 - the review Dockerfile still uses `apt-get` and `pip`
 - `sonic-swss-common` source exposure currently depends on Bazel metadata added in that submodule
+- the current review image only supports non-YANG `sonic-cfggen` paths
 - the image is suitable for structure and dependency review, not yet full SONiC
   runtime parity
 - the target is intentionally tagged `manual` and is not yet the final CI-default
