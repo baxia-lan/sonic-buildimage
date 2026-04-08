@@ -68,27 +68,60 @@ use_repo(llvm, "llvm_toolchain", "llvm_toolchain_llvm")
 
 register_toolchains("@llvm_toolchain//:all")
 
-# Sysroot from Debian packages (5 core packages for C/C++ compilation)
+# Sysroot from Debian packages — all dev libraries for hermetic C++ builds
+# NOTE: URLs from snapshot.debian.org/archive/debian/20260401T000000Z
+_SNAPSHOT = "https://snapshot.debian.org/archive/debian/20260401T000000Z/pool/main"
+
 _sysroot_repo = use_repo_rule("//toolchains/cc:sysroot.bzl", "debian_sysroot_repo")
 
 _sysroot_repo(
     name = "bookworm_sysroot",
     packages = {
-        "libc6-dev": [
-            "https://snapshot.debian.org/archive/debian/20260401T000000Z/pool/main/g/glibc/libc6-dev_2.36-9+deb12u13_amd64.deb",
-        ],
-        "libgcc-12-dev": [
-            "https://snapshot.debian.org/archive/debian/20260401T000000Z/pool/main/g/gcc-12/libgcc-12-dev_12.2.0-14+deb12u1_amd64.deb",
-        ],
-        "libstdc++-12-dev": [
-            "https://snapshot.debian.org/archive/debian/20260401T000000Z/pool/main/g/gcc-12/libstdc++-12-dev_12.2.0-14+deb12u1_amd64.deb",
-        ],
-        "libc6": [
-            "https://snapshot.debian.org/archive/debian/20260401T000000Z/pool/main/g/glibc/libc6_2.36-9+deb12u13_amd64.deb",
-        ],
-        "linux-libc-dev": [
-            "https://snapshot.debian.org/archive/debian/20260401T000000Z/pool/main/l/linux/linux-libc-dev_6.1.164-1_amd64.deb",
-        ],
+        # Core C/C++ toolchain
+        "libc6-dev": [_SNAPSHOT + "/g/glibc/libc6-dev_2.36-9+deb12u13_amd64.deb"],
+        "libc6": [_SNAPSHOT + "/g/glibc/libc6_2.36-9+deb12u13_amd64.deb"],
+        "libgcc-12-dev": [_SNAPSHOT + "/g/gcc-12/libgcc-12-dev_12.2.0-14+deb12u1_amd64.deb"],
+        "libstdc++-12-dev": [_SNAPSHOT + "/g/gcc-12/libstdc++-12-dev_12.2.0-14+deb12u1_amd64.deb"],
+        "linux-libc-dev": [_SNAPSHOT + "/l/linux/linux-libc-dev_6.1.164-1_amd64.deb"],
+        # Redis (swss-common)
+        "libhiredis-dev": [_SNAPSHOT + "/h/hiredis/libhiredis-dev_0.14.1-3_amd64.deb"],
+        "libhiredis0.14": [_SNAPSHOT + "/h/hiredis/libhiredis0.14_0.14.1-3_amd64.deb"],
+        # Boost (swss-common) — bookworm has 1.81
+        "libboost-serialization1.81-dev": [_SNAPSHOT + "/b/boost1.81/libboost-serialization1.81-dev_1.81.0-5+deb12u1_amd64.deb"],
+        "libboost-serialization1.81.0": [_SNAPSHOT + "/b/boost1.81/libboost-serialization1.81.0_1.81.0-5+deb12u1_amd64.deb"],
+        "libboost1.81-dev": [_SNAPSHOT + "/b/boost1.81/libboost1.81-dev_1.81.0-5+deb12u1_amd64.deb"],
+        # ZMQ (swss-common)
+        "libzmq3-dev": [_SNAPSHOT + "/z/zeromq3/libzmq3-dev_4.3.4-6_amd64.deb"],
+        "libzmq5": [_SNAPSHOT + "/z/zeromq3/libzmq5_4.3.4-6_amd64.deb"],
+        # Netlink (swss-common, swss)
+        "libnl-3-dev": [_SNAPSHOT + "/libn/libnl3/libnl-3-dev_3.7.0-0.2+b1_amd64.deb"],
+        "libnl-3-200": [_SNAPSHOT + "/libn/libnl3/libnl-3-200_3.7.0-0.2+b1_amd64.deb"],
+        "libnl-genl-3-dev": [_SNAPSHOT + "/libn/libnl3/libnl-genl-3-dev_3.7.0-0.2+b1_amd64.deb"],
+        "libnl-genl-3-200": [_SNAPSHOT + "/libn/libnl3/libnl-genl-3-200_3.7.0-0.2+b1_amd64.deb"],
+        "libnl-route-3-dev": [_SNAPSHOT + "/libn/libnl3/libnl-route-3-dev_3.7.0-0.2+b1_amd64.deb"],
+        "libnl-route-3-200": [_SNAPSHOT + "/libn/libnl3/libnl-route-3-200_3.7.0-0.2+b1_amd64.deb"],
+        "libnl-nf-3-dev": [_SNAPSHOT + "/libn/libnl3/libnl-nf-3-dev_3.7.0-0.2+b1_amd64.deb"],
+        # JSON (swss-common) — arch: all
+        "nlohmann-json3-dev": [_SNAPSHOT + "/n/nlohmann-json3/nlohmann-json3-dev_3.11.2-2_all.deb"],
+        # YANG (swss-common)
+        "libyang2-dev": [_SNAPSHOT + "/liby/libyang2/libyang2-dev_2.1.30-2_amd64.deb"],
+        "libyang2": [_SNAPSHOT + "/liby/libyang2/libyang2_2.1.30-2_amd64.deb"],
+        # Protobuf (sairedis, dash-api)
+        "libprotobuf-dev": [_SNAPSHOT + "/p/protobuf/libprotobuf-dev_3.21.12-3_amd64.deb"],
+        "libprotobuf32": [_SNAPSHOT + "/p/protobuf/libprotobuf32_3.21.12-3_amd64.deb"],
+        # Misc
+        "uuid-dev": [_SNAPSHOT + "/u/util-linux/uuid-dev_2.38.1-5+deb12u3_amd64.deb"],
+        "libjansson-dev": [_SNAPSHOT + "/j/jansson/libjansson-dev_2.14-2_amd64.deb"],
+        "libjansson4": [_SNAPSHOT + "/j/jansson/libjansson4_2.14-2_amd64.deb"],
+        "libjemalloc-dev": [_SNAPSHOT + "/j/jemalloc/libjemalloc-dev_5.3.0-1_amd64.deb"],
+        "libjemalloc2": [_SNAPSHOT + "/j/jemalloc/libjemalloc2_5.3.0-1_amd64.deb"],
+        # Team (swss)
+        "libteam-dev": [_SNAPSHOT + "/libt/libteam/libteam-dev_1.31-1_amd64.deb"],
+        "libteam5": [_SNAPSHOT + "/libt/libteam/libteam5_1.31-1_amd64.deb"],
+        "libteamdctl0": [_SNAPSHOT + "/libt/libteam/libteamdctl0_1.31-1_amd64.deb"],
+        # GTest (tests)
+        "libgtest-dev": [_SNAPSHOT + "/g/googletest/libgtest-dev_1.12.1-0.2_amd64.deb"],
+        "libgmock-dev": [_SNAPSHOT + "/g/googletest/libgmock-dev_1.12.1-0.2_amd64.deb"],
     },
 )
 
