@@ -14,11 +14,12 @@ sonic_installer_manifest(
 legacy_artifact_bridge(
     name = "onie",
     artifact_path = "sonic-broadcom.bin",
-    bldenv = "trixie",
+    bldenv = "bookworm",
     docker_platform = "linux/amd64",
     legacy_target = "target/sonic-broadcom.bin",
     make_vars = [
         "BUILD_SKIP_TEST=y",
+        "IMAGE_DISTRO=bookworm",
         "SONIC_CONFIG_MAKE_JOBS=4",
         "SONIC_DPKG_CACHE_METHOD=rwcache",
         "SONIC_VERSION_CACHE_METHOD=rcache",
@@ -64,11 +65,12 @@ sonic_installer_manifest(
 legacy_artifact_bridge(
     name = "aboot",
     artifact_path = "sonic-aboot-broadcom.swi",
-    bldenv = "trixie",
+    bldenv = "bookworm",
     docker_platform = "linux/amd64",
     legacy_target = "target/sonic-aboot-broadcom.swi",
     make_vars = [
         "BUILD_SKIP_TEST=y",
+        "IMAGE_DISTRO=bookworm",
         "SONIC_CONFIG_MAKE_JOBS=4",
         "SONIC_DPKG_CACHE_METHOD=rwcache",
         "SONIC_VERSION_CACHE_METHOD=rcache",
