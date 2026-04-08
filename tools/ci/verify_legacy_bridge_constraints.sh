@@ -56,6 +56,11 @@ if ! rg -q --fixed-strings 'COPY tools/bazel/legacy_bridge_helper.apt.txt /tmp/l
     exit 1
 fi
 
+if ! rg -q '^FROM debian@sha256:[0-9a-f]{64}$' "${helper_dockerfile}"; then
+    echo "Legacy bridge helper Dockerfile must pin its Debian base image by digest." >&2
+    exit 1
+fi
+
 if ! rg -q --fixed-strings 'COPY tools/bazel/legacy_bridge_helper.requirements.txt /tmp/legacy_bridge_helper.requirements.txt' "${helper_dockerfile}"; then
     echo "Legacy bridge helper Dockerfile must consume the tracked pip requirements manifest." >&2
     exit 1
