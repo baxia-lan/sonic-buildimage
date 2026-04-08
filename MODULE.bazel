@@ -86,10 +86,11 @@ _sysroot_repo(
         # Redis (swss-common)
         "libhiredis-dev": [_SNAPSHOT + "/h/hiredis/libhiredis-dev_0.14.1-3_amd64.deb"],
         "libhiredis0.14": [_SNAPSHOT + "/h/hiredis/libhiredis0.14_0.14.1-3_amd64.deb"],
-        # Boost (swss-common) — bookworm has 1.81
-        "libboost-serialization1.81-dev": [_SNAPSHOT + "/b/boost1.81/libboost-serialization1.81-dev_1.81.0-5+deb12u1_amd64.deb"],
-        "libboost-serialization1.81.0": [_SNAPSHOT + "/b/boost1.81/libboost-serialization1.81.0_1.81.0-5+deb12u1_amd64.deb"],
-        "libboost1.81-dev": [_SNAPSHOT + "/b/boost1.81/libboost1.81-dev_1.81.0-5+deb12u1_amd64.deb"],
+        # Boost (swss-common) — bookworm defaults to 1.74
+        "libboost-serialization-dev": [_SNAPSHOT + "/b/boost-defaults/libboost-serialization-dev_1.74.0.3_amd64.deb"],
+        "libboost-serialization1.74-dev": [_SNAPSHOT + "/b/boost1.74/libboost-serialization1.74-dev_1.74.0+ds1-21_amd64.deb"],
+        "libboost-serialization1.74.0": [_SNAPSHOT + "/b/boost1.74/libboost-serialization1.74.0_1.74.0+ds1-21_amd64.deb"],
+        "libboost1.74-dev": [_SNAPSHOT + "/b/boost1.74/libboost1.74-dev_1.74.0+ds1-21_amd64.deb"],
         # ZMQ (swss-common)
         "libzmq3-dev": [_SNAPSHOT + "/z/zeromq3/libzmq3-dev_4.3.4-6_amd64.deb"],
         "libzmq5": [_SNAPSHOT + "/z/zeromq3/libzmq5_4.3.4-6_amd64.deb"],
