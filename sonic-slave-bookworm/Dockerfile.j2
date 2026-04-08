@@ -541,7 +541,13 @@ RUN eatmydata apt-get install -y kernel-wedge
 
 # For gobgp and telemetry build
 RUN eatmydata apt-get install -y golang
-{%- if INCLUDE_FIPS == "y" %}
+{#-
+  FIPS-capable images still carry the runtime FIPS package surface through the
+  normal dependency graph, but the slave toolchain should only require the
+  FIPS Go toolchain when FIPS is actually enabled for the build. Otherwise a
+  missing FIPS Go mirror blocks ordinary non-FIPS builds during configure.
+-#}
+{%- if INCLUDE_FIPS == "y" and ENABLE_FIPS == "y" %}
 RUN wget -O golang-go.deb '{{ BUILD_PUBLIC_URL }}/fips/bookworm/{{ FIPS_VERSION }}/{{ CONFIGURED_ARCH }}/golang-1.19-go_{{ FIPS_GOLANG_VERSION }}_{{ CONFIGURED_ARCH }}.deb' \
  && wget -O golang-src.deb '{{ BUILD_PUBLIC_URL }}/fips/bookworm/{{ FIPS_VERSION }}/{{ CONFIGURED_ARCH }}/golang-1.19-src_{{ FIPS_GOLANG_VERSION }}_all.deb' \
  && eatmydata dpkg -i golang-go.deb golang-src.deb \
