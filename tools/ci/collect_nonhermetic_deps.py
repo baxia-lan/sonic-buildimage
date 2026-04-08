@@ -25,6 +25,20 @@ class Issue:
 
 PATTERNS = (
     (
+        re.compile(r"SONIC_DPKG_CACHE_METHOD=(?:cache|wcache|rwcache)\b"),
+        "HIGH",
+        "mutable_dpkg_cache",
+        "mutable Debian package cache configured in Bazel-era bridge target",
+        "Disable mutable cache writes or replace the bridge path with declared Bazel inputs.",
+    ),
+    (
+        re.compile(r"SONIC_VERSION_CACHE_METHOD=(?:cache|rcache|wcache|rwcache)\b"),
+        "HIGH",
+        "mutable_version_cache",
+        "mutable version cache configured in Bazel-era bridge target",
+        "Replace version cache reuse with declared Bazel metadata inputs or disable it.",
+    ),
+    (
         re.compile(r"\b(?:apt-get|apt)\b.*\binstall\b", re.IGNORECASE),
         "MEDIUM",
         "apt_install",
@@ -90,6 +104,9 @@ PATTERNS = (
 )
 
 SCAN_ROOTS = (
+    "bazel/sonic",
+    "images",
+    "installers",
     "sonic-slave-bookworm",
     "dockers",
     "scripts",
@@ -120,7 +137,7 @@ def iter_scan_files(repo_root: Path) -> Iterable[Path]:
         for child in path.rglob("*"):
             if not child.is_file():
                 continue
-            if child.name in DOCKERFILE_NAMES or child.suffix in {".sh", ".mk", ".j2"}:
+            if child.name in DOCKERFILE_NAMES or child.name == "BUILD.bazel" or child.suffix in {".bzl", ".sh", ".mk", ".j2"}:
                 yield child
 
 
