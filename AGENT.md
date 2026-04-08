@@ -154,6 +154,15 @@ unit:
 
 A PR that only shuffles files without changing graph ownership is incomplete.
 
+Bridge-backed outputs do not satisfy graph ownership. A temporary Bazel action
+may still replay legacy logic to capture behavior while a slice is being
+understood, but that path is diagnostic only:
+
+- do not add new long-term public targets backed by `legacy_artifact_bridge`
+- do not count a bridge-produced `.deb`, `.gz`, `.bin`, or `.swi` as migrated
+- replace any surviving bridge with a Bazel-native concrete builder before
+  calling the artifact complete
+
 ## Phase Plan
 
 ### Phase 0: Baseline Capture

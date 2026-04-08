@@ -1,8 +1,27 @@
 exports_files(
     [
         "build_templates/arp_update_vars.j2",
+        "build_templates/buffers_config.j2",
+        "build_templates/qos_config.j2",
         "image_config/constants/constants.yml",
+        "image_config/copp/copp_cfg.j2",
         "scripts/arp_update",
+        "scripts/configdb-load.sh",
+        "scripts/update_chassisdb_config",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "docker_sonic_vs_runtime_files",
+    srcs = [
+        "build_templates/arp_update_vars.j2",
+        "build_templates/buffers_config.j2",
+        "build_templates/qos_config.j2",
+        "image_config/copp/copp_cfg.j2",
+        "scripts/arp_update",
+        "scripts/configdb-load.sh",
+        "scripts/update_chassisdb_config",
     ],
     visibility = ["//visibility:public"],
 )

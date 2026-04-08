@@ -1,0 +1,24 @@
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "runtime_srcs",
+    srcs = [
+        "50-default.conf",
+        "asic_table.json",
+        "buffermgrd.sh",
+        "database_config.json",
+        "default_chassis_cfg.json",
+        "etc/rsyslog.conf",
+        "frr/zebra.conf",
+        "hostname.j2",
+        "hwsku.json",
+        "init_cfg.json.j2",
+        "orchagent.sh",
+        "platform-dpu-2p.json",
+        "platform.json",
+        "port_breakout_config_db.json",
+        "start.sh",
+        "supervisord.conf.j2",
+        "zero_profiles.json",
+    ],
+)

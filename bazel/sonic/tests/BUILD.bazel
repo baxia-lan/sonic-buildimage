@@ -1,4 +1,4 @@
-load("//bazel/sonic:defs.bzl", "sonic_export_to_target_tree")
+load("//bazel/sonic:defs.bzl", "sonic_export_to_target_tree", "sonic_oci_image")
 
 exports_files(["sample.txt"])
 
@@ -14,4 +14,52 @@ genrule(
     srcs = [":exported_target_tree"],
     outs = ["export_verifier.txt"],
     cmd = "test -f $(location :exported_target_tree)/target/example/sample.txt && echo ok > $@",
+)
+
+genrule(
+    name = "sample_rootfs",
+    srcs = [":sample.txt"],
+    outs = ["sample_rootfs.tar"],
+    cmd = """
+tmpdir="$(@D)/sample_rootfs"
+rm -rf "$$tmpdir"
+mkdir -p "$$tmpdir/etc/sonic"
+cp "$(location :sample.txt)" "$$tmpdir/etc/sonic/sample.txt"
+tar -cf "$@" -C "$$tmpdir" .
+""",
+)
+
+sonic_oci_image(
+    name = "sample_image",
+    builder = "bazel",
+    builder_base = "@debian_bookworm",
+    builder_repo_tags = ["sonic/sample:test"],
+    builder_tars = [":sample_rootfs"],
+    metadata = {
+        "container_name": "sample",
+        "migration_role": "test_image_builder",
+    },
+    notes = [
+        "Small Bazel-native OCI smoke target for the SONiC artifact API.",
+    ],
+    output_name = "sample_image.tar.gz",
+)
+
+genrule(
+    name = "sample_image_verifier",
+    srcs = [":sample_image"],
+    outs = ["sample_image_verifier.txt"],
+    cmd = """
+archive=""
+for f in $(locations :sample_image); do
+  case "$$f" in
+    *.tar.gz)
+      archive="$$f"
+      ;;
+  esac
+done
+test -n "$$archive"
+test -s "$$archive"
+echo ok > $@
+""",
 )

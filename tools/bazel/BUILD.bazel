@@ -30,12 +30,24 @@ sh_binary(
 sh_binary(
     name = "build_deb_package",
     srcs = ["build_deb_package.sh"],
+    data = [
+        "legacy_bridge_helper.Dockerfile",
+        "legacy_bridge_helper.apt.txt",
+        "legacy_bridge_helper.requirements.txt",
+        "legacy_bridge_helper_image_ref.sh",
+    ],
     visibility = ["//visibility:public"],
 )
 
 sh_binary(
     name = "build_review_docker_archive",
     srcs = ["build_review_docker_archive.sh"],
+    visibility = ["//visibility:public"],
+)
+
+sh_binary(
+    name = "gzip_file",
+    srcs = ["gzip_file.sh"],
     visibility = ["//visibility:public"],
 )
 

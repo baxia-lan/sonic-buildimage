@@ -4,8 +4,17 @@ package(default_visibility = ["//visibility:public"])
 
 sonic_deb_package(
     name = "deb",
+    builder = "bazel",
+    builder_srcs = ["//src/sonic-swss-common:package_srcs"],
+    deb_pattern = "libswsscommon_1.0.0_amd64.deb",
     legacy_artifact = "libswsscommon_1.0.0_$(CONFIGURED_ARCH).deb",
+    migration_stage = "concrete_builder",
+    output_name = "libswsscommon_1.0.0_amd64.deb",
+    package_arch = "amd64",
+    package_name = "libswsscommon",
+    package_version = "1.0.0",
     source_path = "src/sonic-swss-common",
+    source_root = "src/sonic-swss-common",
     source_makefiles = [
         "rules/swss-common.mk",
         "rules/swss-common.dep",

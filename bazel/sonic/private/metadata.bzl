@@ -1,25 +1,37 @@
-"""Concrete SONiC Debian package builders."""
+"""Shared SONiC artifact metadata helpers."""
 
-load("//bazel/sonic/private:metadata.bzl", "COMMON_ARTIFACT_ATTRS", "SonicArtifactInfo")
 load("//bazel/sonic/private:sources.bzl", "SonicSourceInfo")
 
-def _labels(targets):
+SonicArtifactInfo = provider(
+    doc = "Propagates SONiC artifact metadata through the Bazel migration graph.",
+    fields = {
+        "artifact_kind": "Logical artifact kind such as deb, wheel, or oci_image.",
+        "artifact_labels": "depset of transitive artifact labels.",
+        "composition_depth": "Longest dependency chain depth rooted at this artifact.",
+        "label": "Canonical Bazel label string for this artifact.",
+        "lock": "Resolved lock JSON output file for this artifact.",
+        "manifest": "Primary manifest JSON output file for this artifact.",
+    },
+)
+
+def labels(targets):
     return [str(target.label) for target in targets]
 
-def _artifact_infos(targets):
+def artifact_infos(targets):
     return [target[SonicArtifactInfo] for target in targets if SonicArtifactInfo in target]
 
-def _source_infos(targets):
+def source_infos(targets):
     return [target[SonicSourceInfo] for target in targets if SonicSourceInfo in target]
 
-def _write_package_artifact_metadata(ctx):
-    manifest_output = ctx.actions.declare_file(ctx.attr.output_name + ".manifest.json")
-    lock_output = ctx.actions.declare_file(ctx.attr.output_name + ".lock.json")
+def write_artifact_metadata(ctx):
+    manifest_output = ctx.actions.declare_file(ctx.label.name + ".manifest.json")
+    lock_output = ctx.actions.declare_file(ctx.label.name + ".lock.json")
 
-    runtime_infos = _artifact_infos(ctx.attr.runtime_deps)
-    wheel_infos = _artifact_infos(ctx.attr.wheel_deps)
-    fragment_infos = _artifact_infos(ctx.attr.fragments)
-    bound_sources = _source_infos(ctx.attr.sources)
+    dep_infos = artifact_infos(ctx.attr.deps)
+    runtime_infos = artifact_infos(ctx.attr.runtime_deps)
+    wheel_infos = artifact_infos(ctx.attr.wheel_deps)
+    fragment_infos = artifact_infos(ctx.attr.fragments)
+    bound_sources = source_infos(ctx.attr.sources)
     base_info = ctx.attr.base[SonicArtifactInfo] if ctx.attr.base and SonicArtifactInfo in ctx.attr.base else None
 
     graph_children = runtime_infos + wheel_infos + fragment_infos
@@ -58,22 +70,22 @@ def _write_package_artifact_metadata(ctx):
         ],
         "dependencies": {
             "build": {
-                "bazel": _labels(ctx.attr.deps),
+                "bazel": labels(ctx.attr.deps),
                 "legacy": ctx.attr.legacy_deps,
             },
             "runtime": {
-                "bazel": _labels(ctx.attr.runtime_deps),
+                "bazel": labels(ctx.attr.runtime_deps),
                 "legacy": ctx.attr.legacy_runtime_deps,
             },
             "python_wheels": {
-                "bazel": _labels(ctx.attr.wheel_deps),
+                "bazel": labels(ctx.attr.wheel_deps),
                 "legacy": ctx.attr.legacy_wheel_deps,
             },
         },
         "composition": {
             "base": str(ctx.attr.base.label) if ctx.attr.base else None,
             "legacy_base": ctx.attr.legacy_base if ctx.attr.legacy_base else None,
-            "fragments": _labels(ctx.attr.fragments),
+            "fragments": labels(ctx.attr.fragments),
             "legacy_fragments": ctx.attr.legacy_fragments,
             "files": ctx.attr.files,
         },
@@ -119,12 +131,12 @@ def _write_package_artifact_metadata(ctx):
             for info in bound_sources
         ],
         "direct_dependencies": {
-            "build": _labels(ctx.attr.deps),
-            "runtime": _labels(ctx.attr.runtime_deps),
-            "python_wheels": _labels(ctx.attr.wheel_deps),
+            "build": labels(ctx.attr.deps),
+            "runtime": labels(ctx.attr.runtime_deps),
+            "python_wheels": labels(ctx.attr.wheel_deps),
             "base": str(ctx.attr.base.label) if ctx.attr.base else None,
-            "fragments": _labels(ctx.attr.fragments),
-            "sources": _labels(ctx.attr.sources),
+            "fragments": labels(ctx.attr.fragments),
+            "sources": labels(ctx.attr.sources),
         },
         "platform": {
             "machine": ctx.attr.machine if ctx.attr.machine else None,
@@ -159,80 +171,35 @@ def _write_package_artifact_metadata(ctx):
         transitive_labels = transitive_labels,
     )
 
-def _sonic_deb_builder_impl(ctx):
-    metadata = _write_package_artifact_metadata(ctx)
-    deb_output = ctx.actions.declare_file(ctx.attr.output_name)
-
-    args = ctx.actions.args()
-    args.add("--output", deb_output.path)
-    args.add("--docker-image", ctx.attr.docker_image)
-    args.add("--docker-platform", ctx.attr.docker_platform)
-    args.add("--source-root", ctx.attr.source_root)
-    args.add("--deb-pattern", ctx.attr.deb_pattern)
-    args.add("--package-name", ctx.attr.package_name)
-    args.add("--version", ctx.attr.package_version)
-    args.add("--arch", ctx.attr.package_arch)
-
-    prefix = ctx.attr.source_root + "/"
-    for src in sorted(ctx.files.builder_srcs, key = lambda file: file.short_path):
-        if not src.short_path.startswith(prefix):
-            fail("%s is outside declared source_root %s" % (src.short_path, ctx.attr.source_root))
-        args.add("--src-map", "%s=%s" % (src.path, src.short_path[len(prefix):]))
-
-    ctx.actions.run(
-        executable = ctx.executable._builder,
-        inputs = depset(ctx.files.builder_srcs),
-        outputs = [deb_output],
-        arguments = [args],
-        tools = [ctx.executable._builder],
-        mnemonic = "SonicDebPackage",
-        progress_message = "Building SONiC Debian package %s" % ctx.label,
-        execution_requirements = {
-            "local": "1",
-            "no-sandbox": "1",
-        },
-    )
-
-    return [
-        DefaultInfo(files = depset([deb_output, metadata.manifest, metadata.lock])),
-        SonicArtifactInfo(
-            artifact_kind = ctx.attr.artifact_kind,
-            artifact_labels = metadata.transitive_labels,
-            composition_depth = metadata.graph_depth,
-            label = str(ctx.label),
-            lock = metadata.lock,
-            manifest = metadata.manifest,
-        ),
-    ]
-
-_sonic_deb_builder = rule(
-    implementation = _sonic_deb_builder_impl,
-    attrs = dict(
-        COMMON_ARTIFACT_ATTRS,
-        builder_srcs = attr.label_list(
-            allow_files = True,
-            mandatory = True,
-        ),
-        source_root = attr.string(mandatory = True),
-        output_name = attr.string(mandatory = True),
-        deb_pattern = attr.string(mandatory = True),
-        package_name = attr.string(mandatory = True),
-        package_version = attr.string(mandatory = True),
-        package_arch = attr.string(default = "amd64"),
-        docker_image = attr.string(),
-        docker_platform = attr.string(default = "linux/amd64"),
-        _builder = attr.label(
-            executable = True,
-            cfg = "exec",
-            default = Label("//tools/bazel:build_deb_package"),
-        ),
-    ),
-    doc = "Builds a real Debian package while preserving SONiC artifact metadata side outputs.",
-)
-
-def sonic_deb_builder(name, **kwargs):
-    _sonic_deb_builder(
-        name = name,
-        artifact_kind = "deb",
-        **kwargs
-    )
+COMMON_ARTIFACT_ATTRS = {
+    "artifact_kind": attr.string(mandatory = True),
+    "migration_stage": attr.string(default = "manifest_only"),
+    "legacy_artifact": attr.string(),
+    "legacy_dockerfile": attr.string(),
+    "source_path": attr.string(),
+    "source_makefiles": attr.string_list(),
+    "submodule_paths": attr.string_list(),
+    "deps": attr.label_list(),
+    "legacy_deps": attr.string_list(),
+    "runtime_deps": attr.label_list(),
+    "legacy_runtime_deps": attr.string_list(),
+    "wheel_deps": attr.label_list(),
+    "legacy_wheel_deps": attr.string_list(),
+    "sources": attr.label_list(),
+    "base": attr.label(),
+    "legacy_base": attr.string(),
+    "fragments": attr.label_list(),
+    "legacy_fragments": attr.string_list(),
+    "files": attr.string_list(),
+    "machine": attr.string(),
+    "platform_name": attr.string(),
+    "dependent_machines": attr.string_list(),
+    "configured_arches": attr.string_list(),
+    "installer_format": attr.string(),
+    "legacy_installs": attr.string_list(),
+    "legacy_lazy_installs": attr.string_list(),
+    "legacy_lazy_build_installs": attr.string_list(),
+    "legacy_docker_images": attr.string_list(),
+    "metadata": attr.string_dict(),
+    "notes": attr.string_list(),
+}

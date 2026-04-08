@@ -1,6 +1,9 @@
 exports_files([
     "artifacts.bzl",
+    "builders/deb.bzl",
+    "builders/oci.bzl",
     "bridge.bzl",
     "export.bzl",
+    "metadata.bzl",
     "sources.bzl",
 ])

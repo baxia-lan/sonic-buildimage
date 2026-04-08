@@ -4,8 +4,13 @@ package(default_visibility = ["//visibility:public"])
 
 sonic_oci_image(
     name = "image",
+    builder = "bazel",
+    builder_base = "@debian_bookworm",
+    builder_repo_tags = ["docker-base-bookworm:latest"],
     legacy_artifact = "docker-base-bookworm.gz",
     legacy_dockerfile = "dockers/docker-base-bookworm/Dockerfile.j2",
+    migration_stage = "concrete_builder",
+    output_name = "docker-base-bookworm.gz",
     source_makefiles = ["rules/docker-base-bookworm.mk"],
     legacy_deps = [
         "SOCAT",
