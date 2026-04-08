@@ -1,6 +1,7 @@
 exports_files([
     "collect_image_metrics.py",
     "collect_artifact_inventory.py",
+    "collect_nonhermetic_deps.py",
     "collect_installer_catalog.py",
     "collect_source_catalog.py",
     "image_budgets.json",
