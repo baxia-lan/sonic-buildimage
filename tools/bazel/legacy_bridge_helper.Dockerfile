@@ -1,22 +1,12 @@
 FROM debian:bookworm
 
-ENV DEBIAN_FRONTEND=noninteractive
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+COPY tools/bazel/legacy_bridge_helper.apt.txt /tmp/legacy_bridge_helper.apt.txt
+COPY tools/bazel/legacy_bridge_helper.requirements.txt /tmp/legacy_bridge_helper.requirements.txt
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash \
-    ca-certificates \
-    coreutils \
-    curl \
-    docker.io \
-    gawk \
-    git \
-    jq \
-    kmod \
-    make \
-    passwd \
-    python3 \
-    python3-pip \
-    sudo \
-    wget \
- && python3 -m pip install --break-system-packages --no-cache-dir jinjanator \
+    $(tr '\n' ' ' < /tmp/legacy_bridge_helper.apt.txt) \
+ && python3 -m pip install --break-system-packages --no-cache-dir -r /tmp/legacy_bridge_helper.requirements.txt \
  && rm -rf /var/lib/apt/lists/*
