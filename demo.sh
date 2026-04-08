@@ -46,8 +46,16 @@ echo ""
 echo "━━━ Demo 3: sonic-broadcom.bin ONIE installer ━━━"
 echo ""
 echo "Building ONIE self-extracting installer..."
-time bazel build //platform/broadcom:sonic_broadcom_local \
-  --spawn_strategy=local --strategy=CopyToDirectory=local --jobs=1 2>&1 | grep "Build completed"
+# Try full image (needs Docker for orchagent), fall back to minimal (hermetic only)
+if time bazel build //platform/broadcom:sonic_broadcom_local \
+  --spawn_strategy=local --strategy=CopyToDirectory=local --jobs=1 2>&1 | grep "Build completed"; then
+  ls -lh bazel-bin/platform/broadcom/sonic_broadcom_local.bin
+else
+  echo "(Full build needs Docker for .deb compilation. Building hermetic minimal...)"
+  time bazel build //platform/broadcom:sonic_broadcom_minimal \
+    --strategy=CopyToDirectory=local 2>&1 | grep "Build completed"
+  ls -lh bazel-bin/platform/broadcom/sonic_broadcom_minimal.bin
+fi
 echo ""
 ls -lh bazel-bin/platform/broadcom/sonic_broadcom_local.bin
 file bazel-bin/platform/broadcom/sonic_broadcom_local.bin
