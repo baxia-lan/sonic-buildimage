@@ -8,6 +8,7 @@ def _legacy_artifact_bridge_impl(ctx):
 
     args = ctx.actions.args()
     args.add("--workspace-marker", ctx.file.workspace_marker.path)
+    args.add("--version-file", ctx.info_file.path)
     args.add("--output", output.path)
     args.add("--legacy-target", ctx.attr.legacy_target)
     args.add("--artifact-path", ctx.attr.artifact_path)
@@ -23,7 +24,7 @@ def _legacy_artifact_bridge_impl(ctx):
     for make_var in ctx.attr.make_vars:
         args.add("--make-var", make_var)
 
-    inputs = [ctx.file.workspace_marker, ctx.version_file]
+    inputs = [ctx.file.workspace_marker, ctx.info_file]
     inputs.extend(manifest_files)
 
     ctx.actions.run(

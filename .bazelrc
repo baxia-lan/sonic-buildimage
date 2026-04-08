@@ -8,6 +8,7 @@ common --repository_cache=.cache/bazel/repository
 common --disk_cache=.cache/bazel/disk
 common --lockfile_mode=update
 common --registry=https://bcr.bazel.build
+common --workspace_status_command=./tools/bazel/workspace_status.sh
 
 build --keep_going
 build --show_result=20

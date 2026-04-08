@@ -3,6 +3,7 @@ exports_files(
         "bazelw",
         "configure_platform.sh",
         "init_workspace.sh",
+        "workspace_status.sh",
     ],
     visibility = ["//visibility:public"],
 )

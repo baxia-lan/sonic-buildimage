@@ -6,6 +6,7 @@ usage() {
 Usage:
   build_legacy_artifact_bridge.sh \
     --workspace-marker <MODULE.bazel> \
+    --version-file <stable-status.txt> \
     --output <artifact-output> \
     --legacy-target <make-target> \
     --artifact-path <relative-path-under-target> \
@@ -18,6 +19,7 @@ EOF
 }
 
 workspace_marker=""
+version_file=""
 output=""
 legacy_target=""
 artifact_path=""
@@ -31,6 +33,10 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --workspace-marker)
             workspace_marker="$2"
+            shift 2
+            ;;
+        --version-file)
+            version_file="$2"
             shift 2
             ;;
         --output)
@@ -77,12 +83,13 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ -z "${workspace_marker}" || -z "${output}" || -z "${legacy_target}" || -z "${artifact_path}" || -z "${platform}" ]]; then
+if [[ -z "${workspace_marker}" || -z "${version_file}" || -z "${output}" || -z "${legacy_target}" || -z "${artifact_path}" || -z "${platform}" ]]; then
     usage
     exit 1
 fi
 
 workspace_marker="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "${workspace_marker}")"
+version_file="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "${version_file}")"
 workspace_root="$(dirname "${workspace_marker}")"
 export HOME="${HOME:-$(dirname "${workspace_root}")}"
 export PATH="/Applications/Docker.app/Contents/Resources/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"
@@ -112,35 +119,11 @@ helper_make_vars="${tmpdir}/make_vars.txt"
 helper_script="${tmpdir}/run_in_helper.sh"
 keep_debug_dirs="${SONIC_BAZEL_LEGACY_BRIDGE_KEEP_WORKDIR:-0}"
 
-source_fingerprint="$(
-    python3 - "${workspace_root}" <<'PY'
-import hashlib
-import pathlib
-import subprocess
-import sys
-
-root = pathlib.Path(sys.argv[1])
-files = subprocess.check_output(
-    ["git", "-C", str(root), "ls-files", "-z"],
-    stderr=subprocess.DEVNULL,
-)
-h = hashlib.sha256()
-for raw_path in files.split(b"\0"):
-    if not raw_path:
-        continue
-    rel_path = raw_path.decode("utf-8")
-    abs_path = root / rel_path
-    if not abs_path.is_file():
-        continue
-    h.update(rel_path.encode("utf-8"))
-    h.update(b"\0")
-    with abs_path.open("rb") as fh:
-        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
-            h.update(chunk)
-    h.update(b"\0")
-print(h.hexdigest())
-PY
-)"
+source_fingerprint="$(awk '/^STABLE_SONIC_REPO_INPUTS_DIGEST / { print $2; exit }' "${version_file}")"
+if [[ -z "${source_fingerprint}" ]]; then
+    echo "workspace status file ${version_file} is missing STABLE_SONIC_REPO_INPUTS_DIGEST" >&2
+    exit 1
+fi
 source_fingerprint_component="${source_fingerprint:0:16}"
 relative_target_dir=".bazel-legacy-target/bridge-${bridge_cache_generation}-$(sanitize_path_component "${platform}")-${bldenv}-${docker_platform_component}-${artifact_component}-${source_fingerprint_component}"
 target_dir="${workspace_root}/${relative_target_dir}"
