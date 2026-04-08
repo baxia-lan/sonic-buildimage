@@ -35,3 +35,5 @@ if rg -n --glob '!**/README*' --glob '!**/*.md' \
     echo "Detected non-hermetic network/package-install commands in Bazel-managed paths." >&2
     exit 1
 fi
+
+"${repo_root}/tools/ci/verify_legacy_bridge_constraints.sh"
