@@ -14,6 +14,10 @@ This demo should focus on things that have already been verified locally:
 - The artifact is valid as a gzip archive and can be loaded by Docker.
 - We now have a CI-grade non-hermeticity audit that makes the remaining migration debt explicit.
 
+This is not yet the final correctness gate for `docker-sonic-vs.gz`.
+Final acceptance now requires running `sonic-swss` pytest against the
+Bazel-built `docker-sonic-vs:latest` image.
+
 Do not present Broadcom kernel / ONIE as complete. That line is in progress.
 
 ## Current Verified Artifact
@@ -88,6 +92,11 @@ Expected talking point:
 
 > This demonstrates that Bazel is already producing a real SONiC image artifact in the parent repo, not only intermediate metadata.
 
+Do not over-claim this step:
+
+> `gzip -t` and `docker load` prove the artifact is real and loadable, but the
+> final correctness gate is `sonic-swss` pytest against the Bazel-built image.
+
 ### 4. Show that the remaining debt is now measurable
 
 Say:
@@ -130,6 +139,8 @@ Use this sequence:
 4. **What is still not done**
    - Broadcom ONIE / `sonic-broadcom.bin` is not complete yet.
    - The real Linux kernel is not yet built and verified by the current branch.
+   - `docker-sonic-vs.gz` still needs to pass `sonic-swss` pytest as the final
+     runtime correctness gate.
    - The bridge still needs review fixes:
      - correct Bazel input declaration
      - no execution-time `apt` / `pip`

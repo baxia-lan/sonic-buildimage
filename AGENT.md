@@ -358,6 +358,18 @@ Minimum validation:
 5. layer-count and size comparison for touched images
 6. required runtime file presence check
 
+Required final validation for `docker-sonic-vs.gz` and any migration slice that
+claims VS runtime parity:
+
+1. Bazel must build `//images/oci/docker-sonic-vs:image` hermetically under
+   `--config=ci`.
+2. The produced `docker-sonic-vs.gz` must be loaded and used as the image under
+   test for `src/sonic-swss/tests`.
+3. `sonic-swss` pytest coverage must pass against that Bazel-built image before
+   the artifact can be described as functionally correct.
+4. `gzip -t`, digest capture, and `docker load` are required smoke checks, but
+   they do not replace the `sonic-swss` pytest gate.
+
 Additional validation when applicable:
 
 - service startup smoke test
