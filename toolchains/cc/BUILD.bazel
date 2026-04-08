@@ -1,0 +1,8 @@
+"""Hermetic C/C++ toolchain configuration."""
+
+package(default_visibility = ["//visibility:public"])
+
+cc_binary(
+    name = "hello",
+    srcs = ["hello.cpp"],
+)

@@ -20,7 +20,7 @@ bazel_dep(name = "platforms", version = "1.0.0")
 bazel_dep(name = "rules_pkg", version = "1.0.1")
 
 # ── Language rules ────────────────────────────────────────────────────────────
-bazel_dep(name = "rules_cc", version = "0.2.14")
+bazel_dep(name = "rules_cc", version = "0.2.17")
 bazel_dep(name = "rules_python", version = "1.7.0")
 bazel_dep(name = "rules_go", version = "0.50.1")
 bazel_dep(name = "gazelle", version = "0.40.0")
@@ -38,19 +38,59 @@ bazel_dep(name = "buildifier_prebuilt", version = "7.3.1")
 # ── Distroless (Debian package resolution at fetch time) ─────────────────────
 bazel_dep(name = "rules_distroless", version = "0.3.8")
 
-# ── Hermetic GCC Toolchain ───────────────────────────────────────────────────
-# Pre-built GCC 12.5.0 from f0rmiga/gcc-builds. No host compiler needed.
-# The sysroot is provided by Debian packages via rules_distroless.
-fetch_gcc = use_repo_rule("//toolchains/gcc:gcc.bzl", "fetch_gcc")
+# ── Hermetic LLVM/Clang 18 Toolchain (sonic-bazel pattern) ───────────────────
+# Downloads hermetic Clang/LLVM, links against a Bookworm sysroot assembled
+# from .deb packages extracted during bazel fetch. No host compiler needed.
+bazel_dep(name = "toolchains_llvm", version = "1.7.0")
 
-fetch_gcc(
-    name = "gcc-linux-x86_64",
-    integrity = "sha256-UQduF1g5tDS7LcAAbACWkW31hejERmbTWw486CHVNds=",
-    urls = ["https://github.com/f0rmiga/gcc-builds/releases/download/18082025/gcc-toolchain-12.5.0-x86_64.tar.xz"],
+llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm")
+
+llvm.toolchain(
+    name = "llvm_toolchain",
+    llvm_versions = {
+        "": "18.1.8",
+        "darwin-x86_64": "15.0.7",
+    },
+    link_flags = {
+        "": ["-Wl,-rpath,$ORIGIN/../lib", "-Wl,-rpath,$ORIGIN/../lib/x86_64-linux-gnu", "-lm"],
+    },
+    cxx_flags = {"": ["-std=c++17"]},
 )
 
-# TODO: Enable once cc_toolchain is wired with rules_cc new API
-# register_toolchains("//toolchains/gcc:host_gcc_toolchain")
+# Hermetic sysroot: .deb packages extracted during bazel fetch
+llvm.sysroot(
+    name = "llvm_toolchain",
+    label = "@bookworm_sysroot//:sysroot",
+    targets = ["linux-x86_64"],
+)
+
+use_repo(llvm, "llvm_toolchain", "llvm_toolchain_llvm")
+
+register_toolchains("@llvm_toolchain//:all")
+
+# Sysroot from Debian packages (5 core packages for C/C++ compilation)
+_sysroot_repo = use_repo_rule("//toolchains/cc:sysroot.bzl", "debian_sysroot_repo")
+
+_sysroot_repo(
+    name = "bookworm_sysroot",
+    packages = {
+        "libc6-dev": [
+            "https://snapshot.debian.org/archive/debian/20260401T000000Z/pool/main/g/glibc/libc6-dev_2.36-9+deb12u13_amd64.deb",
+        ],
+        "libgcc-12-dev": [
+            "https://snapshot.debian.org/archive/debian/20260401T000000Z/pool/main/g/gcc-12/libgcc-12-dev_12.2.0-14+deb12u1_amd64.deb",
+        ],
+        "libstdc++-12-dev": [
+            "https://snapshot.debian.org/archive/debian/20260401T000000Z/pool/main/g/gcc-12/libstdc++-12-dev_12.2.0-14+deb12u1_amd64.deb",
+        ],
+        "libc6": [
+            "https://snapshot.debian.org/archive/debian/20260401T000000Z/pool/main/g/glibc/libc6_2.36-9+deb12u13_amd64.deb",
+        ],
+        "linux-libc-dev": [
+            "https://snapshot.debian.org/archive/debian/20260401T000000Z/pool/main/l/linux/linux-libc-dev_6.1.164-1_amd64.deb",
+        ],
+    },
+)
 
 # ── Debian packages (hermetic, resolved at fetch time) ───────────────────────
 # All runtime and build-time Debian packages resolved from pinned snapshots.
