@@ -1,37 +1,334 @@
-"""Virtual Switch (VS) platform — docker-sonic-vs.gz (hermetic).
+"""docker-sonic-vs — Full virtual switch for sonic-swss pytest.
 
-The VS platform uses libsaivs (virtual SAI) for testing and development.
-All packages from rules_distroless — no Docker daemon needed.
+All-in-one container with syncd-vs, orchagent, redis-server, FRR, and all
+40+ supervised services needed for sonic-swss component testing.
 
-Build: bazel build //platform/vs:docker_sonic_vs_tarball --strategy=CopyToDirectory=local
+Build:
+  bazel build //platform/vs:docker_sonic_vs \
+    --spawn_strategy=local --strategy=CopyToDirectory=local --jobs=1
+
+Load into Docker:
+  docker load -i bazel-bin/platform/vs/docker-sonic-vs.tar.gz
+  docker tag <image_id> docker-sonic-vs:latest
+
+Run sonic-swss pytest:
+  cd src/sonic-swss/tests
+  sudo pytest --imgname=docker-sonic-vs:latest -v test_port.py
 """
-
-load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
-load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
-load("//rules/bazel/oci:sonic_docker.bzl", "slim_apt_layer")
 
 package(default_visibility = ["//visibility:public"])
 
-# ── VS runtime packages (hermetic) ───────────────────────────────────────────
-slim_apt_layer(
-    name = "vs_apt_slim",
-    srcs = [
-        "@bookworm_iproute2_6.1.0-3_amd64//:data",
-        "@bookworm_bridge-utils_1.7.1-1_amd64//:data",
-        "@bookworm_iptables_1.8.9-2_amd64//:data",
-        "@bookworm_procps_2-4.0.2-3_amd64//:data",
+# ── Bazel-built .deb packages ──────────────────────────────────────────────────
+_SONIC_DEBS = [
+    "//src/sonic-swss-common:swss_common",
+    "//src/sonic-swss-common:python3_swsscommon",
+    "//src/sonic-swss-common:sonic_db_cli",
+    "//src/sonic-sairedis:sairedis",
+    "//src/sonic-sairedis:saivs",
+    "//src/sonic-sairedis:saimetadata",
+    "//src/sonic-swss:swss_deb",
+    "//src/sonic-dash-api:sonic_dash_api",
+    "//src/sonic-stp:stp",
+]
+
+# ── VS config files ────────────────────────────────────────────────────────────
+_VS_CONFIGS = glob(
+    ["docker-sonic-vs/**"],
+    exclude = [
+        "docker-sonic-vs/Dockerfile.j2",
+        "docker-sonic-vs/sonic-dev.gpg.key",
     ],
+    allow_empty = True,
 )
 
-# ── docker-sonic-vs OCI image ────────────────────────────────────────────────
-sonic_oci_image(
+# ── docker-sonic-vs OCI image ─────────────────────────────────────────────────
+genrule(
     name = "docker_sonic_vs",
-    base = "//dockers/sonic-common-layer:sonic_common_layer",
-    tars = [
-        ":vs_apt_slim",
-    ],
-    labels = {
-        "org.opencontainers.image.title": "docker-sonic-vs",
-        "sonic.platform": "vs",
-    },
+    srcs = _SONIC_DEBS + _VS_CONFIGS,
+    outs = ["docker-sonic-vs.tar.gz"],
+    cmd = """
+set -euo pipefail
+
+FIRST_OUT=$$(echo $(OUTS) | awk '{print $$1}')
+OUT_FILE=$$(cd $$(dirname $$FIRST_OUT) && pwd)/$$(basename $$FIRST_OUT)
+
+# Collect .deb files from Bazel inputs
+DEB_DIR=$$(mktemp -d)
+for f in $(SRCS); do
+  case "$$f" in *.deb) [ -s "$$f" ] && cp "$$f" "$$DEB_DIR/" 2>/dev/null || true;; esac
+done
+# Also find debs in bazel output tree (catches transitive deps)
+for deb in $$(find . -path "*/bin/src/*" -name "*.deb" -size +0 -not -name "*dbgsym*" -not -name "*-dev_*" -not -name "*-dbg_*" 2>/dev/null); do
+  cp "$$deb" "$$DEB_DIR/" 2>/dev/null || true
+done
+echo "Total debs: $$(ls $$DEB_DIR/*.deb 2>/dev/null | wc -l) (v6-disk-fix)"
+
+# Find docker-sonic-vs config dir and repo root
+VS_CFG=""
+for f in $(locations docker-sonic-vs/start.sh); do
+  VS_CFG=$$(cd $$(dirname "$$f") && pwd)
+  break
+done
+[ -z "$$VS_CFG" ] && { echo "Cannot find docker-sonic-vs/start.sh"; exit 1; }
+
+# Derive repo root (platform/vs/docker-sonic-vs -> repo root)
+REPO_ROOT=$$(cd "$$VS_CFG/../../.." && pwd)
+
+# Support files directories
+SCRIPTS_DIR="$$REPO_ROOT/files/scripts"
+TEMPLATES_DIR="$$REPO_ROOT/files/build_templates"
+COPP_DIR="$$REPO_ROOT/files/image_config/copp"
+
+# Python source trees for building sonic-cfggen etc.
+PY_COMMON_DIR="$$REPO_ROOT/src/sonic-py-common"
+CFG_ENGINE_DIR="$$REPO_ROOT/src/sonic-config-engine"
+YANG_MODELS_DIR="$$REPO_ROOT/src/sonic-yang-models"
+YANG_MGMT_DIR="$$REPO_ROOT/src/sonic-yang-mgmt"
+PLATFORM_COMMON_DIR="$$REPO_ROOT/src/sonic-platform-common"
+UTILITIES_DIR="$$REPO_ROOT/src/sonic-utilities"
+HOST_SERVICES_DIR="$$REPO_ROOT/src/sonic-host-services"
+DEVICE_DATA_DIR="$$REPO_ROOT/src/sonic-device-data"
+
+CONTAINER_NAME="bazel-vs-build-$$$$"
+
+docker run --name "$$CONTAINER_NAME" --platform linux/amd64 \
+  -v "$$DEB_DIR:/debs:ro" \
+  -v "$$VS_CFG:/vs-config:ro" \
+  -v "$$SCRIPTS_DIR:/support-scripts:ro" \
+  -v "$$TEMPLATES_DIR:/support-templates:ro" \
+  -v "$$COPP_DIR:/support-copp:ro" \
+  -v "$$PY_COMMON_DIR:/py-src/sonic-py-common:ro" \
+  -v "$$CFG_ENGINE_DIR:/py-src/sonic-config-engine:ro" \
+  -v "$$YANG_MODELS_DIR:/py-src/sonic-yang-models:ro" \
+  -v "$$YANG_MGMT_DIR:/py-src/sonic-yang-mgmt:ro" \
+  -v "$$PLATFORM_COMMON_DIR:/py-src/sonic-platform-common:ro" \
+  -v "$$UTILITIES_DIR:/py-src/sonic-utilities:ro" \
+  -v "$$HOST_SERVICES_DIR:/py-src/sonic-host-services:ro" \
+  -v "$$DEVICE_DATA_DIR:/py-src/sonic-device-data:ro" \
+  -e DEBIAN_FRONTEND=noninteractive \
+  debian:bookworm-slim \
+  bash -o pipefail -c '
+    # ── 1. Base system packages ──
+    # Disable GPG verification (cross-platform Docker with qemu has stale keys)
+    mkdir -p /etc/apt/apt.conf.d
+    echo "Acquire::AllowInsecureRepositories true;" > /etc/apt/apt.conf.d/99insecure
+    echo "APT::Get::AllowUnauthenticated true;" >> /etc/apt/apt.conf.d/99insecure
+    echo "Acquire::Check-Valid-Until false;" >> /etc/apt/apt.conf.d/99insecure
+    apt-get update -qq 2>&1 | tail -3
+    apt-get install -y -qq --no-install-recommends \
+      supervisor rsyslog redis-server \
+      iproute2 bridge-utils iptables iputils-ping net-tools ethtool \
+      tcpdump arping ndisc6 ifupdown conntrack procps psmisc \
+      jq curl wget ca-certificates gnupg apt-utils \
+      python3 python3-pip python3-setuptools python3-wheel python3-venv \
+      python3-redis python3-netifaces python3-yaml python3-protobuf \
+      python3-scapy python3-dev python3-gi \
+      python3-jinja2 python3-netaddr python3-lxml python3-click \
+      python3-natsort python3-tabulate python3-jsonpatch python3-jsonschema \
+      libteam5 libteamdctl0 libteam-utils \
+      libzmq5 libprotobuf-c1 libc-ares2 libjudydebian1 libjansson4 \
+      openssh-client openssh-server bash-completion logrotate \
+      libdbus-1-3 libgirepository-1.0-1 dbus gir1.2-glib-2.0 \
+      build-essential libssl-dev swig pkg-config uuid-dev \
+      libcairo2-dev libdbus-1-dev libgirepository1.0-dev libsystemd-dev \
+      libyang2 libyang2-dev \
+      git \
+      2>&1 | tail -5
+
+    # ── 2. Install FRR ──
+    curl -s https://deb.frrouting.org/frr/keys.gpg 2>/dev/null | tee /usr/share/keyrings/frrouting.gpg >/dev/null
+    echo "deb [signed-by=/usr/share/keyrings/frrouting.gpg] https://deb.frrouting.org/frr bookworm frr-stable" > /etc/apt/sources.list.d/frr.list
+    apt-get update -qq 2>&1 | tail -3
+    apt-get install -y -qq --no-install-recommends frr frr-pythontools 2>&1 | tail -5 || {
+      echo "WARN: FRR stable failed, trying from Debian repos..."
+      apt-get install -y -qq --no-install-recommends frr 2>&1 | tail -5 || echo "WARN: FRR unavailable"
+    }
+    # FRR installs to /usr/lib/frr/ — create symlinks for PATH
+    for f in /usr/lib/frr/*; do
+      [ -x "$$f" ] && ln -sf "$$f" "/usr/sbin/$$(basename $$f)" 2>/dev/null || true
+    done
+
+    # ── 3. Install Bazel-built SONiC .debs ──
+    echo "=== Installing Bazel-built .debs ==="
+    ls -lh /debs/*.deb 2>/dev/null
+    dpkg --force-overwrite --force-depends -i /debs/*.deb 2>&1 | tail -10 || true
+    apt-get install -f -y -qq 2>/dev/null || true
+    ldconfig
+
+    # ── 4. Install SONiC Python packages from source ──
+    echo "=== Building Python packages ==="
+    pip3 install --break-system-packages \
+      pyangbind==0.8.1 pyroute2==0.7.2 netifaces==0.11.0 \
+      redis-dump-load bitarray==2.8.1 packaging \
+      2>&1 | tail -5 || true
+
+    # Copy Python source trees to writable location (mounts are read-only)
+    mkdir -p /tmp/py-build
+    for pkg in sonic-py-common sonic-yang-models sonic-yang-mgmt sonic-config-engine sonic-platform-common sonic-utilities sonic-host-services sonic-device-data; do
+      if [ -d "/py-src/$$pkg" ]; then
+        cp -a "/py-src/$$pkg" "/tmp/py-build/$$pkg" 2>/dev/null || true
+      fi
+    done
+
+    # Build order matters due to dependencies:
+    # sonic-py-common -> sonic-yang-models -> sonic-yang-mgmt -> sonic-config-engine
+    for pkg in sonic-py-common sonic-yang-models sonic-yang-mgmt sonic-config-engine sonic-platform-common sonic-utilities sonic-host-services; do
+      if [ -f "/tmp/py-build/$$pkg/setup.py" ]; then
+        echo "Installing $$pkg..."
+        cd /tmp/py-build/$$pkg
+        pip3 install --break-system-packages --no-deps . 2>&1 | tail -5 || {
+          echo "WARN: $$pkg install failed with --no-deps, trying with deps..."
+          pip3 install --break-system-packages . 2>&1 | tail -5 || echo "WARN: $$pkg install FAILED"
+        }
+      else
+        echo "SKIP: $$pkg (no setup.py)"
+      fi
+    done
+
+    # Install sonic-device-data
+    if [ -f "/tmp/py-build/sonic-device-data/Makefile" ]; then
+      cd /tmp/py-build/sonic-device-data
+      make install DESTDIR=/ 2>&1 | tail -3 || echo "WARN: device-data install failed"
+    fi
+
+    # Verify sonic-cfggen
+    sonic-cfggen --help >/dev/null 2>&1 && echo "sonic-cfggen: OK" || echo "WARN: sonic-cfggen not available"
+
+    # ── 5. Configure Redis ──
+    sed -ri "s/^# save \\\"\\\"$$/save \\\"\\\"/g;
+             s/^daemonize yes$$/daemonize no/;
+             s/^logfile .*$$/logfile \\\"\\\"/;
+             s/^# syslog-enabled no$$/syslog-enabled no/;
+             s/^# unixsocket/unixsocket/;
+             s/redis-server.sock/redis.sock/g;
+             s/^client-output-buffer-limit pubsub [0-9]+mb [0-9]+mb [0-9]+/client-output-buffer-limit pubsub 0 0 0/;
+             s/^notify-keyspace-events \\\"\\\"$$/notify-keyspace-events AKE/;
+             s/^databases [0-9]+$$/databases 100/" /etc/redis/redis.conf
+
+    # ── 6. Install VS config files ──
+    cp /vs-config/start.sh /usr/bin/
+    cp /vs-config/orchagent.sh /usr/bin/
+    cp /vs-config/buffermgrd.sh /usr/bin/
+    chmod +x /usr/bin/start.sh /usr/bin/orchagent.sh /usr/bin/buffermgrd.sh
+
+    cp /vs-config/50-default.conf /etc/rsyslog.d/
+    [ -f /vs-config/etc/rsyslog.conf ] && cp /vs-config/etc/rsyslog.conf /etc/rsyslog.conf
+
+    # Support scripts
+    for f in configdb-load.sh arp_update update_chassisdb_config; do
+      [ -f "/support-scripts/$$f" ] && cp "/support-scripts/$$f" "/usr/bin/$$f" && chmod +x "/usr/bin/$$f"
+    done
+
+    # Jinja2 templates
+    mkdir -p /usr/share/sonic/templates
+    for f in buffers_config.j2 qos_config.j2 arp_update_vars.j2 swss_vars.j2; do
+      [ -f "/support-templates/$$f" ] && cp "/support-templates/$$f" /usr/share/sonic/templates/
+    done
+    [ -f /support-copp/copp_cfg.j2 ] && cp /support-copp/copp_cfg.j2 /usr/share/sonic/templates/
+
+    # Render supervisord.conf: strip Jinja2 ASAN blocks (ENABLE_ASAN=n)
+    cp /vs-config/supervisord.conf.j2 /usr/share/sonic/templates/
+    mkdir -p /etc/supervisor/conf.d
+    # Remove ASAN-conditional blocks and Jinja2 tags
+    awk "/ENABLE_ASAN.*==.*y/{skip=1;next} /endif/{if(skip){skip=0;next}} /set asan/{next} !skip{print}" \
+      /vs-config/supervisord.conf.j2 | sed "/{%/d; s/{{[^}]*}}//g" \
+      > /etc/supervisor/conf.d/supervisord.conf
+    wc -c /etc/supervisor/conf.d/supervisord.conf
+    rm -f /usr/share/sonic/templates/supervisord.conf.j2
+
+    # Database and device config
+    mkdir -p /etc/default/sonic-db /etc/sonic
+    cp /vs-config/database_config.json /etc/default/sonic-db/
+    cp /vs-config/default_chassis_cfg.json /etc/default/sonic-db/
+    cp /vs-config/init_cfg.json.j2 /usr/share/sonic/templates/
+    cp /vs-config/hostname.j2 /usr/share/sonic/templates/
+    cp /vs-config/asic_table.json /etc/sonic/
+    cp /vs-config/zero_profiles.json /etc/sonic/
+    cp /vs-config/port_breakout_config_db.json /etc/sonic/
+
+    # sonic_version.yml
+    cat > /etc/sonic/sonic_version.yml << EOFVER
+build_version: "bazel.20260401"
+debian_version: "12.0"
+kernel_version: "6.1.0-29-2-amd64"
+asic_type: vs
+commit_id: "bazel"
+build_date: "20260401"
+built_by: "bazel"
+platform: vs
+hwsku: Force10-S6000
+EOFVER
+
+    # Platform device data
+    mkdir -p /usr/share/sonic/device/x86_64-kvm_x86_64-r0/Force10-S6000
+    mkdir -p /usr/share/sonic/device/x86_64-kvm_x86_64-r0/brcm_gearbox_vs
+    mkdir -p /usr/share/sonic/device/x86_64-kvm_x86_64-r0/Mellanox-SN2700
+    cp /vs-config/platform.json /usr/share/sonic/device/x86_64-kvm_x86_64-r0/
+    cp /vs-config/platform-dpu-2p.json /usr/share/sonic/device/x86_64-kvm_x86_64-r0/
+    cp /vs-config/hwsku.json /usr/share/sonic/device/x86_64-kvm_x86_64-r0/Force10-S6000/
+    cp /vs-config/hwsku.json /usr/share/sonic/device/x86_64-kvm_x86_64-r0/brcm_gearbox_vs/
+    cp /vs-config/hwsku.json /usr/share/sonic/device/x86_64-kvm_x86_64-r0/Mellanox-SN2700/
+
+    # FRR config
+    echo "docker-sonic-vs" > /etc/hostname
+    mkdir -p /etc/quagga /etc/frr
+    touch /etc/quagga/zebra.conf
+    rm -f /etc/frr/frr.conf 2>/dev/null || true
+    [ -f /vs-config/frr/zebra.conf ] && cp /vs-config/frr/zebra.conf /etc/frr/
+
+    # Working directories
+    mkdir -p /var/warmboot/teamd /etc/swss/config.d /var/log/swss
+
+    # ── 7. Cleanup build deps ──
+    apt-get purge -y build-essential libssl-dev swig python3-dev \
+      libcairo2-dev libdbus-1-dev libgirepository1.0-dev libsystemd-dev pkg-config 2>/dev/null || true
+    apt-get clean -y 2>/dev/null || true
+    apt-get autoremove -y 2>/dev/null || true
+    rm -rf /var/lib/apt/lists/* /tmp/* ~/.cache /root/.cargo 2>/dev/null || true
+
+    # ── 8. Verify critical binaries ──
+    echo "=== Verification ==="
+    for bin in syncd orchagent redis-server supervisord; do
+      which $$bin 2>/dev/null && echo "  $$bin: OK" || echo "  $$bin: MISSING"
+    done
+    for bin in sonic-cfggen sonic-db-cli; do
+      which $$bin 2>/dev/null && echo "  $$bin: OK" || echo "  $$bin: MISSING"
+    done
+    for svc in zebra bgpd staticd; do
+      which $$svc 2>/dev/null && echo "  $$svc: OK" || echo "  $$svc: MISSING"
+    done
+    python3 -c "import swsscommon; print(\"  swsscommon: OK\")" 2>/dev/null || echo "  swsscommon: MISSING"
+    ls /usr/bin/start.sh /usr/bin/orchagent.sh /usr/bin/configdb-load.sh 2>/dev/null && echo "  scripts: OK" || echo "  scripts: MISSING"
+    echo "=== docker-sonic-vs assembly complete ==="
+  '
+
+# Export container as tarball
+echo "=== Exporting docker-sonic-vs ==="
+docker commit \
+  --change "ENV PLATFORM=x86_64-kvm_x86_64-r0" \
+  --change "ENV HWSKU=Force10-S6000" \
+  --change 'CMD ["/usr/bin/supervisord"]' \
+  "$$CONTAINER_NAME" docker-sonic-vs:bazel
+
+docker save docker-sonic-vs:bazel | gzip > "$$OUT_FILE"
+
+# Cleanup
+docker rm "$$CONTAINER_NAME" 2>/dev/null || true
+
+echo "=== Output ==="
+ls -lh "$$OUT_FILE"
+SIZE_MB=$$(( $$(stat -f%z "$$OUT_FILE" 2>/dev/null || stat -c%s "$$OUT_FILE" 2>/dev/null || echo 0) / 1048576 ))
+echo "docker-sonic-vs.tar.gz: $$SIZE_MB MB"
+""",
+    tags = ["requires-docker", "no-sandbox", "no-cache"],
+)
+
+# ── Smoke test: verify docker-sonic-vs boots and services start ────────────────
+# Run with: bazel test //platform/vs:docker_sonic_vs_smoke_test --test_output=streamed
+sh_test(
+    name = "docker_sonic_vs_smoke_test",
+    srcs = ["smoke_test.sh"],
+    data = [":docker_sonic_vs"],
+    tags = ["requires-docker", "no-sandbox", "manual"],
+    timeout = "long",
 )

@@ -74,3 +74,19 @@ scope: bazel | deb | oci | onie | platform/<name> | rules | ci
 - [ ] OCI image has ≤ 3 layers (`docker inspect … | jq '.[0].RootFS.Layers|length'`)
 - [ ] Artifact is within size budget (see above)
 - [ ] Cloud Build passes and remote cache hit rate ≥ 80% on re-run
+
+## Ultimate Verification: docker-sonic-vs pytest
+The definitive test that Bazel build artifacts are correct is:
+1. `bazel build //platform/vs:docker_sonic_vs` produces a hermetic docker-sonic-vs image
+2. Load the image: `docker load < bazel-bin/platform/vs/docker_sonic_vs/tarball.tar`
+3. Tag it: `docker tag <sha> docker-sonic-vs:latest`
+4. Run sonic-swss pytest against it:
+   ```
+   cd src/sonic-swss/tests
+   sudo pytest --imgname=docker-sonic-vs:latest -v test_port.py
+   ```
+5. All pytest tests pass — this proves orchagent, syncd-vs, redis, swss-common,
+   FRR, supervisord, config generation, and all 40+ services work correctly.
+
+This is the ONLY verification that matters for declaring the migration complete.
+Everything else (debdiff, size budgets, reproducibility) is secondary to this.

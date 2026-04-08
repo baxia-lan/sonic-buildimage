@@ -89,12 +89,19 @@ Last updated: 2026-04-08
 - [ ] sonic-yang-mgmt
 - [ ] sonic-platform-common
 
+### docker-sonic-vs for pytest (Ultimate Verification Target)
+- [ ] Build FRR .deb (or use upstream Debian FRR)
+- [ ] Build sonic-config-engine (provides sonic-cfggen)
+- [ ] Build Python wheels (sonic-utilities, sonic-py-common, sonic-yang-models)
+- [ ] Assemble docker-sonic-vs with all 40+ services
+- [ ] docker-sonic-vs passes `pytest test_port.py` from sonic-swss/tests
+- [ ] docker-sonic-vs passes full sonic-swss pytest suite
+
 ## Not Started
 
 - [ ] debdiff verification (Make vs Bazel output comparison)
 - [ ] Reproducibility verification (two builds → identical sha256)
 - [ ] Remote cache/RBE testing (needs GCP credentials)
-- [ ] Component tests (gtest/pytest via deb_test rule)
 - [ ] Upstream PRs to sonic-net
 - [ ] Broadcom SAI platform modules (proprietary)
 - [ ] Full size verification (sonic-broadcom.bin < 400 MB)
