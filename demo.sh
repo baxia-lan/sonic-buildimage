@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # SONiC Make→Bazel Migration Demo
 # Run: ./demo.sh
-set -euo pipefail
+# Don't use set -e: some bazel commands return non-zero on warnings
+set -uo pipefail
 
 echo "╔══════════════════════════════════════════════════════════════╗"
 echo "║  SONiC Build System Migration: Make → Bazel (bzlmod)       ║"
