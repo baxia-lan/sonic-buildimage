@@ -171,6 +171,39 @@ def iter_issues(repo_root: Path) -> list[Issue]:
                         fix=fix,
                     ),
                 )
+    rust_workspace_roots: set[Path] = set()
+    src_root = repo_root / "src"
+    cargo_tomls = sorted(src_root.rglob("Cargo.toml")) if src_root.exists() else []
+    for cargo_toml in cargo_tomls:
+        workspace_root = cargo_toml.parent
+        if any(
+            (parent / "Cargo.toml").exists()
+            for parent in workspace_root.parents
+            if parent != repo_root and parent != src_root and src_root in parent.parents
+        ):
+            continue
+        rust_workspace_roots.add(workspace_root)
+
+    for workspace_root in sorted(rust_workspace_roots):
+        rel_path = workspace_root.relative_to(repo_root).as_posix()
+        cargo_lock = workspace_root / "Cargo.lock"
+        vendor_dir = workspace_root / "vendor"
+        cargo_config = workspace_root / ".cargo" / "config.toml"
+        legacy_cargo_config = workspace_root / ".cargo" / "config"
+
+        if cargo_lock.exists() and vendor_dir.exists() and (cargo_config.exists() or legacy_cargo_config.exists()):
+            continue
+
+        issues.append(
+            Issue(
+                path=f"{rel_path}/Cargo.toml",
+                line=1,
+                severity="HIGH",
+                category="rust_workspace_not_vendored",
+                detail="Rust workspace lacks Cargo.lock and/or vendored crates for hermetic Bazel execution",
+                fix="Add Cargo.lock plus vendored crates and .cargo/config.toml before routing this package through Bazel-native builders.",
+            ),
+        )
     return issues
 
 
