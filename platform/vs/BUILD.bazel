@@ -1,128 +1,37 @@
-"""Virtual Switch (VS) platform — docker-sonic-vs.gz and ONIE image.
+"""Virtual Switch (VS) platform — docker-sonic-vs.gz (hermetic).
 
-The VS platform is used for testing and development. It uses the
-virtual SAI (libsaivs) instead of hardware-specific SAI libraries.
+The VS platform uses libsaivs (virtual SAI) for testing and development.
+All packages from rules_distroless — no Docker daemon needed.
 
-Outputs:
-  - :docker_sonic_vs          — OCI image for docker-sonic-vs
-  - :docker_sonic_vs_tarball  — docker-sonic-vs.gz tarball
-  - :sonic_vs_rootfs          — rootfs for ONIE installer
-  - :sonic_vs_bin             — sonic-vs.bin ONIE installer image
+Build: bazel build //platform/vs:docker_sonic_vs_tarball --strategy=CopyToDirectory=local
 """
 
-load("@rules_oci//oci:defs.bzl", "oci_image")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
-load("//rules/bazel/oci:strip_layer.bzl", "stripped_layer")
-load("//rules/bazel/onie:onie.bzl", "onie_image", "sonic_rootfs")
+load("//rules/bazel/oci:sonic_docker.bzl", "slim_apt_layer")
 
 package(default_visibility = ["//visibility:public"])
 
-# ── VS platform service images ───────────────────────────────────────────────
-# All SONiC service containers included in the VS image.
-VS_SERVICE_IMAGES = [
-    "//dockers/docker-database:docker_database_tarball",
-    "//dockers/docker-fpm-frr:docker_fpm_frr_tarball",
-    "//dockers/docker-orchagent:docker_orchagent_tarball",
-    "//dockers/docker-teamd:docker_teamd_tarball",
-    "//dockers/docker-snmp:docker_snmp_tarball",
-    "//dockers/docker-lldp:docker_lldp_tarball",
-    "//dockers/docker-dhcp-relay:docker_dhcp_relay_tarball",
-    "//dockers/docker-router-advertiser:docker_router_advertiser_tarball",
-    "//dockers/docker-nat:docker_nat_tarball",
-    "//dockers/docker-sflow:docker_sflow_tarball",
-    "//dockers/docker-sonic-gnmi:docker_sonic_gnmi_tarball",
-    "//dockers/docker-sonic-telemetry:docker_sonic_telemetry_tarball",
-    "//dockers/docker-eventd:docker_eventd_tarball",
-    "//dockers/docker-sonic-mgmt-framework:docker_sonic_mgmt_framework_tarball",
-    "//dockers/docker-platform-monitor:docker_platform_monitor_tarball",
-    "//dockers/docker-macsec:docker_macsec_tarball",
-    "//dockers/docker-mux:docker_mux_tarball",
-]
-
-# ── docker-sonic-vs: all-in-one VS image ─────────────────────────────────────
-# For development/testing, all services run in a single container.
-genrule(
-    name = "vs_apt_layer",
-    srcs = [],
-    outs = ["vs_apt_layer.tar"],
-    cmd = """
-set -euo pipefail
-ROOTFS=$$(mktemp -d)
-trap 'rm -rf "$$ROOTFS"' EXIT
-
-apt-get -y install --no-install-recommends \
-  -o Dir::Cache=$$ROOTFS/var/cache/apt \
-  -o Dir::State=$$ROOTFS/var/lib/apt \
-  net-tools iproute2 bridge-utils iptables kmod \
-  procps psmisc
-
-rm -rf $$ROOTFS/var/cache $$ROOTFS/var/lib/apt
-SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \
-  --owner=0 --group=0 -C "$$ROOTFS" -cf $(OUTS) .
-""",
-)
-
-genrule(
-    name = "vs_binary_layer",
+# ── VS runtime packages (hermetic) ───────────────────────────────────────────
+slim_apt_layer(
+    name = "vs_apt_slim",
     srcs = [
-        "//src/sonic-swss:swss_deb",
-        "//src/sonic-sairedis:saivs",
-        "//src/sonic-swss-common:swss_common",
+        "@bookworm_iproute2_6.1.0-3_amd64//:data",
+        "@bookworm_bridge-utils_1.7.1-1_amd64//:data",
+        "@bookworm_iptables_1.8.9-2_amd64//:data",
+        "@bookworm_procps_2-4.0.2-3_amd64//:data",
     ],
-    outs = ["vs_binary_layer.tar"],
-    cmd = """
-set -euo pipefail
-ROOTFS=$$(mktemp -d)
-trap 'rm -rf "$$ROOTFS"' EXIT
-for deb in $(SRCS); do
-  dpkg-deb -x "$$deb" "$$ROOTFS"
-done
-find "$$ROOTFS" -name '*.so*' -type f | xargs -r strip --strip-debug 2>/dev/null || true
-SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \
-  --owner=0 --group=0 -C "$$ROOTFS" -cf $(OUTS) .
-""",
 )
 
-stripped_layer(
-    name = "vs_apt_layer_stripped",
-    src = ":vs_apt_layer",
-    size_budget_mb = 40,
-)
-
-stripped_layer(
-    name = "vs_binary_layer_stripped",
-    src = ":vs_binary_layer",
-    size_budget_mb = 80,
-)
-
+# ── docker-sonic-vs OCI image ────────────────────────────────────────────────
 sonic_oci_image(
     name = "docker_sonic_vs",
-    base = "//dockers/docker-swss-layer-bullseye:sonic_swss_layer_bullseye",
+    base = "//dockers/sonic-common-layer:sonic_common_layer",
     tars = [
-        ":vs_apt_layer_stripped",
-        ":vs_binary_layer_stripped",
+        ":vs_apt_slim",
     ],
     labels = {
         "org.opencontainers.image.title": "docker-sonic-vs",
-        "org.opencontainers.image.description": "SONiC Virtual Switch — all-in-one development image",
         "sonic.platform": "vs",
     },
-)
-
-# ── VS rootfs for ONIE installer ─────────────────────────────────────────────
-sonic_rootfs(
-    name = "sonic_vs_rootfs",
-    platform = "vs",
-    service_images = VS_SERVICE_IMAGES,
-)
-
-# ── VS ONIE installer image ─────────────────────────────────────────────────
-onie_image(
-    name = "sonic_vs_bin",
-    rootfs = ":sonic_vs_rootfs",
-    kernel = "//src/sonic-linux-kernel:vmlinuz",
-    platform = "vs",
-    machine = "x86_64-kvm_x86_64-r0",
-    version = "0.0.0-bazel",
 )
