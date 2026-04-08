@@ -11,8 +11,10 @@ bazelrc_file=".bazelrc"
 helper_dockerfile="tools/bazel/legacy_bridge_helper.Dockerfile"
 helper_apt_manifest="tools/bazel/legacy_bridge_helper.apt.txt"
 helper_requirements="tools/bazel/legacy_bridge_helper.requirements.txt"
+helper_image_ref_script="tools/bazel/legacy_bridge_helper_image_ref.sh"
+helper_image_build_script="tools/bazel/build_legacy_bridge_helper_image.sh"
 
-for path in "${bridge_script}" "${bridge_rule}" "${status_script}" "${bazelrc_file}" "${helper_dockerfile}" "${helper_apt_manifest}" "${helper_requirements}"; do
+for path in "${bridge_script}" "${bridge_rule}" "${status_script}" "${bazelrc_file}" "${helper_dockerfile}" "${helper_apt_manifest}" "${helper_requirements}" "${helper_image_ref_script}" "${helper_image_build_script}"; do
     if [[ ! -f "${path}" ]]; then
         echo "Missing required legacy bridge file: ${path}" >&2
         exit 1
@@ -58,6 +60,16 @@ fi
 
 if ! rg -q '^FROM debian@sha256:[0-9a-f]{64}$' "${helper_dockerfile}"; then
     echo "Legacy bridge helper Dockerfile must pin its Debian base image by digest." >&2
+    exit 1
+fi
+
+if ! rg -q --fixed-strings 'tools/bazel/legacy_bridge_helper_image_ref.sh' "${bridge_script}"; then
+    echo "Legacy bridge script must resolve the helper image through the tracked helper image ref script." >&2
+    exit 1
+fi
+
+if ! rg -q --fixed-strings 'tools/bazel/legacy_bridge_helper_image_ref.sh' "${helper_image_build_script}"; then
+    echo "Legacy bridge helper image build script must resolve the helper image through the tracked helper image ref script." >&2
     exit 1
 fi
 

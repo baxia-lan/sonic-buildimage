@@ -3,6 +3,7 @@ exports_files(
         "bazelw",
         "configure_platform.sh",
         "init_workspace.sh",
+        "legacy_bridge_helper_image_ref.sh",
         "workspace_status.sh",
     ],
     visibility = ["//visibility:public"],
@@ -17,7 +18,12 @@ sh_binary(
 sh_binary(
     name = "build_legacy_bridge_helper_image",
     srcs = ["build_legacy_bridge_helper_image.sh"],
-    data = ["legacy_bridge_helper.Dockerfile"],
+    data = [
+        "legacy_bridge_helper.Dockerfile",
+        "legacy_bridge_helper.apt.txt",
+        "legacy_bridge_helper.requirements.txt",
+        "legacy_bridge_helper_image_ref.sh",
+    ],
     visibility = ["//visibility:public"],
 )
 

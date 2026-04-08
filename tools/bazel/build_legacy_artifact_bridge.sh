@@ -195,7 +195,8 @@ if [[ -z "${host_docker}" ]]; then
     exit 1
 fi
 
-helper_image="${SONIC_BAZEL_LEGACY_BRIDGE_HELPER_IMAGE:-sonic-bazel-legacy-bridge-helper:bookworm}"
+helper_image_ref_script="${workspace_root}/tools/bazel/legacy_bridge_helper_image_ref.sh"
+helper_image="${SONIC_BAZEL_LEGACY_BRIDGE_HELPER_IMAGE:-$("${helper_image_ref_script}")}"
 if ! "${host_docker}" image inspect "${helper_image}" >/dev/null 2>&1; then
     echo "legacy bridge helper image not found: ${helper_image}" >&2
     echo "build it first with ./tools/bazel/build_legacy_bridge_helper_image.sh" >&2
