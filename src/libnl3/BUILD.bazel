@@ -40,13 +40,13 @@ for p in $(locations :patches); do
   cp "$$p" "$$PATCH_DIR/" 2>/dev/null || true
 done
 
-docker run --rm \
+docker run --rm --platform linux/amd64 \
   -v "$$PATCH_DIR:/patches:ro" \
   -v "$$OUT_DIR:/output" \
   -e DEBIAN_FRONTEND=noninteractive \
-  -e SOURCE_DATE_EPOCH=0 \
   debian:bookworm-slim \
-  bash -euo pipefail -c '
+  bash -o pipefail -c '
+    unset SOURCE_DATE_EPOCH
     apt-get update -qq
     apt-get install -y -qq --no-install-recommends \
       build-essential dpkg-dev fakeroot debhelper autoconf automake libtool \
@@ -65,8 +65,14 @@ docker run --rm \
     # Build
     DPKG_GENSYMBOLS_CHECK_LEVEL=0 dpkg-buildpackage -rfakeroot -b -us -uc -d 2>&1 | tail -10
     echo "=== debs ==="
-    ls -lh /tmp/*.deb 2>/dev/null | head -10
-    cp /tmp/*.deb /output/ 2>/dev/null || true
+    ls -lh /tmp/*.deb 2>/dev/null | head -15
+    echo "=== copying to /output ==="
+    ls -la /output/ 2>/dev/null | head -3
+    for deb in /tmp/*.deb; do
+      cp "$$deb" /output/ && echo "  copied: $$(basename $$deb)" || echo "  FAIL: $$deb"
+    done
+    echo "=== /output contents ==="
+    ls -lh /output/*.deb 2>/dev/null | head -15
   '
 
 # Verify
