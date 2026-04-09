@@ -16,21 +16,6 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Copy BUILD.bazel and MODULE.bazel into submodules
-        run: |
-          GITHUB_BASE="https://raw.githubusercontent.com/baxia-lan"
-          for mod in sonic-swss-common sonic-sairedis sonic-swss sonic-dash-api sonic-stp sonic-linux-kernel sonic-gnmi; do
-            if [ -d "src/$mod" ]; then
-              for f in BUILD.bazel MODULE.bazel BUILD.bazel.hermetic config.h; do
-                curl -fsSL "${GITHUB_BASE}/${mod}/claude/${f}?t=$(date +%s)" \
-                  -o "src/$mod/$f" 2>/dev/null && echo "  + src/$mod/$f" || true
-              done
-            fi
-          done
-          # Verify kernel cpupower fix
-          echo "Kernel cpupower fix:"
-          grep "cpupower" src/sonic-linux-kernel/BUILD.bazel | head -3 || echo "WARNING: no cpupower fix"
-
       - name: Align submodules to 202405
         run: |
           for mod in sonic-swss-common sonic-sairedis sonic-swss sonic-dash-api sonic-linux-kernel sonic-stp sonic-gnmi sonic-mgmt-common; do
@@ -47,6 +32,21 @@ jobs:
           cd src/sonic-swss && git checkout 6785d6620804cd0b32db7e8adb7e7dad99ae4a78 && cd ../..
           cd src/sonic-dash-api && git checkout 3f6709001e8574743ecf1a44f4cc3eb26b6329d6 && cd ../..
           cd src/sonic-linux-kernel && git checkout feaf559f38133c9fa649a468c5e589641c77de76 && cd ../..
+
+      - name: Copy BUILD.bazel and MODULE.bazel into submodules
+        run: |
+          # MUST run AFTER align — git checkout reverts files, so we re-download
+          GITHUB_BASE="https://raw.githubusercontent.com/baxia-lan"
+          for mod in sonic-swss-common sonic-sairedis sonic-swss sonic-dash-api sonic-stp sonic-linux-kernel sonic-gnmi; do
+            if [ -d "src/$mod" ]; then
+              for f in BUILD.bazel MODULE.bazel BUILD.bazel.hermetic config.h; do
+                curl -fsSL "${GITHUB_BASE}/${mod}/claude/${f}?t=$(date +%s)" \
+                  -o "src/$mod/$f" 2>/dev/null && echo "  + src/$mod/$f" || true
+              done
+            fi
+          done
+          echo "Kernel cpupower fix:"
+          grep "cpupower" src/sonic-linux-kernel/BUILD.bazel | head -3 || echo "WARNING: no cpupower fix"
 
       - name: Install Bazelisk
         run: |
