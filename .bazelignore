@@ -1,8 +1,4 @@
-# Submodules with their own MODULE.bazel are resolved through the local
-# Bazel registry (tools/bazel/registry/) instead of being part of the
-# root workspace tree. Listing them here prevents Bazel from treating
-# their MODULE.bazel as a workspace boundary conflict.
-#
-# Run `python3 tools/bazel/registry/generate_registry.py` after adding
-# a new submodule MODULE.bazel to regenerate the registry.
-src/sonic-swss-common
+# Currently empty — submodule BUILD.bazel files are referenced directly
+# by the root repo for deb packaging. The local Bazel registry provides
+# @sonic_swss_common for native cc_library builds, but deb packaging
+# still uses //src/sonic-swss-common:* paths.
