@@ -1,6 +1,6 @@
 # Migration Progress
 
-Last updated: 2026-04-08
+Last updated: 2026-04-09
 
 ## Done
 
@@ -10,7 +10,9 @@ Last updated: 2026-04-08
 - [x] toolchains_llvm 1.7.0 — Hermetic LLVM/Clang 18
 - [x] debian_sysroot_repo — Bookworm sysroot from 5 .deb packages
 - [x] slim_apt_layer — ELF strip + locale/man/doc removal
-- [x] 202 BUILD.bazel files across all packages/images/platforms
+- [x] 217+ BUILD.bazel files (88 submodules + 54 dockers + platform + rules)
+- [x] MODULE.bazel.lock committed for reproducible apt package resolution
+- [x] Hermetic sysroot with 30+ Bookworm dev packages
 
 ### .deb Packages (29 from source)
 - [x] libnl3 (23 debs, SONiC-patched, dget from Debian pool)
@@ -37,6 +39,17 @@ Last updated: 2026-04-08
 - [x] docker-sonic-mgmt-framework (hermetic)
 - [x] docker-orchagent (Docker genrule, real binary)
 
+### docker-sonic-vs (OCI image)
+- [x] Hermetic oci_image() with 7 layers (5 hermetic, 2 Docker-based)
+- [x] slim_apt_layer for runtime packages (rules_distroless)
+- [x] deb_extract_layer for Bazel-built SONiC .debs
+- [x] FRR + supervisor layer via apt_install_layer
+- [x] sonic-cfggen + Python packages layer
+- [x] Device data (lanemap.ini, port_config.ini, sai.profile)
+- [x] syncd-vs produced with -Psyncd,vs build profiles
+- [ ] Boot test on native amd64 Linux
+- [ ] sonic-swss pytest passing
+
 ### ONIE Image
 - [x] sonic-broadcom.bin local build (stub kernel + 9 services)
 - [x] ONIE sharch self-extracting format
@@ -58,8 +71,9 @@ Last updated: 2026-04-08
 ## In Progress
 
 ### Kernel
-- [ ] linux-cpupower.install fix (sed after popd)
-- [ ] CI kernel build passing
+- [x] SOURCE_DATE_EPOCH empty string fix (dpkg-deb timestamp)
+- [x] cpupower.install background watcher fix (pushed to fork)
+- [ ] CI kernel build passing (watcher fix in pipeline, waiting)
 - [ ] sonic-broadcom.bin with real kernel
 
 ### More .deb Packages
