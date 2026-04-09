@@ -61,7 +61,7 @@ done
 for deb in $$(find . -path "*/bin/src/*" -name "*.deb" -size +0 -not -name "*dbgsym*" -not -name "*-dev_*" -not -name "*-dbg_*" 2>/dev/null); do
   cp "$$deb" "$$DEB_DIR/" 2>/dev/null || true
 done
-echo "Total debs: $$(ls $$DEB_DIR/*.deb 2>/dev/null | wc -l) (v6-disk-fix)"
+echo "Total debs: $$(ls $$DEB_DIR/*.deb 2>/dev/null | wc -l) (v7-device-data)"
 
 # Find docker-sonic-vs config dir and repo root
 VS_CFG=""
@@ -105,6 +105,7 @@ docker run --name "$$CONTAINER_NAME" --platform linux/amd64 \
   -v "$$UTILITIES_DIR:/py-src/sonic-utilities:ro" \
   -v "$$HOST_SERVICES_DIR:/py-src/sonic-host-services:ro" \
   -v "$$DEVICE_DATA_DIR:/py-src/sonic-device-data:ro" \
+  -v "$$REPO_ROOT/device/virtual/x86_64-kvm_x86_64-r0:/device-data:ro" \
   -e DEBIAN_FRONTEND=noninteractive \
   debian:bookworm-slim \
   bash -o pipefail -c '
@@ -259,15 +260,25 @@ platform: vs
 hwsku: Force10-S6000
 EOFVER
 
-    # Platform device data
-    mkdir -p /usr/share/sonic/device/x86_64-kvm_x86_64-r0/Force10-S6000
-    mkdir -p /usr/share/sonic/device/x86_64-kvm_x86_64-r0/brcm_gearbox_vs
-    mkdir -p /usr/share/sonic/device/x86_64-kvm_x86_64-r0/Mellanox-SN2700
-    cp /vs-config/platform.json /usr/share/sonic/device/x86_64-kvm_x86_64-r0/
-    cp /vs-config/platform-dpu-2p.json /usr/share/sonic/device/x86_64-kvm_x86_64-r0/
-    cp /vs-config/hwsku.json /usr/share/sonic/device/x86_64-kvm_x86_64-r0/Force10-S6000/
-    cp /vs-config/hwsku.json /usr/share/sonic/device/x86_64-kvm_x86_64-r0/brcm_gearbox_vs/
-    cp /vs-config/hwsku.json /usr/share/sonic/device/x86_64-kvm_x86_64-r0/Mellanox-SN2700/
+    # Platform device data — copy from device/virtual tree
+    DEVROOT=/usr/share/sonic/device/x86_64-kvm_x86_64-r0
+    mkdir -p $$DEVROOT/Force10-S6000
+    mkdir -p $$DEVROOT/brcm_gearbox_vs
+    mkdir -p $$DEVROOT/Mellanox-SN2700
+    cp /vs-config/platform.json $$DEVROOT/
+    cp /vs-config/platform-dpu-2p.json $$DEVROOT/
+    cp /vs-config/hwsku.json $$DEVROOT/Force10-S6000/
+    cp /vs-config/hwsku.json $$DEVROOT/brcm_gearbox_vs/
+    cp /vs-config/hwsku.json $$DEVROOT/Mellanox-SN2700/
+    # Device data from device/virtual (lanemap.ini, port_config.ini, sai.profile, etc.)
+    if [ -d /device-data ]; then
+      cp -a /device-data/* $$DEVROOT/ 2>/dev/null || true
+      # Force10-S6000 is the pytest HWSKU — copy SONiC-VM files into it
+      cp -a /device-data/SONiC-VM/* $$DEVROOT/Force10-S6000/ 2>/dev/null || true
+      echo "Device data installed: $$(ls $$DEVROOT/Force10-S6000/ | wc -l) files"
+    fi
+    # Ensure default_sku exists
+    [ -f $$DEVROOT/default_sku ] || echo "Force10-S6000 t1" > $$DEVROOT/default_sku
 
     # FRR config
     echo "docker-sonic-vs" > /etc/hostname
