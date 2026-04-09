@@ -1,0 +1,3 @@
+# Intentionally empty — submodule BUILD.bazel files are referenced
+# by the root repo. The Aspect pattern uses a local Bazel registry
+# instead of .bazelignore for workspace boundary isolation.
