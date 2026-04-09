@@ -13,8 +13,8 @@ package(default_visibility = ["//visibility:public"])
 deb_extract_layer(
     name = "libswsscommon_layer",
     debs = [
-        "//src/sonic-swss-common:swss_common",
-        "//src/sonic-swss-common:python3_swsscommon",
+        "//build/deb/sonic-swss-common:swss_common",
+        "//build/deb/sonic-swss-common:python3_swsscommon",
     ],
     size_budget_mb = 250,
 )

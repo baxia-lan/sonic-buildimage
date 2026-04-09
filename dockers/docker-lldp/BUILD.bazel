@@ -15,7 +15,7 @@ package(default_visibility = ["//visibility:public"])
 deb_extract_layer(
     name = "lldp_binary_layer",
     debs = [
-        "//src/sonic-swss-common:swss_common",
+        "//build/deb/sonic-swss-common:swss_common",
     ],
     size_budget_mb = 250,
 )
