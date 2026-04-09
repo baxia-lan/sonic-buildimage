@@ -31,8 +31,6 @@ genrule(
     ],
     cmd = """
 set -euo pipefail
-FIRST_OUT=$$(echo $(OUTS) | awk '{print $$1}')
-OUT_DIR=$$(cd $$(dirname $$FIRST_OUT) && pwd)
 
 # Stage patches for Docker
 PATCH_DIR=$$(mktemp -d)
@@ -40,9 +38,11 @@ for p in $(locations :patches); do
   cp "$$p" "$$PATCH_DIR/" 2>/dev/null || true
 done
 
+# Build debs in Docker, output to a temp dir
+STAGING=$$(mktemp -d)
 docker run --rm --platform linux/amd64 \
   -v "$$PATCH_DIR:/patches:ro" \
-  -v "$$OUT_DIR:/output" \
+  -v "$$STAGING:/output" \
   -e DEBIAN_FRONTEND=noninteractive \
   debian:bookworm-slim \
   bash -o pipefail -c '
@@ -55,33 +55,28 @@ docker run --rm --platform linux/amd64 \
     git config --global user.email build@sonic
     git config --global user.name sonic
     cd /tmp
-    # Download Debian source package (dsc + orig + debian)
     dget -u https://deb.debian.org/debian/pool/main/libn/libnl3/libnl3_3.7.0-0.2.dsc
     cd libnl3-3.7.0
-    # Apply SONiC patches via stgit
-    git init -q && git add -f . && git commit -qm "initial"
+    git init -q && git add -f . && git commit -qm initial
     stg init
     stg import -s /patches/series 2>&1 | tail -5
-    # Build
     DPKG_GENSYMBOLS_CHECK_LEVEL=0 dpkg-buildpackage -rfakeroot -b -us -uc -d 2>&1 | tail -10
-    echo "=== debs ==="
-    ls -lh /tmp/*.deb 2>/dev/null | head -15
-    echo "=== copying to /output ==="
-    ls -la /output/ 2>/dev/null | head -3
-    for deb in /tmp/*.deb; do
-      cp "$$deb" /output/ && echo "  copied: $$(basename $$deb)" || echo "  FAIL: $$deb"
-    done
-    echo "=== /output contents ==="
-    ls -lh /output/*.deb 2>/dev/null | head -15
+    cp /tmp/*.deb /output/
+    ls -lh /output/*.deb | head -15
   '
 
-# Verify
+# Copy each declared output from staging to its Bazel output path
 for out in $(OUTS); do
-  if [ ! -s "$$out" ]; then
-    echo "FAIL: $$out empty"
+  base=$$(basename "$$out")
+  if [ -f "$$STAGING/$$base" ]; then
+    cp "$$STAGING/$$base" "$$out"
+  else
+    echo "FAIL: $$base not found in staging dir"
+    ls "$$STAGING"/*.deb 2>/dev/null
     exit 1
   fi
 done
+rm -rf "$$STAGING" "$$PATCH_DIR"
 """,
     tags = ["requires-docker", "no-sandbox", "no-cache"],
     visibility = ["//visibility:public"],
