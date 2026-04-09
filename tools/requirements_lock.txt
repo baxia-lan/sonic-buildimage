@@ -23,8 +23,15 @@ tabulate==0.9.0
 jsonpatch==1.33
 jsonpointer==2.4
 
+# pyangbind transitive dependencies
+pyang==2.6.0
+six==1.16.0
+regex==2024.4.16
+enum34==1.1.10
+
 # sonic-py-common dependencies
 redis-dump-load==1.1
+redis==5.0.1
 packaging==23.2
 
 # Network utilities
