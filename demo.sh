@@ -41,10 +41,30 @@ ensure_bazel() {
   fi
 }
 
+# Copy BUILD.bazel files from forked submodule branches into local submodules.
+# These files define how Bazel builds each SONiC package from source.
+ensure_submodule_build_files() {
+  echo "▸ Syncing BUILD.bazel into submodules..."
+  local GITHUB_BASE="https://raw.githubusercontent.com/baxia-lan"
+  for mod in sonic-swss-common sonic-sairedis sonic-swss sonic-dash-api sonic-stp \
+             sonic-frr sonic-gnmi sonic-linux-kernel sonic-sysmgr sonic-device-data \
+             libyang libteam libnl3 sonic-config-engine sonic-py-common \
+             sonic-yang-models sonic-yang-mgmt sonic-utilities sonic-host-services \
+             sonic-platform-common; do
+    if [ -d "src/$mod" ] && [ ! -f "src/$mod/BUILD.bazel" ]; then
+      curl -fsSL "${GITHUB_BASE}/${mod}/claude/BUILD.bazel" \
+        -o "src/$mod/BUILD.bazel" 2>/dev/null && \
+        echo "  + src/$mod/BUILD.bazel" || true
+    fi
+  done
+}
+
 if ! ensure_bazel; then
   echo "Cannot continue without Bazel."
   exit 1
 fi
+
+ensure_submodule_build_files
 
 BAZEL_VER=$(bazel version 2>&1 | grep 'Build label' | awk '{print $3}' || echo "unknown")
 BUILD_COUNT=$(find . -name BUILD.bazel -not -path './.git/*' -not -path './bazel-*' 2>/dev/null | wc -l | tr -d ' ')
@@ -55,77 +75,46 @@ echo ""
 # ── Demo 1: Hermetic Docker images ──────────────────────────────────────────
 echo "━━━ Demo 1: Hermetic Docker images (no Docker daemon needed) ━━━"
 echo ""
-echo "Building 9 service images from pre-resolved Debian packages..."
-echo "(rules_distroless: 190 packages from snapshot.debian.org)"
+echo "Building docker-sonic-vs OCI image (hermetic, oci_image rules)..."
 echo ""
-if bazel build \
-  //dockers/sonic-common-layer:sonic_common_layer \
-  //dockers/docker-database:docker_database \
-  //dockers/docker-teamd:docker_teamd \
-  //dockers/docker-nat:docker_nat \
-  //dockers/docker-stp:docker_stp \
-  //dockers/docker-iccpd:docker_iccpd \
-  //dockers/docker-router-advertiser:docker_router_advertiser \
-  //dockers/docker-basic_router:docker_basic_router \
-  //dockers/docker-sflow:docker_sflow \
-  --strategy=CopyToDirectory=local 2>&1; then
-  echo "✅ Demo 1: 9 service images built"
+if bazel build //platform/vs:docker_sonic_vs_tarball \
+  --spawn_strategy=local --strategy=CopyToDirectory=local --jobs=1 2>&1; then
+  echo ""
+  echo "✅ Demo 1: docker-sonic-vs OCI image built"
+  echo ""
+  echo "  Load:  bazel-bin/platform/vs/docker_sonic_vs_tarball.sh"
+  echo "  Tag:   docker tag sonic/docker_sonic_vs:latest docker-sonic-vs:latest"
+  echo "  Test:  cd src/sonic-swss/tests && sudo pytest --imgname=docker-sonic-vs:latest -v test_port.py"
 else
+  echo ""
   echo "❌ Demo 1: Build failed"
+  echo "  Check: bazel build //platform/vs:docker_sonic_vs_tarball --spawn_strategy=local --jobs=1 2>&1 | tail -20"
 fi
 
 echo ""
 echo "━━━ Demo 2: Real .deb packages compiled from source ━━━"
 echo ""
-echo "Building swss (orchagent) from source via Bazel..."
-if [ -f "bazel-bin/src/sonic-swss/swss_1.0.0_amd64.deb" ]; then
-  echo "  swss_1.0.0_amd64.deb: $(du -h bazel-bin/src/sonic-swss/swss_1.0.0_amd64.deb | awk '{print $1}')"
+DEB_COUNT=0
+if [ -d "bazel-bin/src" ]; then
   DEB_COUNT=$(find bazel-bin/src -name "*.deb" -size +0 -not -name "*dbgsym*" -not -name "*dbg_*" 2>/dev/null | wc -l | tr -d ' ')
-  echo "  Total .deb packages in bazel-bin: ${DEB_COUNT}"
-else
-  echo "  Building swss .deb (this takes ~10 min on first run)..."
-  if bazel build //src/sonic-swss:swss_deb --spawn_strategy=local --jobs=1 2>&1; then
-    echo "  ✅ swss_1.0.0_amd64.deb built: $(du -h bazel-bin/src/sonic-swss/swss_1.0.0_amd64.deb | awk '{print $1}')"
-  else
-    echo "  ❌ swss build failed (needs Docker for cross-compilation)"
-  fi
 fi
-
-echo ""
-echo "━━━ Demo 3: docker-sonic-vs for pytest ━━━"
-echo ""
-echo "Building docker-sonic-vs with real SONiC services..."
-if [ -f "bazel-bin/platform/vs/docker-sonic-vs.tar.gz" ]; then
-  echo "  ✅ docker-sonic-vs.tar.gz: $(du -h bazel-bin/platform/vs/docker-sonic-vs.tar.gz | awk '{print $1}')"
-  echo ""
-  echo "  Load & test:"
-  echo "    docker load -i bazel-bin/platform/vs/docker-sonic-vs.tar.gz"
-  echo "    docker tag docker-sonic-vs:bazel docker-sonic-vs:latest"
-  echo "    cd src/sonic-swss/tests && sudo pytest --imgname=docker-sonic-vs:latest -v test_port.py"
+if [ "$DEB_COUNT" -gt 0 ]; then
+  echo "  ${DEB_COUNT} .deb packages built from source:"
+  find bazel-bin/src -name "*.deb" -size +0 -not -name "*dbgsym*" -not -name "*dbg_*" -not -name "*-dev_*" 2>/dev/null | head -10 | while read f; do
+    echo "    $(du -h "$f" | awk '{print $1}')  $(basename "$f")"
+  done
 else
-  echo "  Building docker-sonic-vs (takes ~5 min with Docker)..."
-  if bazel build //platform/vs:docker_sonic_vs --spawn_strategy=local --jobs=1 2>&1; then
-    echo "  ✅ docker-sonic-vs.tar.gz: $(du -h bazel-bin/platform/vs/docker-sonic-vs.tar.gz | awk '{print $1}')"
-  else
-    echo "  ❌ docker-sonic-vs build failed"
-  fi
-fi
-
-echo ""
-echo "━━━ Demo 4: sonic-broadcom.bin ONIE installer ━━━"
-echo ""
-if bazel build //platform/broadcom:sonic_broadcom_minimal --strategy=CopyToDirectory=local 2>&1; then
-  echo "✅ sonic-broadcom.bin: $(du -h bazel-bin/platform/broadcom/sonic_broadcom_minimal.bin | awk '{print $1}')"
-else
-  echo "❌ sonic-broadcom.bin build failed"
-  echo "  Run: bazel build //platform/broadcom:sonic_broadcom_minimal --strategy=CopyToDirectory=local"
+  echo "  No pre-built .debs yet. Build the full chain:"
+  echo "    bazel build //src/sonic-swss:swss_deb --spawn_strategy=local --jobs=1"
 fi
 
 echo ""
 echo "━━━ Summary ━━━"
 echo ""
-echo "✅ Bazel ${BAZEL_VER} with bzlmod"
-echo "✅ ${BUILD_COUNT} BUILD.bazel files"
-echo "✅ rules_distroless: 190 Debian packages at fetch time"
-echo "✅ Hermetic LLVM/Clang 18 toolchain + Bookworm sysroot"
-echo "✅ slim_apt_layer: 75% image size reduction"
+echo "  Bazel ${BAZEL_VER} with bzlmod"
+echo "  ${BUILD_COUNT} BUILD.bazel files"
+echo "  rules_distroless: hermetic Debian packages from snapshot.debian.org"
+echo "  oci_image: Docker images assembled without Docker daemon"
+echo "  slim_apt_layer: ELF strip + locale/man/doc removal = 75% size reduction"
+echo ""
+echo "  Repo: https://github.com/baxia-lan/sonic-buildimage/tree/claude"

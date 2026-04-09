@@ -67,3 +67,11 @@ packages:
   - pciutils
   - libteam-utils
   - python3-pip
+  - libdbus-1-3
+  - dbus
+  - bash
+  - coreutils
+  - supervisor
+  - lsb-base
+  - adduser
+  - passwd
