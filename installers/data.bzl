@@ -19,6 +19,10 @@ NON_HERMETIC_INSTALLER_NOTES = [
     "This Bazel target owns the installer composition graph and compatibility export surface before the final concrete builder replacement.",
 ]
 
+BROADCOM_VENDOR_SAI_DEPS = [
+    "//platforms/broadcom:vendor_sai_debs",
+]
+
 BROADCOM_LAZY_INSTALLS = [
     "ARISTA_PLATFORM_MODULE_ALL",
     "DELL_S6000_PLATFORM_MODULE",
@@ -160,6 +164,7 @@ BROADCOM_PLATFORM = {
     "platform_name": "broadcom",
     "dependent_machines": ["broadcom-dnx", "broadcom-legacy-th"],
     "configured_arches": COMMON_ARCH_AMD64,
+    "deps": BROADCOM_VENDOR_SAI_DEPS,
     "legacy_installs": [
         "PDDF_PLATFORM_MODULE",
         "SYSTEMD_SONIC_GENERATOR",
@@ -191,6 +196,7 @@ BROADCOM_ONIE = {
     "dependent_machines": ["broadcom-dnx", "broadcom-legacy-th"],
     "configured_arches": COMMON_ARCH_AMD64,
     "installer_format": "onie",
+    "deps": BROADCOM_VENDOR_SAI_DEPS,
     "legacy_installs": [
         "PDDF_PLATFORM_MODULE",
         "SYSTEMD_SONIC_GENERATOR",
@@ -218,6 +224,7 @@ BROADCOM_RAW = {
     "platform_name": "broadcom",
     "configured_arches": COMMON_ARCH_AMD64,
     "installer_format": "raw",
+    "deps": BROADCOM_VENDOR_SAI_DEPS,
     "legacy_installs": [
         "BRCM_OPENNSL_KERNEL",
         "SYSTEMD_SONIC_GENERATOR",
@@ -242,6 +249,7 @@ BROADCOM_ABOOT = {
     "dependent_machines": ["broadcom-dnx", "broadcom-legacy-th"],
     "configured_arches": COMMON_ARCH_AMD64,
     "installer_format": "aboot",
+    "deps": BROADCOM_VENDOR_SAI_DEPS,
     "legacy_installs": [
         "FLASHROM",
         "SYSTEMD_SONIC_GENERATOR",

@@ -3,6 +3,30 @@ load("//platforms:defs.bzl", "sonic_platform_manifest", "sonic_platform_prepare_
 
 package(default_visibility = ["//visibility:public"])
 
+alias(
+    name = "libsaibcm_xgs_deb",
+    actual = "@broadcom_libsaibcm_xgs_deb//file",
+)
+
+alias(
+    name = "libsaibcm_xgs_dev_deb",
+    actual = "@broadcom_libsaibcm_xgs_dev_deb//file",
+)
+
+alias(
+    name = "libsaibcm_dnx_deb",
+    actual = "@broadcom_libsaibcm_dnx_deb//file",
+)
+
+filegroup(
+    name = "vendor_sai_debs",
+    srcs = [
+        ":libsaibcm_xgs_deb",
+        ":libsaibcm_xgs_dev_deb",
+        ":libsaibcm_dnx_deb",
+    ],
+)
+
 sonic_platform_manifest(
     name = "platform",
     data = BROADCOM_PLATFORM,

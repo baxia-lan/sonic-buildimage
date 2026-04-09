@@ -15,6 +15,7 @@ bazel_dep(name = "rules_distroless", version = "0.6.2")
 bazel_dep(name = "rules_img", version = "0.3.5")
 
 oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
+non_module_dependencies = use_extension("//bazel/repositories:extensions.bzl", "non_module_dependencies")
 
 oci.pull(
     name = "debian_bookworm",
@@ -27,6 +28,39 @@ use_repo(
     oci,
     "debian_bookworm",
     "debian_bookworm_linux_amd64",
+)
+
+# Keep Broadcom vendor SAI payloads pinned in Bzlmod instead of discovering
+# them implicitly through legacy installer logic.
+non_module_dependencies.file(
+    name = "broadcom_libsaibcm_xgs_deb",
+    urls = [
+        "https://packages.trafficmanager.net/public/sai/sai-broadcom/SAI_13.2.1_GA/13.2.1.7/xgs/libsaibcm_13.2.1.7_amd64.deb",
+    ],
+    sha256 = "f7446d4772f1e293d2a23611baa110f453ef23ec8ab79e3d23c5f33228ea4b08",
+)
+
+non_module_dependencies.file(
+    name = "broadcom_libsaibcm_xgs_dev_deb",
+    urls = [
+        "https://packages.trafficmanager.net/public/sai/sai-broadcom/SAI_13.2.1_GA/13.2.1.7/xgs/libsaibcm-dev_13.2.1.7_amd64.deb",
+    ],
+    sha256 = "ea17880af1c8cc40a1f1ba63b9cfae666dc20c8a3de4f3791b4168ca6e83c399",
+)
+
+non_module_dependencies.file(
+    name = "broadcom_libsaibcm_dnx_deb",
+    urls = [
+        "https://packages.trafficmanager.net/public/sai/sai-broadcom/SAI_13.2.1_EA/13.2.1.1/dnx/libsaibcm_dnx_13.2.1.1_amd64.deb",
+    ],
+    sha256 = "3121afcc2aa4d66acf4f325d7dcca30e7d2c91619b177ee3b3b2ff60a65e9322",
+)
+
+use_repo(
+    non_module_dependencies,
+    "broadcom_libsaibcm_xgs_deb",
+    "broadcom_libsaibcm_xgs_dev_deb",
+    "broadcom_libsaibcm_dnx_deb",
 )
 
 # Additional toolchain and repository extension setup is added incrementally as
