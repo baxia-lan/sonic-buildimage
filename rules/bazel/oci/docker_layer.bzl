@@ -56,9 +56,9 @@ touch "$$OUT"
 docker run --rm --platform linux/amd64 \
   -v "$$OUT:/output/layer.tar" \
   -e DEBIAN_FRONTEND=noninteractive \
-  -e SOURCE_DATE_EPOCH=0 \
   {image} \
-  bash -euo pipefail -c '
+  bash -o pipefail -c '
+    unset SOURCE_DATE_EPOCH
     apt-get update -qq
     apt-get install -y -qq --no-install-recommends {packages}
     {pip_cmd}
@@ -150,9 +150,9 @@ done
 docker run --rm --platform linux/amd64 \
   -v "$$DEB_DIR:/debs:ro" \
   -v "$$OUT:/output/layer.tar" \
-  -e SOURCE_DATE_EPOCH=0 \
+  -e DEBIAN_FRONTEND=noninteractive \
   {image} \
-  bash -euo pipefail -c '
+  bash -o pipefail -c '
     ROOTFS=$$(mktemp -d)
     for deb in /debs/*.deb; do
       [ -s "$$deb" ] && dpkg-deb -x "$$deb" "$$ROOTFS" 2>/dev/null || true
