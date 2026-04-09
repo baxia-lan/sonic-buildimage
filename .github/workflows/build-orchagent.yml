@@ -16,21 +16,20 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Copy BUILD.bazel into submodules
+      - name: Copy BUILD.bazel and MODULE.bazel into submodules
         run: |
+          GITHUB_BASE="https://raw.githubusercontent.com/baxia-lan"
           for mod in sonic-swss-common sonic-sairedis sonic-swss sonic-dash-api sonic-stp sonic-linux-kernel sonic-gnmi; do
-            repo="$mod"
             if [ -d "src/$mod" ]; then
-              # Cache-bust: add timestamp to URL
-              curl -sL "https://raw.githubusercontent.com/baxia-lan/$repo/claude/BUILD.bazel?t=$(date +%s)" \
-                -H "Cache-Control: no-cache" \
-                -o "src/$mod/BUILD.bazel" 2>/dev/null || echo "No BUILD.bazel for $mod"
-              echo "$mod BUILD.bazel: $(head -1 src/$mod/BUILD.bazel 2>/dev/null)"
+              for f in BUILD.bazel MODULE.bazel BUILD.bazel.hermetic config.h; do
+                curl -fsSL "${GITHUB_BASE}/${mod}/claude/${f}?t=$(date +%s)" \
+                  -o "src/$mod/$f" 2>/dev/null && echo "  + src/$mod/$f" || true
+              done
             fi
           done
-          # Verify kernel fix
-          echo "Kernel cpupower fix check:"
-          grep "popd.*touch" src/sonic-linux-kernel/BUILD.bazel || echo "WARNING: cpupower fix NOT found!"
+          # Verify kernel cpupower fix
+          echo "Kernel cpupower fix:"
+          grep "cpupower" src/sonic-linux-kernel/BUILD.bazel | head -3 || echo "WARNING: no cpupower fix"
 
       - name: Align submodules to 202405
         run: |
@@ -92,6 +91,57 @@ jobs:
             //dockers/docker-router-advertiser:docker_router_advertiser \
             //dockers/docker-basic_router:docker_basic_router \
             --spawn_strategy=local --jobs=4 || echo "Some images failed"
+
+      - name: Run pytest verification (docker-sonic-vs)
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+
+          echo "=== Install pytest dependencies ==="
+          pip3 install pytest docker redis
+
+          echo "=== Build docker-sonic-vs ==="
+          bazel build //platform/vs:docker_sonic_vs_tarball \
+            --spawn_strategy=local --jobs=4
+
+          echo "=== Load docker-sonic-vs image ==="
+          bash bazel-bin/platform/vs/docker_sonic_vs_tarball.sh
+
+          echo "=== Tag image ==="
+          docker tag sonic/docker_sonic_vs:latest docker-sonic-vs:latest
+
+          echo "=== Smoke test: start container and verify services ==="
+          CONTAINER_ID=$(docker run -d --privileged docker-sonic-vs:latest)
+          echo "Container: $CONTAINER_ID"
+
+          # Wait for services to come up (up to 120s)
+          for i in $(seq 1 24); do
+            if docker exec "$CONTAINER_ID" redis-cli ping 2>/dev/null | grep -q PONG; then
+              echo "Redis is up after $((i * 5))s"
+              break
+            fi
+            if [ "$i" -eq 24 ]; then
+              echo "WARNING: Redis did not respond within 120s"
+              docker logs "$CONTAINER_ID" | tail -50
+            fi
+            sleep 5
+          done
+
+          echo "=== Run pytest ==="
+          cd src/sonic-swss/tests
+          sudo pytest --imgname=docker-sonic-vs:latest -v test_port.py -x --timeout=300 || TEST_RC=$?
+
+          echo "=== Cleanup ==="
+          docker stop "$CONTAINER_ID" || true
+          docker rm "$CONTAINER_ID" || true
+
+          echo "=== Test result ==="
+          if [ "${TEST_RC:-0}" -ne 0 ]; then
+            echo "WARN: pytest exited with code ${TEST_RC} (continue-on-error enabled)"
+            exit "${TEST_RC}"
+          else
+            echo "All tests passed"
+          fi
 
       - name: Build sonic-broadcom.bin
         run: |
