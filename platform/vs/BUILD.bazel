@@ -17,7 +17,7 @@ Load & test:
 load("@rules_oci//oci:defs.bzl", "oci_image", "oci_load")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 load("//rules/bazel/oci:sonic_docker.bzl", "slim_apt_layer")
-load("//rules/bazel/oci:docker_layer.bzl", "apt_install_layer", "deb_extract_layer")
+load("//rules/bazel/oci:docker_layer.bzl", "deb_extract_layer")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -52,9 +52,9 @@ slim_apt_layer(
 deb_extract_layer(
     name = "vs_sonic_debs",
     debs = [
-        "//src/sonic-swss-common:swss_common",
-        "//src/sonic-swss-common:python3_swsscommon",
-        "//src/sonic-swss-common:sonic_db_cli",
+        "//build/deb/sonic-swss-common:swss_common",
+        "//build/deb/sonic-swss-common:python3_swsscommon",
+        "//build/deb/sonic-swss-common:sonic_db_cli",
         "//src/sonic-sairedis:sairedis",
         "//src/sonic-sairedis:saivs",
         "//src/sonic-sairedis:saimetadata",
@@ -101,42 +101,81 @@ pkg_tar(
     mode = "0755",
 )
 
-# ── Layer 5: FRR + supervisor + sonic-cfggen (Docker-based) ─────────────────
-# FRR comes from deb.frrouting.org (not in standard Debian repos).
-# sonic-cfggen and Python packages are built from source inside Docker.
-# This layer is the only non-hermetic part — everything else is OCI-native.
-# v2: FRR + supervisor runtime
-apt_install_layer(
+# ── Layer 5a: FRR runtime dependencies (hermetic, from rules_distroless) ────
+# Python packages, supervisor, and shared libraries that FRR needs.
+# All resolved at fetch time from snapshot.debian.org.
+slim_apt_layer(
+    name = "vs_frr_deps",
+    srcs = [
+        # Supervisor + system services
+        "@bookworm_rsyslog_8.2302.0-1-p-deb12u1_amd64//:data",
+        # Python packages for FRR and sonic-cfggen
+        "@bookworm_python3_3.11.2-1-p-b1_amd64//:data",
+        "@bookworm_python3-yaml_6.0-3-p-b2_amd64//:data",
+        "@bookworm_python3-netifaces_0.11.0-2-p-b1_amd64//:data",
+        # FRR shared library dependencies
+        "@bookworm_libjansson4_2.14-2_amd64//:data",
+        "@bookworm_libyang2_2.1.30-2_amd64//:data",
+        "@bookworm_libcap2_1-2.66-4-p-deb12u2-p-b2_amd64//:data",
+        "@bookworm_libreadline8_8.2-1.3_amd64//:data",
+        "@bookworm_libpam0g_1.5.2-6-p-deb12u2_amd64//:data",
+        "@bookworm_jq_1.6-2.1-p-deb12u1_amd64//:data",
+    ],
+)
+
+# ── Layer 5b: FRR binaries (hermetic, from @frr repo) ──────────────────────
+# FRR 10.x .deb packages downloaded from deb.frrouting.org at fetch time.
+# Pinned by sha256 in MODULE.bazel. No Docker, no apt-get at build time.
+#
+# The @frr//:frr target is a tarball of the extracted frr .deb contents.
+# The @frr//:frr_pythontools target has FRR's Python management tools.
+# These are merged and slimmed (stripped, docs removed) via genrule.
+genrule(
     name = "vs_frr_layer",
-    packages = [
-        "supervisor",
-        "rsyslog",
-        "python3-pip",
-        "python3-jinja2",
-        "python3-netaddr",
-        "python3-natsort",
-        "python3-click",
-        "python3-tabulate",
-        "python3-lxml",
-        "python3-redis",
-        "python3-netifaces",
-        "python3-yaml",
-        "net-tools",
-        "ifupdown",
-        "jq",
-        "curl",
-        "gnupg",
-        "libjansson4",
+    srcs = [
+        "@frr//:frr",
+        "@frr//:frr_pythontools",
     ],
-    post_install_cmds = [
-        # Install FRR from official repo
-        "curl -s https://deb.frrouting.org/frr/keys.gpg | tee /usr/share/keyrings/frrouting.gpg >/dev/null",
-        "echo 'deb [signed-by=/usr/share/keyrings/frrouting.gpg] https://deb.frrouting.org/frr bookworm frr-stable' > /etc/apt/sources.list.d/frr.list",
-        "apt-get update -qq && apt-get install -y -qq --no-install-recommends frr frr-pythontools || true",
-        # Symlink FRR binaries into PATH
-        "for f in /usr/lib/frr/*; do [ -x $$f ] && ln -sf $$f /usr/sbin/$$(basename $$f); done || true",
-    ],
-    size_budget_mb = 300,
+    outs = ["vs_frr_layer.tar"],
+    cmd = """\
+set -euo pipefail
+TMPDIR=$$(mktemp -d)
+cleanup() { rm -rf "$$TMPDIR"; }
+trap cleanup EXIT
+
+# Extract both FRR package tars into staging directory
+for src in $(SRCS); do
+    tar xf "$$src" -C "$$TMPDIR" 2>/dev/null || true
+done
+
+# Strip ELF binaries
+if command -v strip >/dev/null 2>&1 && command -v file >/dev/null 2>&1; then
+    find "$$TMPDIR" -type f | while IFS= read -r f; do
+        if file "$$f" 2>/dev/null | grep -q " ELF "; then
+            strip --strip-unneeded "$$f" 2>/dev/null || true
+        fi
+    done
+fi
+
+# Remove docs, man pages, locale data (except en_US.UTF-8)
+rm -rf "$$TMPDIR/usr/share/man" "$$TMPDIR/usr/share/doc"
+if [ -d "$$TMPDIR/usr/share/locale" ]; then
+    find "$$TMPDIR/usr/share/locale" -mindepth 1 -maxdepth 1 \\
+        ! -name "en_US.UTF-8" ! -name "locale.alias" -exec rm -rf {} + 2>/dev/null || true
+fi
+find "$$TMPDIR" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+
+# Create symlinks for FRR binaries in PATH
+if [ -d "$$TMPDIR/usr/lib/frr" ]; then
+    mkdir -p "$$TMPDIR/usr/sbin"
+    for f in "$$TMPDIR/usr/lib/frr/"*; do
+        [ -x "$$f" ] && ln -sf "/usr/lib/frr/$$(basename $$f)" "$$TMPDIR/usr/sbin/$$(basename $$f)" || true
+    done
+fi
+
+# Repack with reproducible timestamps
+tar --sort=name --mtime=@0 --owner=0 --group=0 -cf "$@" -C "$$TMPDIR" .
+""",
 )
 
 # ── Layer 6: sonic-cfggen + Python packages (Docker-based) ──────────────────
@@ -196,6 +235,7 @@ oci_image(
     tars = [
         ":vs_runtime_apt",
         ":vs_sonic_debs",
+        ":vs_frr_deps",
         ":vs_frr_layer",
         ":vs_python_layer",
         ":vs_config_layer",

@@ -1,0 +1,149 @@
+"""sonic-swss-common Debian packages.
+
+Deb packaging lives in the root workspace because it depends on root-workspace
+build rules (//rules/bazel/deb:deb.bzl, //platforms:*). The native cc_library
+targets live in the submodule itself, accessed via @sonic_swss_common//:swsscommon.
+"""
+
+package(default_visibility = ["//visibility:public"])
+
+_BUILD_IMAGE = "debian:bookworm-slim"
+
+_COMMON_BUILD_DEPS = " ".join([
+    "build-essential",
+    "dpkg-dev",
+    "fakeroot",
+    "debhelper",
+    "cmake",
+    "libnl-3-dev",
+    "libnl-genl-3-dev",
+    "libnl-route-3-dev",
+    "libnl-nf-3-dev",
+    "libhiredis-dev",
+    "swig",
+    "libgtest-dev",
+    "libgmock-dev",
+    "libboost-dev",
+    "libboost-serialization-dev",
+    "libzmq3-dev",
+    "pkg-config",
+    "dh-exec",
+    "nlohmann-json3-dev",
+    "python3-dev",
+    "libprotobuf-dev",
+    "protobuf-compiler",
+    "autoconf",
+    "automake",
+    "libtool",
+    "libyang2-dev",
+    "curl",
+    "uuid-dev",
+    "ca-certificates",
+    "libclang-dev",
+    "clang",
+    "autoconf-archive",
+    "doxygen",
+    "graphviz",
+    "perl",
+    "libxml-simple-perl",
+    "git",
+    "aspell",
+    "aspell-en",
+    "libjansson-dev",
+    "libteam-dev",
+    "libjemalloc-dev",
+])
+
+genrule(
+    name = "swss_common_debs",
+    srcs = [
+        "@sonic_swss_common//:all_srcs",
+        "//src/libnl3:libnl3_dev",
+    ],
+    outs = [
+        "libswsscommon_1.0.0_amd64.deb",
+        "libswsscommon-dev_1.0.0_amd64.deb",
+        "python3-swsscommon_1.0.0_amd64.deb",
+        "sonic-db-cli_1.0.0_amd64.deb",
+    ],
+    cmd = """
+set -euo pipefail
+# Locate the submodule source tree via a known file
+CONFIG_H=$$(echo $(locations @sonic_swss_common//:all_srcs) | tr ' ' '\\n' | grep 'config\\.h$$' | head -1)
+SRC_DIR=$$(cd $$(dirname "$$CONFIG_H") && pwd)
+STAGING=$$(mktemp -d)
+DEPS_DIR=$$(mktemp -d)
+find . -path './bazel-out/*/bin/src/*' -name '*.deb' -size +0 2>/dev/null | while IFS= read -r f; do cp "$$f" "$$DEPS_DIR/" 2>/dev/null; done || true
+docker run --rm --platform linux/amd64 \\
+  -v "$$SRC_DIR:/src:ro" \\
+  -v "$$STAGING:/output" \\
+  -v "$$DEPS_DIR:/deps:ro" \\
+  -e DEBIAN_FRONTEND=noninteractive \\
+  """ + _BUILD_IMAGE + """ \\
+  bash -o pipefail -c '
+    unset SOURCE_DATE_EPOCH
+    apt-get update -qq
+    apt-get install -y -qq --no-install-recommends """ + _COMMON_BUILD_DEPS + """
+    curl -sSL https://raw.githubusercontent.com/zeromq/cppzmq/v4.10.0/zmq.hpp -o /usr/include/zmq.hpp
+    curl -sSL https://raw.githubusercontent.com/zeromq/cppzmq/v4.10.0/zmq_addon.hpp -o /usr/include/zmq_addon.hpp
+    curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal 2>/dev/null
+    export PATH=/root/.cargo/bin:$$PATH
+    if ls /deps/*.deb >/dev/null 2>&1; then dpkg --force-overwrite --force-depends -i /deps/*.deb 2>&1 || true; fi
+    apt-get install -f -y -qq 2>/dev/null || true
+    ldconfig
+    cp -a /src /tmp/build-src
+    cd /tmp/build-src
+    find . -name .git -type f -delete 2>/dev/null || true
+    rm -rf .git
+    git config --global user.email build@sonic && git config --global user.name sonic
+    git init -q && git add -A . && git commit -qm init 2>/dev/null || true
+    for v in 1.10.0 1.11.0 1.12.0 1.13.0 1.14.0 1.15.0 1.16.0; do git tag v$$v 2>/dev/null || true; done
+    unset MAKEFLAGS 2>/dev/null || true
+    export DEB_BUILD_OPTIONS=nocheck
+    PATH=/root/.cargo/bin:$$PATH dpkg-buildpackage -rfakeroot -b -us -uc -d -Pnoyangmod,nopython2 -j2 2>&1; DPKG_EXIT=$$?
+    echo "dpkg-buildpackage exit: $$DPKG_EXIT"
+    cp /tmp/*.deb /output/ 2>/dev/null || true
+  '
+for out in $(OUTS); do
+  base=$$(basename "$$out")
+  if [ -f "$$STAGING/$$base" ]; then
+    cp "$$STAGING/$$base" "$$out"
+  else
+    echo "FAIL: $$base not in staging"
+    ls "$$STAGING"/*.deb 2>/dev/null || true
+    exit 1
+  fi
+done
+rm -rf "$$STAGING" "$$DEPS_DIR"
+""",
+    tags = [
+        "no-cache",
+        "no-sandbox",
+        "requires-docker",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "swss_common",
+    actual = ":swss_common_debs",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "swss_common_dev",
+    actual = ":swss_common_debs",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "python3_swsscommon",
+    actual = ":swss_common_debs",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "sonic_db_cli",
+    actual = ":swss_common_debs",
+    visibility = ["//visibility:public"],
+)

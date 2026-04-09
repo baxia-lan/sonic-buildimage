@@ -1,3 +1,6 @@
 """Debian package building rules — public API."""
 
-exports_files(["deb.bzl"])
+exports_files([
+    "deb.bzl",
+    "frr_repo.bzl",
+])

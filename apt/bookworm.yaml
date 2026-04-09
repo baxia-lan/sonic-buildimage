@@ -75,3 +75,21 @@ packages:
   - lsb-base
   - adduser
   - passwd
+
+  # FRR runtime dependencies (from standard Debian repos)
+  # FRR itself comes from @frr repo (deb.frrouting.org, pinned by sha256).
+  # These are the shared libraries FRR links against at runtime.
+  - libc-ares2
+  - libjson-c5
+  - libprotobuf-c1
+  - libsnmp40
+  - python3-jinja2
+  - python3-netaddr
+  - python3-natsort
+  - python3-click
+  - python3-tabulate
+  - python3-lxml
+  - python3-redis
+  - curl
+  - gnupg
+  - libjansson4

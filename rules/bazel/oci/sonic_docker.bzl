@@ -45,7 +45,7 @@ Example:
             "@bookworm//redis-tools:data",
         ],
         debs = [
-            "//src/sonic-swss-common:libswsscommon",
+            "@sonic_swss_common//:libswsscommon",
         ],
         configs = {
             "/usr/share/sonic/templates/supervisord.conf.j2": "supervisord.conf.j2",

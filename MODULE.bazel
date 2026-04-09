@@ -28,6 +28,9 @@ bazel_dep(name = "gazelle", version = "0.40.0")
 # ── C/C++ foreign build systems (autotools, cmake) ───────────────────────────
 bazel_dep(name = "rules_foreign_cc", version = "0.13.0")
 
+# ── SONiC submodules (resolved via local registry) ───────────────────────────
+bazel_dep(name = "sonic_swss_common", version = "0.0.0")
+
 # ── OCI / container images ────────────────────────────────────────────────────
 bazel_dep(name = "rules_oci", version = "2.0.0")
 
@@ -123,6 +126,31 @@ _sysroot_repo(
         # GTest (tests)
         "libgtest-dev": [_SNAPSHOT + "/g/googletest/libgtest-dev_1.12.1-0.2_amd64.deb"],
         "libgmock-dev": [_SNAPSHOT + "/g/googletest/libgmock-dev_1.12.1-0.2_amd64.deb"],
+    },
+)
+
+# ── FRR (Free Range Routing) packages — pinned from deb.frrouting.org ────────
+# FRR is not in standard Debian repos (bookworm has 8.4.x, SONiC needs 10.x).
+# Downloaded at fetch time with sha256 pins. No network at build time.
+# Pool index: https://deb.frrouting.org/frr/pool/frr-stable/f/frr/
+_FRR_POOL = "https://deb.frrouting.org/frr/pool/frr-stable/f/frr"
+
+_frr_repo = use_repo_rule("//rules/bazel/deb:frr_repo.bzl", "frr_deb_repo")
+
+_frr_repo(
+    name = "frr",
+    packages = {
+        # FRR 10.6.0 for Debian 12 (bookworm) amd64 — frr-stable branch
+        # To update: browse the pool index, download new .deb, compute sha256:
+        #   curl -sL <url> | sha256sum
+        "frr": [
+            _FRR_POOL + "/frr_10.6.0-0~deb12u1_amd64.deb",
+            "6b48510913aaea86c1b1f31fb06819d873ad069aba1efabb15b2420a45bced15",
+        ],
+        "frr-pythontools": [
+            _FRR_POOL + "/frr-pythontools_10.6.0-0~deb12u1_all.deb",
+            "f5f6c28517667b8739da763e8c67350a91540faf53a4364bfc3aeda2697dd143",
+        ],
     },
 )
 

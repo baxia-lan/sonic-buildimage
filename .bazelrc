@@ -1,6 +1,12 @@
 # SONiC Buildimage — Bazel 8 flags
 # Hermetic build: no host tools, no network in build actions.
 
+# ── Local registry (submodule workspace boundary fix) ────────────────────────
+# Local registry must come first so submodule modules resolve locally.
+# BCR must be listed explicitly because --registry overrides the default.
+common --registry=file://%workspace%/tools/bazel/registry
+common --registry=https://bcr.bazel.build
+
 # ── Hermeticity ──────────────────────────────────────────────────────────────
 build --incompatible_strict_action_env=true
 build --sandbox_default_allow_network=false
