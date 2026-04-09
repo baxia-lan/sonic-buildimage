@@ -82,11 +82,44 @@ pkg_tar(
 )
 
 # Device data (lanemap.ini, port_config.ini, sai.profile, etc.)
-pkg_tar(
+# Force10-S6000 is the VS HWSKU used by start.sh. In the Make system,
+# sonic-device-data generates it from SONiC-VM. We replicate that here.
+genrule(
     name = "vs_device_data_layer",
-    srcs = ["//device/virtual:vs_device_data"],
-    package_dir = "/usr/share/sonic/device/x86_64-kvm_x86_64-r0",
-    strip_prefix = "device/virtual/x86_64-kvm_x86_64-r0",
+    srcs = [
+        "//device/virtual:vs_device_data",
+        "docker-sonic-vs/hwsku.json",
+    ],
+    outs = ["vs_device_data_layer.tar"],
+    cmd = """\
+set -euo pipefail
+STAGING=$$(mktemp -d)
+trap 'rm -rf "$$STAGING"' EXIT
+DEVDIR="$$STAGING/usr/share/sonic/device/x86_64-kvm_x86_64-r0"
+mkdir -p "$$DEVDIR"
+
+# Copy the base VS device data (SONiC-VM, brcm_gearbox_vs, DPU-2P, etc.)
+for f in $(locations //device/virtual:vs_device_data); do
+  REL=$${f#device/virtual/x86_64-kvm_x86_64-r0/}
+  if [ "$$REL" != "$$f" ]; then
+    DEST_DIR="$$DEVDIR/$$(dirname $$REL)"
+    mkdir -p "$$DEST_DIR"
+    cp "$$f" "$$DEST_DIR/" 2>/dev/null || true
+  fi
+done
+
+# Create Force10-S6000 from SONiC-VM (as the Make system does)
+F10DIR="$$DEVDIR/Force10-S6000"
+mkdir -p "$$F10DIR"
+if [ -d "$$DEVDIR/SONiC-VM" ]; then
+  cp "$$DEVDIR/SONiC-VM"/* "$$F10DIR/" 2>/dev/null || true
+fi
+# Override hwsku.json with the VS-specific one
+cp $(location docker-sonic-vs/hwsku.json) "$$F10DIR/hwsku.json"
+
+TAR=tar; command -v gtar >/dev/null 2>&1 && TAR=gtar
+$$TAR --sort=name --mtime=@0 --owner=0 --group=0 -cf "$@" -C "$$STAGING" .
+""",
 )
 
 # ── Layer 4: Support scripts and templates ──────────────────────────────────
@@ -174,7 +207,8 @@ if [ -d "$$TMPDIR/usr/lib/frr" ]; then
 fi
 
 # Repack with reproducible timestamps
-tar --sort=name --mtime=@0 --owner=0 --group=0 -cf "$@" -C "$$TMPDIR" .
+TAR=tar; command -v gtar >/dev/null 2>&1 && TAR=gtar
+$$TAR --sort=name --mtime=@0 --owner=0 --group=0 -cf "$@" -C "$$TMPDIR" .
 """,
 )
 

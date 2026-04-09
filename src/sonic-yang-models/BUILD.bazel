@@ -2,6 +2,12 @@ load("//rules/bazel/wheel:wheel.bzl", "sonic_wheel")
 
 package(default_visibility = ["//visibility:public"])
 
+filegroup(
+    name = "yang_model_files",
+    srcs = glob(["yang-models/*.yang"]),
+    visibility = ["//visibility:public"],
+)
+
 sonic_wheel(
     name = "sonic_yang_models_wheel",
     distribution = "sonic_yang_models",

@@ -1,0 +1,197 @@
+"""Hermetic Python layer for SONiC OCI images.
+
+Packages pure-Python SONiC libraries (sonic-py-common, sonic-config-engine,
+sonic-yang-models, sonic-yang-mgmt) and their pip dependencies into a single
+tar layer suitable for oci_image assembly.
+
+No Docker daemon, no pip install, no network access at build time.
+Python source files are placed directly into the site-packages layout
+that matches what `setup.py install` would produce.
+"""
+
+package(default_visibility = ["//visibility:public"])
+
+# ── SONiC pure-Python packages layer ────────────────────────────────────────
+# Assembles source files from four SONiC Python packages into the filesystem
+# paths where setup.py would install them. This replaces the Docker-based
+# vs_python_layer genrule with a fully hermetic build action.
+genrule(
+    name = "sonic_python_layer",
+    srcs = [
+        # sonic-py-common
+        "//src/sonic-py-common/sonic_py_common:__init__.py",
+        "//src/sonic-py-common/sonic_py_common:daemon_base.py",
+        "//src/sonic-py-common/sonic_py_common:device_info.py",
+        "//src/sonic-py-common/sonic_py_common:general.py",
+        "//src/sonic-py-common/sonic_py_common:interface.py",
+        "//src/sonic-py-common/sonic_py_common:logger.py",
+        "//src/sonic-py-common/sonic_py_common:multi_asic.py",
+        "//src/sonic-py-common/sonic_py_common:port_util.py",
+        "//src/sonic-py-common/sonic_py_common:security_cipher.py",
+        "//src/sonic-py-common/sonic_py_common:sidecar_common.py",
+        "//src/sonic-py-common/sonic_py_common:sonic_db_dump_load.py",
+        "//src/sonic-py-common/sonic_py_common:syslogger.py",
+        "//src/sonic-py-common/sonic_py_common:task_base.py",
+        "//src/sonic-py-common/sonic_py_common:util.py",
+        # sonic-config-engine modules
+        "//src/sonic-config-engine:__init__.py",
+        "//src/sonic-config-engine:asic_sensors_config.py",
+        "//src/sonic-config-engine:config_samples.py",
+        "//src/sonic-config-engine:minigraph.py",
+        "//src/sonic-config-engine:openconfig_acl.py",
+        "//src/sonic-config-engine:portconfig.py",
+        "//src/sonic-config-engine:smartswitch_config.py",
+        "//src/sonic-config-engine:sonic_yang_cfg_generator.py",
+        # sonic-config-engine script and data
+        "//src/sonic-config-engine:sonic-cfggen",
+        "//src/sonic-config-engine/data:l1intf.j2",
+        "//src/sonic-config-engine/data:l2switch.j2",
+        "//src/sonic-config-engine/data:l3intf.j2",
+        # sonic-yang-models
+        "//src/sonic-yang-models:yang_model_files",
+        # sonic-yang-mgmt
+        "//src/sonic-yang-mgmt:sonic_yang.py",
+        "//src/sonic-yang-mgmt:sonic_yang_ext.py",
+        "//src/sonic-yang-mgmt:sonic_yang_path.py",
+        "//src/sonic-yang-mgmt:sonic-cfg-help",
+    ],
+    outs = ["sonic_python_layer.tar"],
+    cmd = """\
+set -euo pipefail
+STAGING=$$(mktemp -d)
+trap 'rm -rf "$$STAGING"' EXIT
+
+SITE="$$STAGING/usr/local/lib/python3.11/dist-packages"
+mkdir -p "$$SITE/sonic_py_common"
+mkdir -p "$$STAGING/usr/local/bin"
+mkdir -p "$$STAGING/usr/share/sonic/templates"
+mkdir -p "$$STAGING/usr/local/yang-models"
+
+# sonic-py-common: package directory under site-packages
+for f in $(locations //src/sonic-py-common/sonic_py_common:__init__.py) \
+         $(locations //src/sonic-py-common/sonic_py_common:daemon_base.py) \
+         $(locations //src/sonic-py-common/sonic_py_common:device_info.py) \
+         $(locations //src/sonic-py-common/sonic_py_common:general.py) \
+         $(locations //src/sonic-py-common/sonic_py_common:interface.py) \
+         $(locations //src/sonic-py-common/sonic_py_common:logger.py) \
+         $(locations //src/sonic-py-common/sonic_py_common:multi_asic.py) \
+         $(locations //src/sonic-py-common/sonic_py_common:port_util.py) \
+         $(locations //src/sonic-py-common/sonic_py_common:security_cipher.py) \
+         $(locations //src/sonic-py-common/sonic_py_common:sidecar_common.py) \
+         $(locations //src/sonic-py-common/sonic_py_common:sonic_db_dump_load.py) \
+         $(locations //src/sonic-py-common/sonic_py_common:syslogger.py) \
+         $(locations //src/sonic-py-common/sonic_py_common:task_base.py) \
+         $(locations //src/sonic-py-common/sonic_py_common:util.py); do
+    cp "$$f" "$$SITE/sonic_py_common/"
+done
+
+# sonic-config-engine: top-level modules in site-packages
+for f in $(location //src/sonic-config-engine:__init__.py) \
+         $(location //src/sonic-config-engine:asic_sensors_config.py) \
+         $(location //src/sonic-config-engine:config_samples.py) \
+         $(location //src/sonic-config-engine:minigraph.py) \
+         $(location //src/sonic-config-engine:openconfig_acl.py) \
+         $(location //src/sonic-config-engine:portconfig.py) \
+         $(location //src/sonic-config-engine:smartswitch_config.py) \
+         $(location //src/sonic-config-engine:sonic_yang_cfg_generator.py); do
+    cp "$$f" "$$SITE/"
+done
+
+# sonic-cfggen binary
+cp $(location //src/sonic-config-engine:sonic-cfggen) "$$STAGING/usr/local/bin/sonic-cfggen"
+chmod 755 "$$STAGING/usr/local/bin/sonic-cfggen"
+
+# sonic-config-engine data templates
+cp $(location //src/sonic-config-engine/data:l1intf.j2) "$$STAGING/usr/share/sonic/templates/"
+cp $(location //src/sonic-config-engine/data:l2switch.j2) "$$STAGING/usr/share/sonic/templates/"
+cp $(location //src/sonic-config-engine/data:l3intf.j2) "$$STAGING/usr/share/sonic/templates/"
+
+# sonic-yang-models: YANG files
+for f in $(locations //src/sonic-yang-models:yang_model_files); do
+    cp "$$f" "$$STAGING/usr/local/yang-models/"
+done
+
+# sonic-yang-mgmt: top-level modules in site-packages
+cp $(location //src/sonic-yang-mgmt:sonic_yang.py) "$$SITE/"
+cp $(location //src/sonic-yang-mgmt:sonic_yang_ext.py) "$$SITE/"
+cp $(location //src/sonic-yang-mgmt:sonic_yang_path.py) "$$SITE/"
+
+# sonic-cfg-help binary
+cp $(location //src/sonic-yang-mgmt:sonic-cfg-help) "$$STAGING/usr/local/bin/sonic-cfg-help"
+chmod 755 "$$STAGING/usr/local/bin/sonic-cfg-help"
+
+# Write .egg-info stubs so pkg_resources.get_distribution() works at runtime
+for pkg_spec in "sonic_py_common 1.0" "sonic_config_engine 1.0" "sonic_yang_models 1.0" "sonic_yang_mgmt 1.0"; do
+    set -- $$pkg_spec
+    PKG=$$1; VER=$$2
+    INFO_DIR="$$SITE/$${PKG}-$${VER}.egg-info"
+    mkdir -p "$$INFO_DIR"
+    cat > "$$INFO_DIR/PKG-INFO" <<PKGEOF
+Metadata-Version: 1.0
+Name: $${PKG//_/-}
+Version: $$VER
+PKGEOF
+    echo "$${PKG//_/-}" > "$$INFO_DIR/top_level.txt"
+done
+
+TAR=tar; command -v gtar >/dev/null 2>&1 && TAR=gtar
+$$TAR --sort=name --mtime=@0 --owner=0 --group=0 -cf "$@" -C "$$STAGING" .
+""",
+)
+
+# ── pip dependencies layer (from @sonic_pip hub) ────────────────────────────
+# Resolved hermetically by rules_python pip.parse() at fetch time.
+# Each @sonic_pip//<pkg> provides a py_library whose runfiles we repackage
+# into the dist-packages directory tree.
+genrule(
+    name = "pip_deps_layer",
+    srcs = [
+        "@sonic_pip//pyangbind",
+        "@sonic_pip//bitarray",
+        "@sonic_pip//netaddr",
+        "@sonic_pip//lxml",
+        "@sonic_pip//natsort",
+        "@sonic_pip//click",
+        "@sonic_pip//tabulate",
+        "@sonic_pip//jsonpatch",
+        "@sonic_pip//jsonpointer",
+        "@sonic_pip//redis_dump_load",
+        "@sonic_pip//packaging",
+        "@sonic_pip//jinja2",
+        "@sonic_pip//markupsafe",
+        "@sonic_pip//pyyaml",
+    ],
+    outs = ["pip_deps_layer.tar"],
+    cmd = """\
+set -euo pipefail
+STAGING=$$(mktemp -d)
+trap 'rm -rf "$$STAGING"' EXIT
+SITE="$$STAGING/usr/local/lib/python3.11/dist-packages"
+mkdir -p "$$SITE"
+
+# rules_python pip.parse() puts each package's files under
+# external/<hub_name>_<pkg>/site-packages/. We find and copy them.
+for src in $(SRCS); do
+    if [ -f "$$src" ]; then
+        SRCDIR=$$(dirname "$$src")
+    else
+        SRCDIR="$$src"
+    fi
+    # Walk up to find the site-packages directory
+    D="$$SRCDIR"
+    while [ "$$D" != "/" ] && [ "$$D" != "." ]; do
+        if [ -d "$$D/site-packages" ]; then
+            cp -a "$$D/site-packages"/. "$$SITE/" 2>/dev/null || true
+            break
+        fi
+        D=$$(dirname "$$D")
+    done
+done
+
+find "$$STAGING" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+find "$$STAGING" -type f -name "*.pyc" -delete 2>/dev/null || true
+
+TAR=tar; command -v gtar >/dev/null 2>&1 && TAR=gtar
+$$TAR --sort=name --mtime=@0 --owner=0 --group=0 -cf "$@" -C "$$STAGING" .
+""",
+)
