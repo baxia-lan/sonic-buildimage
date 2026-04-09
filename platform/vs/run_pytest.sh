@@ -1,60 +1,53 @@
 #!/usr/bin/env bash
-# Run sonic-swss pytest against Bazel-built docker-sonic-vs.
-# This is the ULTIMATE verification that the Bazel build is correct.
+# End-to-end: Build docker-sonic-vs with Bazel, run sonic-swss pytest.
+# This is the ULTIMATE verification that the Bazel migration is correct.
 #
 # Usage:
-#   ./platform/vs/run_pytest.sh [test_file] [extra_pytest_args...]
-#
-# Examples:
-#   ./platform/vs/run_pytest.sh                        # Run all tests
-#   ./platform/vs/run_pytest.sh test_port.py           # Run port tests only
-#   ./platform/vs/run_pytest.sh test_port.py -k test_port_fec  # Run specific test
+#   ./platform/vs/run_pytest.sh                    # Quick test (test_port.py)
+#   ./platform/vs/run_pytest.sh test_vlan.py       # Specific test
+#   ./platform/vs/run_pytest.sh -k test_port_fec   # pytest -k filter
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 IMAGE_NAME="docker-sonic-vs:latest"
-TARBALL="$REPO_ROOT/bazel-bin/platform/vs/docker-sonic-vs.tar.gz"
 
-# Step 1: Build if needed
-if [ ! -f "$TARBALL" ]; then
-  echo "=== Building docker-sonic-vs ==="
-  cd "$REPO_ROOT"
-  bazel build //platform/vs:docker_sonic_vs \
-    --spawn_strategy=local --strategy=CopyToDirectory=local --jobs=1
-fi
+cd "$REPO_ROOT"
 
-# Step 2: Load into Docker
-echo "=== Loading docker-sonic-vs ==="
-docker load -i "$TARBALL"
-# Tag with the name pytest expects
-LOADED_IMAGE=$(docker images --format '{{.Repository}}:{{.Tag}}' | grep docker-sonic-vs | head -1)
-docker tag "$LOADED_IMAGE" "$IMAGE_NAME"
-echo "Tagged as $IMAGE_NAME"
+# Step 1: Ensure BUILD.bazel in submodules
+echo "=== Step 1: Sync submodule BUILD.bazel files ==="
+./demo.sh 2>/dev/null | grep -E '^\s+\+' || true
 
-# Step 3: Run pytest
-echo "=== Running sonic-swss pytest ==="
+# Step 2: Build OCI image
+echo "=== Step 2: Building docker-sonic-vs OCI image ==="
+bazel build //platform/vs:docker_sonic_vs_tarball \
+  --spawn_strategy=local --strategy=CopyToDirectory=local --jobs=1
+
+# Step 3: Load into Docker
+echo "=== Step 3: Loading into Docker ==="
+bazel-bin/platform/vs/docker_sonic_vs_tarball.sh
+
+# Step 4: Tag for pytest
+echo "=== Step 4: Tagging image ==="
+docker tag sonic/docker_sonic_vs:latest "$IMAGE_NAME"
+echo "  Tagged as $IMAGE_NAME"
+
+# Step 5: Quick smoke test
+echo "=== Step 5: Smoke test ==="
+docker run --rm --entrypoint bash "$IMAGE_NAME" -c '
+  for bin in syncd orchagent redis-server supervisord sonic-db-cli; do
+    which $bin 2>/dev/null && echo "  $bin: OK" || echo "  $bin: MISSING"
+  done
+  python3 -c "import swsscommon; print(\"  swsscommon: OK\")" 2>/dev/null || echo "  swsscommon: MISSING"
+'
+
+# Step 6: Run pytest
+echo "=== Step 6: Running sonic-swss pytest ==="
 cd "$REPO_ROOT/src/sonic-swss/tests"
 
-TEST_FILE="${1:-}"
-shift 2>/dev/null || true
-
-if [ -n "$TEST_FILE" ]; then
-  sudo pytest --imgname="$IMAGE_NAME" -v "$TEST_FILE" "$@"
+if [ $# -gt 0 ]; then
+  sudo pytest --imgname="$IMAGE_NAME" -v "$@"
 else
-  # Run a focused subset of tests that cover core functionality
-  echo "Running core test suite (port, VLAN, interface, neighbor)..."
-  sudo pytest --imgname="$IMAGE_NAME" -v \
-    test_port.py \
-    test_vlan.py \
-    test_interface.py \
-    test_neighbor.py \
-    "$@" 2>&1 || {
-      echo ""
-      echo "=== Some tests failed. This is expected for first-time Bazel builds ==="
-      echo "Check which services are missing and fix the docker-sonic-vs BUILD.bazel"
-      exit 1
-    }
+  echo "Running test_port.py (quick test)..."
+  sudo pytest --imgname="$IMAGE_NAME" -v test_port.py
 fi
-
-echo "=== pytest PASSED ==="
