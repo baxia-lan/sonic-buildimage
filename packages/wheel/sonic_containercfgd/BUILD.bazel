@@ -4,13 +4,20 @@ package(default_visibility = ["//visibility:public"])
 
 sonic_py_wheel(
     name = "wheel",
+    builder = "bazel",
+    builder_srcs = ["//src:sonic_containercfgd_package_srcs"],
     legacy_artifact = "sonic_containercfgd-1.0-py3-none-any.whl",
+    output_name = "sonic_containercfgd-1.0-py3-none-any.whl",
+    package_name = "sonic_containercfgd",
+    package_version = "1.0",
     source_path = "src/sonic-containercfgd",
+    source_root = "src/sonic-containercfgd",
     source_makefiles = [
         "rules/sonic-containercfgd.mk",
         "rules/sonic-containercfgd.dep",
     ],
     sources = ["//sources/sonic-containercfgd:source"],
+    wheel_deps = ["//packages/wheel/sonic_py_common:wheel"],
     legacy_deps = [
         "SONIC_PY_COMMON_PY3",
         "LIBSWSSCOMMON",

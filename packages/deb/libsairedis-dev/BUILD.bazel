@@ -1,0 +1,46 @@
+load("//bazel/sonic:defs.bzl", "sonic_deb_package")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_deb_package(
+    name = "deb",
+    builder = "bazel",
+    builder_srcs = ["//src:sonic_sairedis_package_srcs"],
+    build_profiles = [
+        "nopython2",
+        "nopython3",
+    ],
+    deb_pattern = "libsairedis-dev_1.0.0_amd64.deb",
+    legacy_artifact = "libsairedis-dev_1.0.0_$(CONFIGURED_ARCH).deb",
+    migration_stage = "concrete_builder",
+    output_name = "libsairedis-dev_1.0.0_amd64.deb",
+    package_arch = "amd64",
+    package_name = "libsairedis-dev",
+    package_version = "1.0.0",
+    source_path = "src/sonic-sairedis",
+    source_root = "src/sonic-sairedis",
+    source_makefiles = [
+        "rules/sairedis.mk",
+        "rules/sairedis.dep",
+    ],
+    sources = ["//sources/sonic-sairedis:source"],
+    submodule_paths = [
+        "src/sonic-sairedis",
+        "src/sonic-sairedis/SAI",
+        "src/sonic-sairedis/SAI/test/ptf",
+        "src/sonic-sairedis/SAI/test/saithrift/ctypesgen",
+    ],
+    deps = [
+        "//packages/deb/libsairedis:deb",
+        "//packages/deb/libswsscommon:deb",
+        "//packages/deb/libswsscommon-dev:deb",
+    ],
+    metadata = {
+        "derived_from": "LIBSAIREDIS",
+        "legacy_name": "LIBSAIREDIS_DEV",
+        "migration_wave": "orchagent_chain",
+    },
+    notes = [
+        "This derived package provides sairedis headers used by swss concrete builds.",
+    ],
+)

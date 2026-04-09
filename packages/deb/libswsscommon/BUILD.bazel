@@ -13,6 +13,10 @@ sonic_deb_package(
     package_arch = "amd64",
     package_name = "libswsscommon",
     package_version = "1.0.0",
+    build_profiles = [
+        "nopython2",
+        "noyangmod",
+    ],
     source_path = "src/sonic-swss-common",
     source_root = "src/sonic-swss-common",
     source_makefiles = [

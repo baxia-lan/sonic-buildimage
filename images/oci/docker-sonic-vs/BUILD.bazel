@@ -1,26 +1,130 @@
 load("//bazel/sonic:defs.bzl", "sonic_export_to_target_tree", "sonic_oci_image")
-load("//bazel/sonic/private:bridge.bzl", "legacy_artifact_bridge")
+load(":rootfs_layer.bzl", "sonic_rootfs_layer")
 
 package(default_visibility = ["//visibility:public"])
 
+sh_binary(
+    name = "build_rootfs_layer_wrapper",
+    srcs = ["build_rootfs_layer_wrapper.sh"],
+)
+
+genrule(
+    name = "sonic_version_yml",
+    outs = ["sonic_version.yml"],
+    cmd = """cat >$@ <<'EOF'
+---
+build_version: 'bazel-dev'
+asic_type: vs
+commit_id: 'unknown'
+branch: 'codex/codex'
+release: 'none'
+build_date: '1970-01-01'
+build_number: '0'
+built_by: 'bazel'
+sonic_os_version: 'bookworm'
+secure_boot_image: 'no'
+EOF
+""",
+)
+
+filegroup(
+    name = "runtime_layer_files",
+    srcs = [
+        "//files:docker_sonic_vs_runtime_files",
+        "//platform/vs/docker-sonic-vs:runtime_srcs",
+        ":sonic-cfggen",
+        ":docker-init.sh",
+        ":rebootbackend",
+        ":lanemap.ini",
+        ":port_config.ini",
+        "//images/oci/docker-sonic-vs/sonic_py_common:runtime_srcs",
+        ":sonic_version_yml",
+    ],
+)
+
+sonic_rootfs_layer(
+    name = "runtime_layer",
+    output_name = "docker-sonic-vs.runtime.tar",
+    runtime_deps = [
+        "//packages/deb/libsairedis:deb",
+        "//packages/deb/libsaivs:deb",
+        "//packages/deb/libsaimetadata:deb",
+        "//packages/deb/libswsscommon:deb",
+        "//packages/deb/python3-swsscommon:deb",
+        "//packages/deb/sonic-db-cli:deb",
+        "//packages/deb/swss:deb",
+        "//packages/deb/syncd-vs:deb",
+    ],
+    files = [":runtime_layer_files"],
+    file_maps = [
+        "files/build_templates/arp_update_vars.j2=/usr/share/sonic/templates/arp_update_vars.j2",
+        "files/build_templates/buffers_config.j2=/usr/share/sonic/templates/buffers_config.j2",
+        "files/build_templates/qos_config.j2=/usr/share/sonic/templates/qos_config.j2",
+        "files/build_templates/swss_vars.j2=/usr/share/sonic/templates/swss_vars.j2",
+        "files/image_config/copp/copp_cfg.j2=/usr/share/sonic/templates/copp_cfg.j2",
+        "files/scripts/arp_update=/usr/bin/arp_update",
+        "files/scripts/configdb-load.sh=/usr/bin/configdb-load.sh",
+        "files/scripts/update_chassisdb_config=/usr/bin/update_chassisdb_config",
+        "platform/vs/docker-sonic-vs/50-default.conf=/etc/rsyslog.d/50-default.conf",
+        "platform/vs/docker-sonic-vs/asic_table.json=/etc/sonic/asic_table.json",
+        "platform/vs/docker-sonic-vs/buffermgrd.sh=/usr/bin/buffermgrd.sh",
+        "platform/vs/docker-sonic-vs/database_config.json=/etc/default/sonic-db/database_config.json",
+        "platform/vs/docker-sonic-vs/default_chassis_cfg.json=/etc/default/sonic-db/default_chassis_cfg.json",
+        "platform/vs/docker-sonic-vs/etc/rsyslog.conf=/etc/rsyslog.conf",
+        "platform/vs/docker-sonic-vs/frr/zebra.conf=/etc/frr/zebra.conf",
+        "platform/vs/docker-sonic-vs/hostname.j2=/usr/share/sonic/templates/hostname.j2",
+        "platform/vs/docker-sonic-vs/hwsku.json=/usr/share/sonic/device/x86_64-kvm_x86_64-r0/Force10-S6000/hwsku.json",
+        "images/oci/docker-sonic-vs/lanemap.ini=/usr/share/sonic/device/x86_64-kvm_x86_64-r0/Force10-S6000/lanemap.ini",
+        "images/oci/docker-sonic-vs/port_config.ini=/usr/share/sonic/device/x86_64-kvm_x86_64-r0/Force10-S6000/port_config.ini",
+        "images/oci/docker-sonic-vs/sonic-cfggen=/usr/bin/sonic-cfggen",
+        "images/oci/docker-sonic-vs/sonic_py_common/__init__.py=/usr/local/lib/python3/dist-packages/sonic_py_common/__init__.py",
+        "images/oci/docker-sonic-vs/sonic_py_common/daemon_base.py=/usr/local/lib/python3/dist-packages/sonic_py_common/daemon_base.py",
+        "images/oci/docker-sonic-vs/sonic_py_common/device_info.py=/usr/local/lib/python3/dist-packages/sonic_py_common/device_info.py",
+        "images/oci/docker-sonic-vs/sonic_py_common/general.py=/usr/local/lib/python3/dist-packages/sonic_py_common/general.py",
+        "images/oci/docker-sonic-vs/sonic_py_common/interface.py=/usr/local/lib/python3/dist-packages/sonic_py_common/interface.py",
+        "images/oci/docker-sonic-vs/sonic_py_common/logger.py=/usr/local/lib/python3/dist-packages/sonic_py_common/logger.py",
+        "images/oci/docker-sonic-vs/sonic_py_common/multi_asic.py=/usr/local/lib/python3/dist-packages/sonic_py_common/multi_asic.py",
+        "images/oci/docker-sonic-vs/sonic_py_common/port_util.py=/usr/local/lib/python3/dist-packages/sonic_py_common/port_util.py",
+        "images/oci/docker-sonic-vs/sonic_py_common/security_cipher.py=/usr/local/lib/python3/dist-packages/sonic_py_common/security_cipher.py",
+        "images/oci/docker-sonic-vs/sonic_py_common/sidecar_common.py=/usr/local/lib/python3/dist-packages/sonic_py_common/sidecar_common.py",
+        "images/oci/docker-sonic-vs/sonic_py_common/sonic_db_dump_load.py=/usr/local/lib/python3/dist-packages/sonic_py_common/sonic_db_dump_load.py",
+        "images/oci/docker-sonic-vs/sonic_py_common/syslogger.py=/usr/local/lib/python3/dist-packages/sonic_py_common/syslogger.py",
+        "images/oci/docker-sonic-vs/sonic_py_common/task_base.py=/usr/local/lib/python3/dist-packages/sonic_py_common/task_base.py",
+        "images/oci/docker-sonic-vs/sonic_py_common/util.py=/usr/local/lib/python3/dist-packages/sonic_py_common/util.py",
+        "platform/vs/docker-sonic-vs/hwsku.json=/usr/share/sonic/device/x86_64-kvm_x86_64-r0/brcm_gearbox_vs/hwsku.json",
+        "platform/vs/docker-sonic-vs/hwsku.json=/usr/share/sonic/device/x86_64-kvm_x86_64-r0/Mellanox-SN2700/hwsku.json",
+        "platform/vs/docker-sonic-vs/init_cfg.json.j2=/usr/share/sonic/templates/init_cfg.json.j2",
+        "platform/vs/docker-sonic-vs/orchagent.sh=/usr/bin/orchagent.sh",
+        "platform/vs/docker-sonic-vs/platform-dpu-2p.json=/usr/share/sonic/device/x86_64-kvm_x86_64-r0/platform-dpu-2p.json",
+        "platform/vs/docker-sonic-vs/platform.json=/usr/share/sonic/device/x86_64-kvm_x86_64-r0/platform.json",
+        "platform/vs/docker-sonic-vs/port_breakout_config_db.json=/etc/sonic/port_breakout_config_db.json",
+        "platform/vs/docker-sonic-vs/start.sh=/usr/bin/start.sh",
+        "platform/vs/docker-sonic-vs/supervisord.conf.j2=/usr/share/sonic/templates/supervisord.conf.j2",
+        "platform/vs/docker-sonic-vs/zero_profiles.json=/etc/sonic/zero_profiles.json",
+        "images/oci/docker-sonic-vs/docker-init.sh=/usr/bin/docker-init.sh",
+        "images/oci/docker-sonic-vs/rebootbackend=/usr/bin/rebootbackend",
+        "images/oci/docker-sonic-vs/sonic_version.yml=/etc/sonic/sonic_version.yml",
+    ],
+)
+
 sonic_oci_image(
-    name = "image_manifest",
+    name = "image",
+    builder = "bazel",
+    builder_base = "//images/oci/docker-base-bookworm:image__oci",
+    builder_entrypoint = ["/usr/bin/docker-init.sh"],
+    builder_env = {
+        "ENABLE_ASAN": "n",
+        "HWSKU": "Force10-S6000",
+        "PLATFORM": "x86_64-kvm_x86_64-r0",
+    },
+    builder_repo_tags = ["docker-sonic-vs:latest"],
+    builder_tars = [":runtime_layer"],
     legacy_artifact = "docker-sonic-vs.gz",
     legacy_dockerfile = "platform/vs/docker-sonic-vs/Dockerfile.j2",
+    output_name = "docker-sonic-vs.gz",
     source_makefiles = [
         "platform/vs/docker-sonic-vs.mk",
         "platform/vs/rules.mk",
-    ],
-    base = "//images/oci/docker-swss-layer-bookworm:image",
-    files = [
-        "CONFIGDB_LOAD_SCRIPT",
-        "ARP_UPDATE_SCRIPT",
-        "ARP_UPDATE_VARS_TEMPLATE",
-        "BUFFERS_CONFIG_TEMPLATE",
-        "QOS_CONFIG_TEMPLATE",
-        "SONIC_VERSION",
-        "UPDATE_CHASSISDB_CONFIG_SCRIPT",
-        "COPP_CONFIG_TEMPLATE",
     ],
     metadata = {
         "container_name": "docker-sonic-vs",
@@ -29,34 +133,14 @@ sonic_oci_image(
         "package_name": "docker-sonic-vs",
     },
     notes = [
-        "Concrete bytes are currently produced by a Bazel local bridge over the legacy sonic-slave build path.",
-        "The final hermetic Bazel OCI builder still needs to replace the legacy Dockerfile and Make execution flow.",
+        "Concrete bytes are produced by pure Bazel OCI assembly with explicit tar layers.",
+        "This image currently targets swss DVS runtime smoke first and does not claim full legacy docker-sonic-vs runtime parity yet.",
     ],
-)
-
-legacy_artifact_bridge(
-    name = "image",
-    artifact_path = "docker-sonic-vs.gz",
-    docker_platform = "linux/amd64",
-    legacy_target = "target/docker-sonic-vs.gz",
-    make_vars = [
-        "BUILD_SKIP_TEST=y",
-        "SONIC_CONFIG_MAKE_JOBS=4",
-        "SONIC_DEVICE_DATA_VS_SCOPE=minimal",
-        "SONIC_DPKG_CACHE_METHOD=rwcache",
-        "SONIC_CONFIG_USE_NATIVE_DOCKERD_FOR_BUILD=y",
-        "SONIC_VERSION_CACHE_METHOD=rcache",
-        "SONIC_VERSION_CONTROL_COMPONENTS=web",
-    ],
-    manifest = ":image_manifest",
-    output_name = "docker-sonic-vs.gz",
-    platform = "vs",
-    tags = ["manual"],
 )
 
 genrule(
     name = "image_lock",
-    srcs = [":image_manifest"],
+    srcs = [":image"],
     outs = ["docker-sonic-vs.gz.lock.json"],
     cmd = """
 lock=''

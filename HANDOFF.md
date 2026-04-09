@@ -2,6 +2,23 @@
 
 ## Current State
 
+The repository now also contains an in-progress Bazel-native migration for
+`docker-sonic-vs.gz`.
+
+Current status:
+
+- Bazel-native concrete package and OCI builder infrastructure is in tree
+- `//packages/deb/libsaivs:deb` succeeds through the Bazel concrete builder
+- `//images/oci/docker-base-bookworm:image` succeeds through the Bazel-native
+  OCI builder
+- `//images/oci/docker-sonic-vs:image` is not complete yet
+- the current blocker is a host Bazel toolchain mismatch in the
+  `rules_distroless` flatten path, not a SONiC runtime package failure
+
+See:
+
+- `bazel/reports/docker-sonic-vs-bazel-native-status.md`
+
 The repository now contains a Bazel Phase 1 review path for
 `docker-orchagent.gz`.
 

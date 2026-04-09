@@ -1,0 +1,79 @@
+version: 1
+
+sources:
+  - channel: bookworm main
+    url: https://snapshot.debian.org/archive/debian/20251001T023456Z
+  - channel: bookworm-security main
+    url: https://snapshot.debian.org/archive/debian-security/20251001T023456Z
+
+archs:
+  - amd64
+
+packages:
+  - arping
+  - bash
+  - base-files
+  - binutils
+  - bridge-utils
+  - ca-certificates
+  - conntrack
+  - coreutils
+  - curl
+  - ethtool
+  - frr
+  - gawk
+  - gcc-12-base
+  - iproute2
+  - iptables
+  - jq
+  - kmod
+  - less
+  - libatomic1
+  - libboost-serialization1.74.0
+  - libc-bin
+  - libc6
+  - libdbus-1-3
+  - libgcc-s1
+  - libgmp10
+  - libgmpxx4ldbl
+  - libgomp1
+  - libhiredis0.14
+  - libjansson4
+  - libnl-3-200
+  - libnl-cli-3-200
+  - libnl-genl-3-200
+  - libnl-nf-3-200
+  - libnl-route-3-200
+  - libpcre2-8-0
+  - libssl3
+  - libstdc++6
+  - libteam-utils
+  - libteamdctl0
+  - libwrap0
+  - libyang2
+  - libzmq5
+  - media-types
+  - ndisc6
+  - net-tools
+  - netbase
+  - openssl
+  - perl
+  - procps
+  - python-is-python3
+  - python3
+  - python3-jinja2
+  - python3-lxml
+  - python3-natsort
+  - python3-netaddr
+  - python3-netifaces
+  - python3-protobuf
+  - python3-pyroute2
+  - python3-scapy
+  - python3-six
+  - python3-yaml
+  - redis-server
+  - redis-tools
+  - rsyslog
+  - supervisor
+  - tcpdump
+  - tzdata

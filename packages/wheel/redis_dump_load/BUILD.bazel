@@ -1,0 +1,24 @@
+load("//bazel/sonic:defs.bzl", "sonic_py_wheel")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_py_wheel(
+    name = "wheel",
+    builder = "bazel",
+    builder_srcs = ["//src:redis_dump_load_package_srcs"],
+    legacy_artifact = "redis_dump_load-1.1-py3-none-any.whl",
+    output_name = "redis_dump_load-1.1-py3-none-any.whl",
+    package_name = "redis_dump_load",
+    package_version = "1.1",
+    source_path = "src/redis-dump-load",
+    source_root = "src/redis-dump-load",
+    source_makefiles = ["src/redis-dump-load/Makefile"],
+    metadata = {
+        "legacy_name": "REDIS_DUMP_LOAD",
+        "migration_wave": "orchagent_chain",
+        "python_version": "3",
+    },
+    notes = [
+        "This wheel is a local source dependency of sonic-py-common.",
+    ],
+)

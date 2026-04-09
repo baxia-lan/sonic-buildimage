@@ -1,0 +1,22 @@
+load("//bazel/sonic:defs.bzl", "sonic_py_wheel")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_py_wheel(
+    name = "wheel",
+    builder = "bazel",
+    builder_srcs = ["//src:sonic_py_common_package_srcs"],
+    legacy_artifact = "sonic_py_common-1.0-py3-none-any.whl",
+    output_name = "sonic_py_common-1.0-py3-none-any.whl",
+    package_name = "sonic_py_common",
+    package_version = "1.0",
+    source_path = "src/sonic-py-common",
+    source_root = "src/sonic-py-common",
+    source_makefiles = ["rules/sonic-py-common.mk"],
+    wheel_deps = ["//packages/wheel/redis_dump_load:wheel"],
+    metadata = {
+        "legacy_name": "SONIC_PY_COMMON_PY3",
+        "migration_wave": "orchagent_chain",
+        "python_version": "3",
+    },
+)

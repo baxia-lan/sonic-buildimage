@@ -4,8 +4,17 @@ package(default_visibility = ["//visibility:public"])
 
 sonic_deb_package(
     name = "deb",
+    builder = "bazel",
+    builder_srcs = ["//src:sonic_swss_package_srcs"],
+    deb_pattern = "swss_1.0.0_amd64.deb",
+    migration_stage = "concrete_builder",
+    output_name = "swss_1.0.0_amd64.deb",
+    package_arch = "amd64",
+    package_name = "swss",
+    package_version = "1.0.0",
     legacy_artifact = "swss_1.0.0_$(CONFIGURED_ARCH).deb",
     source_path = "src/sonic-swss",
+    source_root = "src/sonic-swss",
     source_makefiles = [
         "rules/swss.mk",
         "rules/swss.dep",
@@ -13,9 +22,14 @@ sonic_deb_package(
     sources = ["//sources/sonic-swss:source"],
     submodule_paths = ["src/sonic-swss"],
     deps = [
+        "//packages/deb/libsairedis-dev:deb",
         "//packages/deb/libsairedis:deb",
-        "//packages/deb/libswsscommon:deb",
+        "//packages/deb/libsaimetadata-dev:deb",
+        "//packages/deb/libsaivs:deb",
+        "//packages/deb/libsaivs-dev:deb",
         "//packages/deb/libdashapi:deb",
+        "//packages/deb/libswsscommon:deb",
+        "//packages/deb/libswsscommon-dev:deb",
     ],
     legacy_deps = [
         "LIBSAIMETADATA_DEV",
@@ -50,5 +64,6 @@ sonic_deb_package(
     },
     notes = [
         "Legacy Make emits swss-dbg as a derived package from the same source tree.",
+        "Concrete swss builds currently rely on the pinned local Bazel builder image to supply non-SONiC build dependencies while the remaining third-party package surfaces migrate.",
     ],
 )

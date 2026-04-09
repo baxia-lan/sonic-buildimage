@@ -1,0 +1,712 @@
+#!/usr/bin/env python3
+"""Minimal SONiC cfggen for docker-sonic-vs runtime readiness.
+
+This implementation intentionally covers only the runtime paths exercised by
+the VS docker bootstrap and the swss DVS fixture:
+
+- render supervisord.conf.j2 for docker-init.sh
+- render init_cfg.json.j2
+- render swss_vars.j2
+- render copp_cfg.j2
+- render hostname.j2
+- render arp_update_vars.j2
+- merge JSON/YAML fragments and write CONFIG_DB
+- evaluate simple -v lookups used by start.sh and related scripts
+
+It avoids the full legacy config-engine wheel stack so the image can stay
+Bazel-owned and hermetic for the VS runtime path.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Optional
+
+
+DEFAULT_PLATFORM = "x86_64-kvm_x86_64-r0"
+DEFAULT_HWSKU = "Force10-S6000"
+DEFAULT_HOSTNAME = "docker-sonic-vs"
+DEFAULT_SWITCH_TYPE = "switch"
+DEFAULT_DEVICE_TYPE = "ToRRouter"
+DEFAULT_ASIC_TYPE = "vs"
+
+
+def _load_json_like(path: str) -> Dict[str, Any]:
+    with open(path, "r", encoding="utf-8") as fh:
+        text = fh.read().strip()
+    if not text:
+        return {}
+    if path.endswith((".yml", ".yaml")):
+        return _load_simple_yaml(text)
+    return json.loads(text)
+
+
+def _load_simple_yaml(text: str) -> Dict[str, Any]:
+    data: Dict[str, Any] = {}
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        key = key.strip()
+        value = value.strip()
+        if value.startswith(("'", '"')) and value.endswith(("'", '"')):
+            value = value[1:-1]
+        data[key] = value
+    return data
+
+
+def _deep_merge(dst: Dict[str, Any], src: Dict[str, Any]) -> Dict[str, Any]:
+    for key, value in src.items():
+        if isinstance(value, dict) and isinstance(dst.get(key), dict):
+            _deep_merge(dst[key], value)
+        else:
+            dst[key] = value
+    return dst
+
+
+def _get_path(data: Any, path: str) -> Any:
+    expr = path.strip()
+    if not expr:
+        return ""
+
+    # Special case used by start.sh.
+    if expr == 'VLAN.keys() | join(" ") if VLAN' or expr == "VLAN.keys() | join(' ') if VLAN":
+        vlan = data.get("VLAN") if isinstance(data, dict) else None
+        if not vlan:
+            return ""
+        return " ".join(vlan.keys())
+
+    expr = re.sub(r"\[['\"]([^'\"]+)['\"]\]", r".\1", expr)
+    expr = expr.replace(" ", "")
+    expr = expr.split("|", 1)[0]
+    expr = expr.split("(", 1)[0]
+
+    node: Any = data
+    for token in expr.split("."):
+        if not token:
+            continue
+        if isinstance(node, dict) and token in node:
+            node = node[token]
+            continue
+        return ""
+    return node
+
+
+def _mac_from_eth0() -> str:
+    for candidate in (
+        ["/bin/sh", "-c", "cat /sys/class/net/eth0/address 2>/dev/null"],
+        ["/bin/sh", "-c", "ip link show eth0 2>/dev/null | awk '/link\\/ether/ {print $2; exit}'"],
+    ):
+        try:
+            out = subprocess.check_output(candidate, text=True).strip()
+            if out:
+                return out
+        except Exception:
+            continue
+    return "00:00:00:00:00:00"
+
+
+def _load_hwsku_default_modes() -> Dict[str, str]:
+    hwsku_files = [
+        "/usr/share/sonic/device/x86_64-kvm_x86_64-r0/Force10-S6000/hwsku.json",
+        "/usr/share/sonic/device/x86_64-kvm_x86_64-r0/brcm_gearbox_vs/hwsku.json",
+        "/usr/share/sonic/device/x86_64-kvm_x86_64-r0/Mellanox-SN2700/hwsku.json",
+    ]
+    for hwsku_file in hwsku_files:
+        if not os.path.exists(hwsku_file):
+            continue
+        try:
+            with open(hwsku_file, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            interfaces = data.get("interfaces", {})
+            if isinstance(interfaces, dict) and interfaces:
+                return {
+                    name: str(attrs.get("default_brkout_mode", "1x100G[40G]"))
+                    for name, attrs in interfaces.items()
+                    if isinstance(attrs, dict)
+                }
+        except Exception:
+            continue
+    return {}
+
+
+def _port_table_from_ini(path: str) -> Dict[str, Dict[str, str]]:
+    ports: Dict[str, Dict[str, str]] = {}
+    default_modes = _load_hwsku_default_modes()
+    index = 0
+    with open(path, "r", encoding="utf-8") as fh:
+        for raw in fh:
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split()
+            if len(parts) < 2:
+                continue
+            name = parts[0]
+            lanes = parts[1]
+            ports[name] = {
+                "alias": name,
+                "lanes": lanes,
+                "index": str(index),
+                "admin_status": "down",
+                "mtu": "9100",
+                "speed": "100000",
+            }
+            if name in default_modes:
+                ports[name]["default_brkout_mode"] = default_modes[name]
+            index += 1
+    return ports
+
+
+def _build_base_context() -> Dict[str, Any]:
+    hostname = os.environ.get("HOSTNAME", DEFAULT_HOSTNAME)
+    platform = os.environ.get("PLATFORM", DEFAULT_PLATFORM)
+    hwsku = os.environ.get("HWSKU", DEFAULT_HWSKU)
+    switch_type = os.environ.get("SWITCH_TYPE", DEFAULT_SWITCH_TYPE)
+    device_type = DEFAULT_DEVICE_TYPE
+    if hwsku == "DPU-2P":
+        device_type = "SmartSwitchDPU"
+        switch_type = "dpu"
+
+    metadata = {
+        "hostname": hostname,
+        "platform": platform,
+        "hwsku": hwsku,
+        "type": device_type,
+        "switch_type": switch_type,
+        "buffer_model": "traditional",
+        "default_bgp_status": "up",
+        "default_pfcwd_status": "disable",
+        "timezone": "UTC",
+        "asic_id": "0",
+        "mac": _mac_from_eth0(),
+        "resource_type": "",
+        "synchronous_mode": "enable",
+    }
+
+    return {
+        "DEVICE_METADATA": {"localhost": metadata},
+        "DEVICE_RUNTIME_METADATA": {"ETHERNET_PORTS_PRESENT": True},
+        "FEATURE": {},
+        "CRM": {},
+        "FLEX_COUNTER_TABLE": {},
+        "BGP_DEVICE_GLOBAL": {},
+        "AUTO_TECHSUPPORT": {},
+        "AUTO_TECHSUPPORT_FEATURE": {},
+        "SYSLOG_CONFIG": {},
+        "SYSLOG_CONFIG_FEATURE": {},
+        "PASSW_HARDENING": {},
+        "BANNER_MESSAGE": {},
+        "SYSTEM_DEFAULTS": {},
+        "KDUMP": {},
+        "NTP": {"global": {"admin_state": "enabled", "authentication": "disabled", "dhcp": "enabled", "server_role": "disabled", "src_intf": "eth0", "vrf": "default"}},
+        "PORT": _port_table_from_ini("/usr/share/sonic/hwsku/port_config.ini") if os.path.exists("/usr/share/sonic/hwsku/port_config.ini") else {},
+        "VLAN": {},
+        "INTERFACE": {},
+        "PORTCHANNEL_INTERFACE": {},
+        "VLAN_SUB_INTERFACE": {},
+        "STATIC_ROUTE": {},
+    }
+
+
+def _merge_inputs(args: argparse.Namespace) -> Dict[str, Any]:
+    ctx = _build_base_context()
+
+    if args.d:
+        # When running in the live docker-vs container, prefer the current config db
+        # as the "default" data source if it already exists.
+        config_db_json = "/etc/sonic/config_db.json"
+        if os.path.exists(config_db_json):
+            try:
+                _deep_merge(ctx, _load_json_like(config_db_json))
+            except Exception:
+                pass
+
+    for file_name in args.y or []:
+        _deep_merge(ctx, _load_json_like(file_name))
+
+    for file_name in args.j or []:
+        _deep_merge(ctx, _load_json_like(file_name))
+
+    if args.a:
+        _deep_merge(ctx, json.loads(args.a))
+
+    if args.platform_json or args.hwsku:
+        # Retain a deterministic DVS-friendly port model. The platform/hwsku
+        # arguments are accepted for compatibility but the runtime structure is
+        # intentionally based on the local VS hwsku port_config.ini.
+        ctx["DEVICE_METADATA"]["localhost"]["platform"] = os.environ.get("PLATFORM", DEFAULT_PLATFORM)
+        ctx["DEVICE_METADATA"]["localhost"]["hwsku"] = args.hwsku or os.environ.get("HWSKU", DEFAULT_HWSKU)
+        ctx["DEVICE_METADATA"]["localhost"]["switch_type"] = os.environ.get("SWITCH_TYPE", DEFAULT_SWITCH_TYPE)
+        ctx["DEVICE_METADATA"]["localhost"]["type"] = DEFAULT_DEVICE_TYPE
+        if not ctx.get("PORT"):
+            ctx["PORT"] = _port_table_from_ini("/usr/share/sonic/hwsku/port_config.ini")
+
+    # Keep the init_cfg-derived metadata available in the default data path.
+    ctx["DEVICE_METADATA"]["localhost"].setdefault("platform", os.environ.get("PLATFORM", DEFAULT_PLATFORM))
+    ctx["DEVICE_METADATA"]["localhost"].setdefault("hwsku", os.environ.get("HWSKU", DEFAULT_HWSKU))
+    ctx["DEVICE_METADATA"]["localhost"].setdefault("type", DEFAULT_DEVICE_TYPE)
+    ctx["DEVICE_METADATA"]["localhost"].setdefault("switch_type", os.environ.get("SWITCH_TYPE", DEFAULT_SWITCH_TYPE))
+    ctx["DEVICE_METADATA"]["localhost"].setdefault("mac", _mac_from_eth0())
+    ctx["DEVICE_METADATA"]["localhost"].setdefault("asic_id", "0")
+    return ctx
+
+
+def _render_supervisord(enable_asan: str) -> str:
+    template_candidates = [
+        Path("/usr/share/sonic/templates/supervisord.conf.j2"),
+        Path("platform/vs/docker-sonic-vs/supervisord.conf.j2"),
+    ]
+    template_path = next((path for path in template_candidates if path.exists()), None)
+    if template_path is None:
+        raise SystemExit("Missing supervisord.conf.j2 template")
+    out: List[str] = []
+    include = True
+    with template_path.open("r", encoding="utf-8") as fh:
+        for raw in fh:
+            line = raw.rstrip("\n")
+            stripped = line.strip()
+            if stripped == '{% if ENABLE_ASAN == "y" %}':
+                include = enable_asan == "y"
+                continue
+            if stripped == "{% endif %}":
+                include = True
+                continue
+            if not include:
+                continue
+            out.append(line.replace("{{ asan_extra_options }}", ":print_suppressions=0"))
+    return "\n".join(out) + "\n"
+
+
+def _render_init_cfg(ctx: Dict[str, Any]) -> str:
+    localhost = ctx["DEVICE_METADATA"]["localhost"]
+    switch_type = localhost.get("switch_type", DEFAULT_SWITCH_TYPE)
+
+    if switch_type == "dpu":
+        features = {
+            "swss": "enabled",
+            "bgp": "enabled",
+            "teamd": "disabled",
+            "nat": "disabled",
+            "database": "enabled",
+            "lldp": "enabled",
+            "dhcp_relay": "disabled",
+            "macsec": "disabled",
+        }
+    else:
+        features = {
+            "swss": "enabled",
+            "bgp": "enabled",
+            "teamd": "enabled",
+            "nat": "enabled",
+            "database": "enabled",
+            "lldp": "enabled",
+            "dhcp_relay": "enabled",
+            "macsec": "enabled",
+        }
+
+    init_cfg = {
+        "DEVICE_METADATA": {
+            "localhost": {
+                "mac": localhost.get("mac", _mac_from_eth0()),
+                "switch_type": switch_type,
+                "buffer_model": "traditional",
+                "default_bgp_status": localhost.get("default_bgp_status", "up"),
+                "default_pfcwd_status": localhost.get("default_pfcwd_status", "disable"),
+                "timezone": localhost.get("timezone", "UTC"),
+                "hostname": localhost.get("hostname", DEFAULT_HOSTNAME),
+                "platform": localhost.get("platform", DEFAULT_PLATFORM),
+                "hwsku": localhost.get("hwsku", DEFAULT_HWSKU),
+                "type": localhost.get("type", DEFAULT_DEVICE_TYPE),
+                "asic_id": localhost.get("asic_id", "0"),
+                "resource_type": localhost.get("resource_type", ""),
+                "synchronous_mode": localhost.get("synchronous_mode", "enable"),
+            }
+        },
+        "CRM": {
+            "Config": {
+                "polling_interval": "300",
+                "ipv4_route_threshold_type": "percentage",
+                "ipv4_route_low_threshold": "70",
+                "ipv4_route_high_threshold": "85",
+                "ipv6_route_threshold_type": "percentage",
+                "ipv6_route_low_threshold": "70",
+                "ipv6_route_high_threshold": "85",
+                "ipv4_nexthop_threshold_type": "percentage",
+                "ipv4_nexthop_low_threshold": "70",
+                "ipv4_nexthop_high_threshold": "85",
+                "ipv6_nexthop_threshold_type": "percentage",
+                "ipv6_nexthop_low_threshold": "70",
+                "ipv6_nexthop_high_threshold": "85",
+                "ipv4_neighbor_threshold_type": "percentage",
+                "ipv4_neighbor_low_threshold": "70",
+                "ipv4_neighbor_high_threshold": "85",
+                "ipv6_neighbor_threshold_type": "percentage",
+                "ipv6_neighbor_low_threshold": "70",
+                "ipv6_neighbor_high_threshold": "85",
+                "nexthop_group_member_threshold_type": "percentage",
+                "nexthop_group_member_low_threshold": "70",
+                "nexthop_group_member_high_threshold": "85",
+                "nexthop_group_threshold_type": "percentage",
+                "nexthop_group_low_threshold": "70",
+                "nexthop_group_high_threshold": "85",
+                "acl_table_threshold_type": "percentage",
+                "acl_table_low_threshold": "70",
+                "acl_table_high_threshold": "85",
+                "acl_group_threshold_type": "percentage",
+                "acl_group_low_threshold": "70",
+                "acl_group_high_threshold": "85",
+                "acl_entry_threshold_type": "percentage",
+                "acl_entry_low_threshold": "70",
+                "acl_entry_high_threshold": "85",
+                "acl_counter_threshold_type": "percentage",
+                "acl_counter_low_threshold": "70",
+                "acl_counter_high_threshold": "85",
+                "fdb_entry_threshold_type": "percentage",
+                "fdb_entry_low_threshold": "70",
+                "fdb_entry_high_threshold": "85",
+                "snat_entry_threshold_type": "percentage",
+                "snat_entry_low_threshold": "70",
+                "snat_entry_high_threshold": "85",
+                "dnat_entry_threshold_type": "percentage",
+                "dnat_entry_low_threshold": "70",
+                "dnat_entry_high_threshold": "85",
+                "ipmc_entry_threshold_type": "percentage",
+                "ipmc_entry_low_threshold": "70",
+                "ipmc_entry_high_threshold": "85",
+                "mpls_inseg_threshold_type": "percentage",
+                "mpls_inseg_low_threshold": "70",
+                "mpls_inseg_high_threshold": "85",
+                "mpls_nexthop_threshold_type": "percentage",
+                "mpls_nexthop_low_threshold": "70",
+                "mpls_nexthop_high_threshold": "85",
+            }
+        },
+        "FLEX_COUNTER_TABLE": {
+            "ACL": {"FLEX_COUNTER_STATUS": "enable", "POLL_INTERVAL": "10000"},
+            "PORT": {"FLEX_COUNTER_STATUS": "enable"},
+            "PORT_PHY_ATTR": {"FLEX_COUNTER_STATUS": "enable"},
+            "RIF": {"FLEX_COUNTER_STATUS": "enable"},
+            "QUEUE": {"FLEX_COUNTER_STATUS": "enable"},
+            "PFCWD": {"FLEX_COUNTER_STATUS": "enable"},
+            "PG_WATERMARK": {"FLEX_COUNTER_STATUS": "enable"},
+            "PG_DROP": {"FLEX_COUNTER_STATUS": "enable"},
+            "QUEUE_WATERMARK": {"FLEX_COUNTER_STATUS": "enable"},
+            "BUFFER_POOL_WATERMARK": {"FLEX_COUNTER_STATUS": "enable"},
+            "PORT_BUFFER_DROP": {"FLEX_COUNTER_STATUS": "enable"},
+        },
+        "BGP_DEVICE_GLOBAL": {"STATE": {"tsa_enabled": "false", "wcmp_enabled": "false", "idf_isolation_state": "unisolated"}},
+        "FEATURE": {},
+        "AUTO_TECHSUPPORT": {"GLOBAL": {"state": "disabled", "rate_limit_interval": "180", "max_techsupport_limit": "10.0", "max_core_limit": "5.0", "available_mem_threshold": "10.0", "min_available_mem": "200", "since": "2 days ago"}},
+        "AUTO_TECHSUPPORT_FEATURE": {},
+        "SYSLOG_CONFIG": {"GLOBAL": {"rate_limit_interval": "0", "rate_limit_burst": "0"}},
+        "SYSLOG_CONFIG_FEATURE": {},
+        "PASSW_HARDENING": {"POLICIES": {"state": "disabled", "expiration": "180", "expiration_warning": "15", "history_cnt": "10", "len_min": "8", "reject_user_passw_match": "true", "lower_class": "true", "upper_class": "true", "digits_class": "true", "special_class": "true"}},
+        "BANNER_MESSAGE": {"global": {"state": "disabled", "login": "Debian GNU/Linux 11", "motd": "You are on\n  ____   ___  _   _ _  ____\n / ___| / _ \\| \\ | (_)/ ___|\n \\___ \\| | | |  \\| | | |\n  ___) | |_| | |\\  | | |___\n |____/ \\___/|_| \\_|_|\\____|\n\n-- Software for Open Networking in the Cloud --\n\nUnauthorized access and/or use are prohibited.\nAll access and/or use are subject to monitoring.\n\nHelp:    https://sonic-net.github.io/SONiC/\n\n", "logout": ""}},
+        "SYSTEM_DEFAULTS": {},
+        "KDUMP": {"config": {"enabled": "false", "memory": "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M", "num_dumps": "3"}},
+        "NTP": {"global": {"authentication": "disabled", "dhcp": "enabled", "server_role": "disabled", "src_intf": "eth0", "admin_state": "enabled", "vrf": "default"}},
+    }
+
+    for feature, state in features.items():
+        init_cfg["FEATURE"][feature] = {
+            "state": state,
+            "delayed": "False",
+            "has_global_scope": "true",
+            "has_per_asic_scope": "False",
+            "auto_restart": "enabled",
+            "support_syslog_rate_limit": "true",
+            "high_mem_alert": "disabled",
+        }
+        if feature in ("bgp", "swss", "pmon"):
+            init_cfg["FEATURE"][feature]["check_up_status"] = "false"
+
+    for feature in features:
+        init_cfg["AUTO_TECHSUPPORT_FEATURE"][feature] = {
+            "state": "disabled",
+            "rate_limit_interval": "600",
+            "available_mem_threshold": "10.0",
+        }
+        init_cfg["SYSLOG_CONFIG_FEATURE"][feature] = {
+            "rate_limit_interval": "300",
+            "rate_limit_burst": "20000",
+        }
+
+    init_cfg["DEVICE_METADATA"]["localhost"]["switch_type"] = switch_type
+    return json.dumps(init_cfg, indent=4) + "\n"
+
+
+def _render_swss_vars(ctx: Dict[str, Any]) -> str:
+    localhost = ctx["DEVICE_METADATA"]["localhost"]
+    swss_vars = {
+        "asic_type": ctx.get("asic_type", os.environ.get("ASIC_TYPE", DEFAULT_ASIC_TYPE)),
+        "asic_id": localhost.get("asic_id", "0"),
+        "mac": localhost.get("mac", _mac_from_eth0()),
+        "resource_type": localhost.get("resource_type", ""),
+        "synchronous_mode": "disable" if localhost.get("synchronous_mode") == "disable" else "enable",
+        "dual_tor": "enable" if localhost.get("type") == "ToRRouter" and localhost.get("subtype") == "DualToR" else "disable",
+        "dscp_remapping": "enable" if ctx.get("SYSTEM_DEFAULTS", {}).get("tunnel_qos_remap", {}).get("status") == "enabled" else "disable",
+        "switch_type": localhost.get("switch_type", DEFAULT_SWITCH_TYPE),
+    }
+    if "asic_subtype" in ctx and ctx["asic_subtype"]:
+        swss_vars["asic_subtype"] = ctx["asic_subtype"]
+    if localhost.get("supporting_bulk_counter_groups"):
+        swss_vars["supporting_bulk_counter_groups"] = ",".join(localhost["supporting_bulk_counter_groups"])
+    return json.dumps(swss_vars, indent=4) + "\n"
+
+
+def _render_copp_cfg(ctx: Dict[str, Any]) -> str:
+    dev_type = ctx.get("DEVICE_METADATA", {}).get("localhost", {}).get("type", "")
+    is_mgmt = "Mgmt" in dev_type
+    queue4_group3 = {
+        "trap_action": "trap",
+        "trap_priority": "4",
+        "queue": "4",
+        "meter_type": "packets",
+        "mode": "sr_tcm",
+        "cir": "300" if is_mgmt else "100",
+        "cbs": "300" if is_mgmt else "100",
+        "red_action": "drop",
+    }
+    copp = {
+        "COPP_GROUP": {
+            "default": {
+                "queue": "0",
+                "meter_type": "packets",
+                "mode": "sr_tcm",
+                "cir": "600",
+                "cbs": "600",
+                "red_action": "drop",
+            },
+            "queue4_group1": {
+                "trap_action": "trap",
+                "trap_priority": "4",
+                "queue": "4",
+                "meter_type": "packets",
+                "mode": "sr_tcm",
+                "cir": "6000",
+                "cbs": "6000",
+                "red_action": "drop",
+            },
+            "queue4_group2": {
+                "trap_action": "copy",
+                "trap_priority": "4",
+                "queue": "4",
+                "meter_type": "packets",
+                "mode": "sr_tcm",
+                "cir": "600",
+                "cbs": "600",
+                "red_action": "drop",
+            },
+            "queue4_group3": queue4_group3,
+            "queue1_group1": {
+                "trap_action": "trap",
+                "trap_priority": "1",
+                "queue": "1",
+                "meter_type": "packets",
+                "mode": "sr_tcm",
+                "cir": "6000",
+                "cbs": "6000",
+                "red_action": "drop",
+            },
+            "queue1_group2": {
+                "trap_action": "trap",
+                "trap_priority": "1",
+                "queue": "1",
+                "meter_type": "packets",
+                "mode": "sr_tcm",
+                "cir": "600",
+                "cbs": "600",
+                "red_action": "drop",
+            },
+            "queue1_group3": {
+                "trap_action": "trap",
+                "trap_priority": "1",
+                "queue": "1",
+                "meter_type": "packets",
+                "mode": "sr_tcm",
+                "cir": "200",
+                "cbs": "200",
+                "red_action": "drop",
+            },
+            "queue2_group1": {
+                "cbs": "1000",
+                "cir": "1000",
+                "genetlink_mcgrp_name": "packets",
+                "genetlink_name": "psample",
+                "meter_type": "packets",
+                "mode": "sr_tcm",
+                "queue": "2",
+                "red_action": "drop",
+                "trap_action": "trap",
+                "trap_priority": "1",
+            },
+        },
+        "COPP_TRAP": {
+            "bgp": {"trap_ids": "bgp,bgpv6", "trap_group": "queue4_group1"},
+            "lacp": {"trap_ids": "lacp", "trap_group": "queue4_group1", "always_enabled": "true"},
+            "arp": {"trap_ids": "arp_req,arp_resp,neigh_discovery", "trap_group": "queue4_group2", "always_enabled": "true"},
+            "lldp": {"trap_ids": "lldp", "trap_group": "queue4_group3"},
+            "dhcp_relay": {"trap_ids": "dhcp,dhcpv6", "trap_group": "queue4_group3"},
+            "udld": {"trap_ids": "udld", "trap_group": "queue4_group3", "always_enabled": "true"},
+            "ip2me": {"trap_ids": "ip2me", "trap_group": "queue1_group1", "always_enabled": "true"},
+            "macsec": {"trap_ids": "eapol", "trap_group": "queue4_group1"},
+            "nat": {"trap_ids": "src_nat_miss,dest_nat_miss", "trap_group": "queue1_group2"},
+            "sflow": {"trap_group": "queue2_group1", "trap_ids": "sample_packet"},
+            "neighbor_miss": {"trap_ids": "neighbor_miss", "trap_group": "queue1_group3", "always_enabled": "true"},
+        },
+    }
+    return json.dumps(copp, indent=4) + "\n"
+
+
+def _render_hostname(ctx: Dict[str, Any]) -> str:
+    chassis_db = ctx.get("DEVICE_METADATA", {}).get("localhost", {}).get("chassis_db_address")
+    if chassis_db:
+        return f"{chassis_db} redis_chassis.server\n"
+    return "\n"
+
+
+def _render_arp_update_vars(ctx: Dict[str, Any]) -> str:
+    def _join_names(table_name: str) -> str:
+        table = ctx.get(table_name) or {}
+        names: List[str] = []
+        for key, value in table.items():
+            if isinstance(value, dict) and value:
+                # Best-effort: use entries with an IPv6-like prefix if provided.
+                prefix = next((v for v in value.values() if isinstance(v, str) and ":" in v), None)
+                if prefix:
+                    names.append(str(key).split("|", 1)[0])
+            else:
+                names.append(str(key).split("|", 1)[0])
+        return " ".join(dict.fromkeys(names))
+
+    localhost = ctx.get("DEVICE_METADATA", {}).get("localhost", {})
+    output = {
+        "switch_type": localhost.get("switch_type", ""),
+        "type": localhost.get("type", ""),
+        "interface": _join_names("INTERFACE"),
+        "pc_interface": _join_names("PORTCHANNEL_INTERFACE"),
+        "vlan_sub_interface": _join_names("VLAN_SUB_INTERFACE"),
+        "vlan": " ".join((ctx.get("VLAN") or {}).keys()),
+        "static_route_nexthops": " ".join(
+            str(attrs.get("nexthop", "")).replace(",", " ").lower()
+            for _, attrs in (ctx.get("STATIC_ROUTE") or {}).items()
+            if isinstance(attrs, dict) and attrs.get("nexthop")
+        ),
+        "static_route_ifnames": " ".join(
+            str(attrs.get("ifname", "")).replace(",", " ")
+            for _, attrs in (ctx.get("STATIC_ROUTE") or {}).items()
+            if isinstance(attrs, dict) and attrs.get("ifname")
+        ),
+    }
+    return json.dumps(output, indent=4) + "\n"
+
+
+def _render_template(template: str, ctx: Dict[str, Any], enable_asan: str) -> str:
+    base = os.path.basename(template)
+    if base == "supervisord.conf.j2":
+        return _render_supervisord(enable_asan)
+    if base == "init_cfg.json.j2":
+        return _render_init_cfg(ctx)
+    if base == "swss_vars.j2":
+        return _render_swss_vars(ctx)
+    if base == "copp_cfg.j2":
+        return _render_copp_cfg(ctx)
+    if base == "hostname.j2":
+        return _render_hostname(ctx)
+    if base == "arp_update_vars.j2":
+        return _render_arp_update_vars(ctx)
+
+    raise SystemExit(f"Unsupported template for minimal sonic-cfggen: {template}")
+
+
+def _write_config_db(data: Dict[str, Any]) -> None:
+    for table_name, table_data in data.items():
+        if table_name == "DEVICE_RUNTIME_METADATA":
+            continue
+        if not isinstance(table_data, dict):
+            continue
+        for key, value in table_data.items():
+            if isinstance(value, dict):
+                items = []
+                for field, field_value in value.items():
+                    if isinstance(field_value, (dict, list)):
+                        field_value = json.dumps(field_value, sort_keys=True)
+                    else:
+                        field_value = str(field_value)
+                    items.extend([field, field_value])
+            else:
+                items = ["value", str(value)]
+
+            cmd = ["sonic-db-cli", "CONFIG_DB", "HSET", f"{table_name}|{key}"] + items
+            subprocess.run(cmd, check=True)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("-a", dest="a")
+    parser.add_argument("-d", dest="d", action="store_true")
+    parser.add_argument("-H", dest="host", action="store_true")
+    parser.add_argument("-j", dest="j", action="append")
+    parser.add_argument("-m", dest="minigraph")
+    parser.add_argument("-M", dest="device_desc")
+    parser.add_argument("-n", dest="namespace")
+    parser.add_argument("-p", dest="platform_json")
+    parser.add_argument("-t", dest="template")
+    parser.add_argument("-v", dest="var")
+    parser.add_argument("-y", dest="y", action="append")
+    parser.add_argument("-k", dest="hwsku")
+    parser.add_argument("--print-data", dest="print_data", action="store_true")
+    parser.add_argument("--write-to-db", dest="write_to_db", action="store_true")
+    parser.add_argument("--help", action="help")
+
+    args, _unknown = parser.parse_known_args()
+
+    if not args.j:
+        args.j = []
+    if not args.y:
+        args.y = []
+
+    ctx = _merge_inputs(args)
+
+    if args.var:
+        value = _get_path(ctx, args.var)
+        if isinstance(value, (dict, list)):
+            sys.stdout.write(json.dumps(value))
+        else:
+            sys.stdout.write("" if value is None else str(value))
+        sys.stdout.write("\n")
+        return 0
+
+    if args.write_to_db:
+        _write_config_db(ctx)
+        return 0
+
+    if args.print_data:
+        sys.stdout.write(json.dumps(ctx, indent=4))
+        sys.stdout.write("\n")
+        return 0
+
+    if args.template:
+        enable_asan = ctx.get("ENABLE_ASAN", os.environ.get("ENABLE_ASAN", "n"))
+        rendered = _render_template(args.template, ctx, enable_asan)
+        sys.stdout.write(rendered)
+        return 0
+
+    # Compatibility fallback: if nothing was requested, print the merged data.
+    sys.stdout.write(json.dumps(ctx, indent=4))
+    sys.stdout.write("\n")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -4,8 +4,21 @@ package(default_visibility = ["//visibility:public"])
 
 sonic_deb_package(
     name = "deb",
+    builder = "bazel",
+    builder_srcs = ["//src:sonic_sairedis_package_srcs"],
+    deb_pattern = "libsairedis_1.0.0_amd64.deb",
+    build_profiles = [
+        "nopython2",
+        "nopython3",
+    ],
     legacy_artifact = "libsairedis_1.0.0_$(CONFIGURED_ARCH).deb",
+    migration_stage = "concrete_builder",
+    output_name = "libsairedis_1.0.0_amd64.deb",
+    package_arch = "amd64",
+    package_name = "libsairedis",
+    package_version = "1.0.0",
     source_path = "src/sonic-sairedis",
+    source_root = "src/sonic-sairedis",
     source_makefiles = [
         "rules/sairedis.mk",
         "rules/sairedis.dep",
@@ -17,7 +30,10 @@ sonic_deb_package(
         "src/sonic-sairedis/SAI/test/ptf",
         "src/sonic-sairedis/SAI/test/saithrift/ctypesgen",
     ],
-    deps = ["//packages/deb/libswsscommon:deb"],
+    deps = [
+        "//packages/deb/libswsscommon:deb",
+        "//packages/deb/libswsscommon-dev:deb",
+    ],
     legacy_runtime_deps = ["LIBSWSSCOMMON"],
     metadata = {
         "cache_mode": "GIT_CONTENT_SHA",

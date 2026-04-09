@@ -277,6 +277,16 @@ stderr_syslog=true
 environment=ASAN_OPTIONS="log_path=/var/log/asan/buffermgrd-asan.log{{ asan_extra_options }}"
 {% endif %}
 
+[program:rebootbackend]
+command=/usr/bin/rebootbackend
+priority=17
+autostart=false
+autorestart=false
+stdout_logfile=NONE
+stdout_syslog=true
+stderr_logfile=NONE
+stderr_syslog=true
+
 [program:vrfmgrd]
 command=/usr/bin/vrfmgrd
 priority=18

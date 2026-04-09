@@ -12,6 +12,16 @@ def _artifact_infos(targets):
 def _source_infos(targets):
     return [target[SonicSourceInfo] for target in targets if SonicSourceInfo in target]
 
+def _deb_files(targets):
+    files = []
+    for target in targets:
+        if DefaultInfo not in target:
+            continue
+        for file in target[DefaultInfo].files.to_list():
+            if file.basename.endswith(".deb"):
+                files.append(file)
+    return files
+
 def _write_package_artifact_metadata(ctx):
     manifest_output = ctx.actions.declare_file(ctx.attr.output_name + ".manifest.json")
     lock_output = ctx.actions.declare_file(ctx.attr.output_name + ".lock.json")
@@ -162,6 +172,7 @@ def _write_package_artifact_metadata(ctx):
 def _sonic_deb_builder_impl(ctx):
     metadata = _write_package_artifact_metadata(ctx)
     deb_output = ctx.actions.declare_file(ctx.attr.output_name)
+    build_dep_debs = sorted(_deb_files(ctx.attr.deps), key = lambda file: file.short_path)
 
     args = ctx.actions.args()
     args.add("--output", deb_output.path)
@@ -172,6 +183,10 @@ def _sonic_deb_builder_impl(ctx):
     args.add("--package-name", ctx.attr.package_name)
     args.add("--version", ctx.attr.package_version)
     args.add("--arch", ctx.attr.package_arch)
+    for profile in ctx.attr.build_profiles:
+        args.add("--build-profile", profile)
+    for dep in build_dep_debs:
+        args.add("--build-deb", dep.path)
 
     prefix = ctx.attr.source_root + "/"
     for src in sorted(ctx.files.builder_srcs, key = lambda file: file.short_path):
@@ -181,7 +196,7 @@ def _sonic_deb_builder_impl(ctx):
 
     ctx.actions.run(
         executable = ctx.executable._builder,
-        inputs = depset(ctx.files.builder_srcs),
+        inputs = depset(ctx.files.builder_srcs + build_dep_debs),
         outputs = [deb_output],
         arguments = [args],
         tools = [ctx.executable._builder],
@@ -219,6 +234,7 @@ _sonic_deb_builder = rule(
         package_name = attr.string(mandatory = True),
         package_version = attr.string(mandatory = True),
         package_arch = attr.string(default = "amd64"),
+        build_profiles = attr.string_list(),
         docker_image = attr.string(),
         docker_platform = attr.string(default = "linux/amd64"),
         _builder = attr.label(

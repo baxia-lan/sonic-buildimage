@@ -34,6 +34,38 @@ filegroup(
 )
 
 filegroup(
+    name = "redis_dump_load_package_srcs",
+    srcs = glob(
+        ["redis-dump-load/**"],
+        exclude = [
+            "redis-dump-load/**/BUILD",
+            "redis-dump-load/**/BUILD.bazel",
+            "redis-dump-load/**/__pycache__/**",
+            "redis-dump-load/**/*.pyc",
+            "redis-dump-load/build/**",
+            "redis-dump-load/dist/**",
+            "redis-dump-load/*.egg-info/**",
+        ],
+    ),
+)
+
+filegroup(
+    name = "sonic_py_common_package_srcs",
+    srcs = glob(
+        ["sonic-py-common/**"],
+        exclude = [
+            "sonic-py-common/**/BUILD",
+            "sonic-py-common/**/BUILD.bazel",
+            "sonic-py-common/**/__pycache__/**",
+            "sonic-py-common/**/*.pyc",
+            "sonic-py-common/build/**",
+            "sonic-py-common/dist/**",
+            "sonic-py-common/*.egg-info/**",
+        ],
+    ),
+)
+
+filegroup(
     name = "sonic_config_engine_review_srcs",
     srcs = glob(
         ["sonic-config-engine/**"],
@@ -42,6 +74,124 @@ filegroup(
             "sonic-config-engine/**/*.pyc",
             "sonic-config-engine/BUILD",
             "sonic-config-engine/BUILD.bazel",
+        ],
+    ),
+)
+
+filegroup(
+    name = "sonic_config_engine_package_srcs",
+    srcs = glob(
+        ["sonic-config-engine/**"],
+        exclude = [
+            "sonic-config-engine/**/BUILD",
+            "sonic-config-engine/**/BUILD.bazel",
+            "sonic-config-engine/**/__pycache__/**",
+            "sonic-config-engine/**/*.pyc",
+            "sonic-config-engine/build/**",
+            "sonic-config-engine/dist/**",
+            "sonic-config-engine/*.egg-info/**",
+        ],
+    ),
+)
+
+filegroup(
+    name = "sonic_containercfgd_package_srcs",
+    srcs = glob(
+        ["sonic-containercfgd/**"],
+        exclude = [
+            "sonic-containercfgd/**/BUILD",
+            "sonic-containercfgd/**/BUILD.bazel",
+            "sonic-containercfgd/**/__pycache__/**",
+            "sonic-containercfgd/**/*.pyc",
+            "sonic-containercfgd/build/**",
+            "sonic-containercfgd/dist/**",
+            "sonic-containercfgd/*.egg-info/**",
+        ],
+    ),
+)
+
+filegroup(
+    name = "sonic_yang_mgmt_package_srcs",
+    srcs = glob(
+        ["sonic-yang-mgmt/**"],
+        exclude = [
+            "sonic-yang-mgmt/**/BUILD",
+            "sonic-yang-mgmt/**/BUILD.bazel",
+            "sonic-yang-mgmt/**/__pycache__/**",
+            "sonic-yang-mgmt/**/*.pyc",
+            "sonic-yang-mgmt/build/**",
+            "sonic-yang-mgmt/dist/**",
+            "sonic-yang-mgmt/*.egg-info/**",
+        ],
+    ),
+)
+
+filegroup(
+    name = "sonic_yang_models_package_srcs",
+    srcs = glob(
+        ["sonic-yang-models/**"],
+        exclude = [
+            "sonic-yang-models/**/BUILD",
+            "sonic-yang-models/**/BUILD.bazel",
+            "sonic-yang-models/**/__pycache__/**",
+            "sonic-yang-models/**/*.pyc",
+            "sonic-yang-models/build/**",
+            "sonic-yang-models/dist/**",
+            "sonic-yang-models/*.egg-info/**",
+        ],
+    ),
+)
+
+filegroup(
+    name = "sonic_eventd_package_srcs",
+    srcs = glob(
+        ["sonic-eventd/**"],
+        exclude = [
+            "sonic-eventd/**/BUILD",
+            "sonic-eventd/**/BUILD.bazel",
+            "sonic-eventd/**/__pycache__/**",
+            "sonic-eventd/**/*.pyc",
+            "sonic-eventd/misc/tests/test",
+        ],
+    ),
+)
+
+filegroup(
+    name = "sonic_sairedis_package_srcs",
+    srcs = glob(
+        ["sonic-sairedis/**"],
+        exclude = [
+            "sonic-sairedis/**/BUILD",
+            "sonic-sairedis/**/BUILD.bazel",
+            "sonic-sairedis/**/__pycache__/**",
+            "sonic-sairedis/**/*.pyc",
+        ],
+    ),
+)
+
+filegroup(
+    name = "sonic_dash_api_package_srcs",
+    srcs = glob(
+        ["sonic-dash-api/**"],
+        exclude = [
+            "sonic-dash-api/**/BUILD",
+            "sonic-dash-api/**/BUILD.bazel",
+            "sonic-dash-api/**/__pycache__/**",
+            "sonic-dash-api/**/*.pyc",
+            "sonic-dash-api/misc/tests/test",
+        ],
+    ),
+)
+
+filegroup(
+    name = "sonic_swss_package_srcs",
+    srcs = glob(
+        ["sonic-swss/**"],
+        exclude = [
+            "sonic-swss/**/BUILD",
+            "sonic-swss/**/BUILD.bazel",
+            "sonic-swss/**/__pycache__/**",
+            "sonic-swss/**/*.pyc",
         ],
     ),
 )

@@ -41,15 +41,19 @@ from asic_sensors_config import get_asic_sensors_config
 PY3x = sys.version_info >= (3, 0)
 
 # TODO: Remove STR_TYPE, FILE_TYPE once SONiC moves to Python 3.x
-# TODO: Remove the import SonicYangCfgDbGenerator once SONiC moves to python3.x
 if PY3x:
     from io import IOBase
-    from sonic_yang_cfg_generator import SonicYangCfgDbGenerator
     STR_TYPE = str
     FILE_TYPE = IOBase
 else:
     STR_TYPE = unicode
     FILE_TYPE = file
+
+def get_sonic_yang_cfg_generator():
+    # Import the libyang-backed generator only for --yang call sites.
+    from sonic_yang_cfg_generator import SonicYangCfgDbGenerator
+
+    return SonicYangCfgDbGenerator
 
 def sort_by_port_index(value):
     if not value:
@@ -409,7 +413,7 @@ def main():
         #TODO: Remove this check onces SONiC moves to python3.x
         if PY3x:
             yang_file = args.yang
-            config_db_json = SonicYangCfgDbGenerator().generate_config(
+            config_db_json = get_sonic_yang_cfg_generator()().generate_config(
                 yang_data_file=yang_file)
             deep_update(data, config_db_json)
         else:

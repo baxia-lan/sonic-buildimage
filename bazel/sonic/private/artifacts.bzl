@@ -2,7 +2,10 @@
 
 load("//bazel/sonic/private:builders/deb.bzl", "sonic_deb_builder")
 load("//bazel/sonic/private:builders/oci.bzl", "sonic_oci_builder")
+load("//bazel/sonic/private:builders/wheel.bzl", "sonic_py_wheel_builder")
 load("//bazel/sonic/private:metadata.bzl", "COMMON_ARTIFACT_ATTRS", "SonicArtifactInfo", "write_artifact_metadata")
+
+DEFAULT_CONCRETE_BUILDER_IMAGE = "sonic-bazel-legacy-bridge-helper:bookworm"
 
 def _artifact_manifest_impl(ctx):
     metadata = write_artifact_metadata(ctx)
@@ -39,6 +42,8 @@ def sonic_deb_package(name, builder = None, **kwargs):
     if builder == "bazel":
         if "migration_stage" not in kwargs:
             kwargs["migration_stage"] = "concrete_builder"
+        if "docker_image" not in kwargs:
+            kwargs["docker_image"] = DEFAULT_CONCRETE_BUILDER_IMAGE
         sonic_deb_builder(
             name = name,
             **kwargs
@@ -47,12 +52,27 @@ def sonic_deb_package(name, builder = None, **kwargs):
 
     fail("Unsupported sonic_deb_package builder: %s" % builder)
 
-def sonic_py_wheel(name, **kwargs):
-    _artifact_manifest(
-        name = name,
-        artifact_kind = "wheel",
-        **kwargs
-    )
+def sonic_py_wheel(name, builder = None, **kwargs):
+    if builder == None:
+        _artifact_manifest(
+            name = name,
+            artifact_kind = "wheel",
+            **kwargs
+        )
+        return
+
+    if builder == "bazel":
+        if "migration_stage" not in kwargs:
+            kwargs["migration_stage"] = "concrete_builder"
+        if "docker_image" not in kwargs:
+            kwargs["docker_image"] = DEFAULT_CONCRETE_BUILDER_IMAGE
+        sonic_py_wheel_builder(
+            name = name,
+            **kwargs
+        )
+        return
+
+    fail("Unsupported sonic_py_wheel builder: %s" % builder)
 
 def sonic_go_binary(name, **kwargs):
     _artifact_manifest(

@@ -4,8 +4,14 @@ package(default_visibility = ["//visibility:public"])
 
 sonic_py_wheel(
     name = "wheel",
+    builder = "bazel",
+    builder_srcs = ["//src:sonic_yang_models_package_srcs"],
     legacy_artifact = "sonic_yang_models-1.0-py3-none-any.whl",
+    output_name = "sonic_yang_models-1.0-py3-none-any.whl",
+    package_name = "sonic_yang_models",
+    package_version = "1.0",
     source_path = "src/sonic-yang-models",
+    source_root = "src/sonic-yang-models",
     source_makefiles = ["rules/sonic-yang-models-py3.mk"],
     sources = ["//sources/sonic-yang-models:source"],
     legacy_deps = [

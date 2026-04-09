@@ -40,6 +40,30 @@ sh_binary(
 )
 
 sh_binary(
+    name = "build_wheel_package",
+    srcs = ["build_wheel_package.sh"],
+    visibility = ["//visibility:public"],
+)
+
+sh_binary(
+    name = "build_docker_archive",
+    srcs = ["build_docker_archive.sh"],
+    visibility = ["//visibility:public"],
+)
+
+sh_binary(
+    name = "build_rootfs_layer",
+    srcs = ["build_rootfs_layer.sh"],
+    data = [
+        "legacy_bridge_helper.Dockerfile",
+        "legacy_bridge_helper.apt.txt",
+        "legacy_bridge_helper.requirements.txt",
+        "legacy_bridge_helper_image_ref.sh",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+sh_binary(
     name = "build_review_docker_archive",
     srcs = ["build_review_docker_archive.sh"],
     visibility = ["//visibility:public"],

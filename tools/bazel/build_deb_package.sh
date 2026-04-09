@@ -13,6 +13,7 @@ Usage:
     --package-name <name> \
     --version <version> \
     --arch <arch> \
+    [--build-profile <name>] \
     --src-map <abs-src>=<rel-path> ...
 EOF
 }
@@ -25,6 +26,8 @@ deb_pattern=""
 package_name=""
 package_version=""
 package_arch="amd64"
+declare -a build_debs=()
+declare -a build_profiles=()
 declare -a src_maps=()
 
 while [[ $# -gt 0 ]]; do
@@ -61,6 +64,14 @@ while [[ $# -gt 0 ]]; do
             package_arch="$2"
             shift 2
             ;;
+        --build-profile)
+            build_profiles+=("$2")
+            shift 2
+            ;;
+        --build-deb)
+            build_debs+=("$2")
+            shift 2
+            ;;
         --src-map)
             src_maps+=("$2")
             shift 2
@@ -83,7 +94,37 @@ if [[ -z "${output}" || -z "${source_root}" || -z "${deb_pattern}" || -z "${pack
 fi
 
 docker_bin="${DOCKER_BIN:-docker}"
+export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"
+
+configure_docker_host() {
+    if [[ -n "${DOCKER_HOST:-}" || -n "${DOCKER_CONTEXT:-}" ]]; then
+        return
+    fi
+
+    if "${docker_bin}" info >/dev/null 2>&1; then
+        return
+    fi
+
+    local default_socket="/var/run/docker.sock"
+    if [[ -S "${default_socket}" ]] && DOCKER_HOST="unix://${default_socket}" "${docker_bin}" info >/dev/null 2>&1; then
+        export DOCKER_HOST="unix://${default_socket}"
+        return
+    fi
+
+    local user_home="${HOME:-}"
+    if [[ -z "${user_home}" ]]; then
+        user_home="$(eval echo "~$(id -un)")"
+    fi
+
+    local desktop_socket="${user_home}/.docker/run/docker.sock"
+    if [[ -S "${desktop_socket}" ]] && DOCKER_HOST="unix://${desktop_socket}" "${docker_bin}" info >/dev/null 2>&1; then
+        export DOCKER_HOST="unix://${desktop_socket}"
+    fi
+}
+
+configure_docker_host
 helper_image_ref_script="tools/bazel/legacy_bridge_helper_image_ref.sh"
+helper_image_stable_ref="sonic-bazel-legacy-bridge-helper:bookworm"
 if [[ ! -x "${helper_image_ref_script}" ]]; then
     workspace_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
     helper_image_ref_script="${workspace_root}/tools/bazel/legacy_bridge_helper_image_ref.sh"
@@ -91,12 +132,50 @@ fi
 if [[ -z "${docker_image}" ]]; then
     docker_image="$("${helper_image_ref_script}")"
 fi
+inspect_output="$({ "${docker_bin}" image inspect "${docker_image}" >/dev/null; } 2>&1)" || inspect_status=$?
+inspect_status="${inspect_status:-0}"
+if [[ "${inspect_status}" -ne 0 ]]; then
+    stable_inspect_output="$({ "${docker_bin}" image inspect "${helper_image_stable_ref}" >/dev/null; } 2>&1)" || stable_inspect_status=$?
+    stable_inspect_status="${stable_inspect_status:-0}"
+    if [[ "${docker_image}" != "${helper_image_stable_ref}" ]] && [[ "${stable_inspect_status}" -eq 0 ]]; then
+        docker_image="${helper_image_stable_ref}"
+    elif grep -Eqi 'permission denied|cannot connect|docker daemon|error during connect' <<<"${inspect_output}${stable_inspect_output}"; then
+        echo "Docker helper image lookup failed because the Docker daemon is not reachable from this Bazel action." >&2
+        echo "DOCKER_HOST=${DOCKER_HOST:-<unset>}" >&2
+        if [[ -n "${inspect_output}" ]]; then
+            echo "${inspect_output}" >&2
+        fi
+        if [[ -n "${stable_inspect_output}" ]]; then
+            echo "${stable_inspect_output}" >&2
+        fi
+        exit 1
+    else
+        echo "Missing local helper image ${docker_image}; build it with tools/bazel/build_legacy_bridge_helper_image.sh before running Bazel concrete Debian builders." >&2
+        if [[ -n "${inspect_output}" ]]; then
+            echo "${inspect_output}" >&2
+        fi
+        exit 1
+    fi
+fi
 workdir="$(mktemp -d)"
 stage_dir="${workdir}/src"
 out_dir="${workdir}/out"
+deps_dir="${workdir}/build-debs"
+build_dep_count=0
+if [[ "${build_debs+set}" == "set" ]]; then
+    build_dep_count="${#build_debs[@]}"
+fi
 mkdir -p "${stage_dir}" "${out_dir}"
+if (( build_dep_count > 0 )); then
+    mkdir -p "${deps_dir}"
+fi
 
 cleanup() {
+    if [[ "${SONIC_BAZEL_KEEP_WORKDIR:-0}" == "1" ]]; then
+        echo "Keeping workdir: ${workdir}" >&2
+        return
+    fi
+
     rm -rf "${workdir}"
 }
 trap cleanup EXIT
@@ -112,7 +191,30 @@ for mapping in "${src_maps[@]}"; do
     cp -p "${src}" "${stage_dir}/${rel}"
 done
 
-if find "${stage_dir}" -name Cargo.toml -print -quit | grep -q .; then
+normalize_autotools_timestamps() {
+    local source_stamp="200001010000"
+    local generated_stamp="200001010100"
+
+    find "${stage_dir}" -type f \( -name "configure.ac" -o -name "aclocal.m4" -o -name "Makefile.am" -o -name "*.m4" \) \
+        -exec touch -t "${source_stamp}" {} +
+
+    find "${stage_dir}" -type f \( -name "configure" -o -name "Makefile.in" \) \
+        -exec touch -t "${generated_stamp}" {} +
+}
+
+normalize_autotools_timestamps
+
+for dep in "${build_debs[@]-}"; do
+    [[ -n "${dep}" ]] || continue
+    cp -p "${dep}" "${deps_dir}/$(basename "${dep}")"
+done
+
+rust_build_invoked=0
+if [[ -f "${stage_dir}/debian/rules" ]] && grep -Eq '(^|[^[:alnum:]_])cargo[[:space:]]+(build|check|install|run|rustc|test)\b' "${stage_dir}/debian/rules"; then
+    rust_build_invoked=1
+fi
+
+if [[ "${rust_build_invoked}" -eq 1 ]]; then
     cargo_config_present=0
     if find "${stage_dir}" \( -path '*/.cargo/config.toml' -o -path '*/.cargo/config' \) -type f -print -quit | grep -q .; then
         cargo_config_present=1
@@ -134,7 +236,13 @@ if find "${stage_dir}" -name Cargo.toml -print -quit | grep -q .; then
     fi
 fi
 
+build_profile_args=""
+if (( ${#build_profiles[@]} > 0 )); then
+    build_profile_args="-P$(IFS=,; echo "${build_profiles[*]}")"
+fi
+
 "${docker_bin}" run --rm \
+    --pull never \
     --network none \
     --platform "${docker_platform}" \
     -e CARGO_NET_OFFLINE="true" \
@@ -160,7 +268,12 @@ for libclang in /usr/lib/llvm-*/lib; do
 done
 
 cd /work/src
-dpkg-buildpackage -rfakeroot -b -us -uc -d -Pnoyangmod,nopython2
+if compgen -G '/work/build-debs/*.deb' >/dev/null; then
+    for build_dep in /work/build-debs/*.deb; do
+        dpkg-deb -x "\${build_dep}" /
+    done
+fi
+dpkg-buildpackage -rfakeroot -b -us -uc -d ${build_profile_args}
 
 shopt -s nullglob
 matches=(/work/${deb_pattern})

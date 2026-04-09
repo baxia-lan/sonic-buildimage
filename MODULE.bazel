@@ -15,6 +15,7 @@ bazel_dep(name = "rules_distroless", version = "0.6.2")
 bazel_dep(name = "rules_img", version = "0.3.5")
 
 oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
+apt = use_extension("@rules_distroless//apt:extensions.bzl", "apt")
 non_module_dependencies = use_extension("//bazel/repositories:extensions.bzl", "non_module_dependencies")
 
 oci.pull(
@@ -29,6 +30,14 @@ use_repo(
     "debian_bookworm",
     "debian_bookworm_linux_amd64",
 )
+
+apt.install(
+    name = "bookworm_runtime",
+    manifest = "//images/oci/docker-base-bookworm:bookworm_runtime.yaml",
+    lock = "//images/oci/docker-base-bookworm:bookworm_runtime.lock.json",
+)
+
+use_repo(apt, "bookworm_runtime")
 
 # Keep Broadcom vendor SAI payloads pinned in Bzlmod instead of discovering
 # them implicitly through legacy installer logic.

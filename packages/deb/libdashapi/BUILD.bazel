@@ -4,8 +4,17 @@ package(default_visibility = ["//visibility:public"])
 
 sonic_deb_package(
     name = "deb",
+    builder = "bazel",
+    builder_srcs = ["//src:sonic_dash_api_package_srcs"],
+    deb_pattern = "libdashapi_1.0.0_amd64.deb",
+    migration_stage = "concrete_builder",
+    output_name = "libdashapi_1.0.0_amd64.deb",
+    package_arch = "amd64",
+    package_name = "libdashapi",
+    package_version = "1.0.0",
     legacy_artifact = "libdashapi_1.0.0_$(CONFIGURED_ARCH).deb",
     source_path = "src/sonic-dash-api",
+    source_root = "src/sonic-dash-api",
     source_makefiles = [
         "rules/sonic-dash-api.mk",
         "rules/sonic-dash-api.dep",

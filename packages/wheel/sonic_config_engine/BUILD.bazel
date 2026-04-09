@@ -4,11 +4,18 @@ package(default_visibility = ["//visibility:public"])
 
 sonic_py_wheel(
     name = "wheel",
+    builder = "bazel",
+    builder_srcs = ["//src:sonic_config_engine_package_srcs"],
     legacy_artifact = "sonic_config_engine-1.0-py3-none-any.whl",
+    output_name = "sonic_config_engine-1.0-py3-none-any.whl",
+    package_name = "sonic_config_engine",
+    package_version = "1.0",
     source_path = "src/sonic-config-engine",
+    source_root = "src/sonic-config-engine",
     source_makefiles = ["rules/sonic-config.mk"],
     sources = ["//sources/sonic-config-engine:source"],
     wheel_deps = [
+        "//packages/wheel/sonic_py_common:wheel",
         "//packages/wheel/sonic_yang_mgmt:wheel",
         "//packages/wheel/sonic_yang_models:wheel",
     ],

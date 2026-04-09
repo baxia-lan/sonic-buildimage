@@ -4,14 +4,26 @@ package(default_visibility = ["//visibility:public"])
 
 sonic_deb_package(
     name = "deb",
+    builder = "bazel",
+    builder_srcs = ["//src:sonic_eventd_package_srcs"],
+    deb_pattern = "sonic-eventd_1.0.0-0_amd64.deb",
     legacy_artifact = "sonic-eventd_1.0.0-0_$(CONFIGURED_ARCH).deb",
+    migration_stage = "concrete_builder",
+    output_name = "sonic-eventd_1.0.0-0_amd64.deb",
+    package_arch = "amd64",
+    package_name = "sonic-eventd",
+    package_version = "1.0.0-0",
     source_path = "src/sonic-eventd",
+    source_root = "src/sonic-eventd",
     source_makefiles = [
         "rules/eventd.mk",
         "rules/eventd.dep",
     ],
     sources = ["//sources/sonic-eventd:source"],
-    deps = ["//packages/deb/libswsscommon:deb"],
+    deps = [
+        "//packages/deb/libswsscommon:deb",
+        "//packages/deb/libswsscommon-dev:deb",
+    ],
     runtime_deps = ["//packages/deb/libswsscommon:deb"],
     metadata = {
         "cache_mode": "GIT_CONTENT_SHA",
