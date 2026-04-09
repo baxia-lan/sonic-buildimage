@@ -2,4 +2,8 @@
 
 package(default_visibility = ["//visibility:public"])
 
-exports_files(["arp_update"])
+exports_files([
+    "arp_update",
+    "configdb-load.sh",
+    "update_chassisdb_config",
+])

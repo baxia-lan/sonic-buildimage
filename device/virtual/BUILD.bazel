@@ -1,0 +1,6 @@
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "vs_device_data",
+    srcs = glob(["x86_64-kvm_x86_64-r0/**"]),
+)
