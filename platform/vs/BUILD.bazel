@@ -105,6 +105,7 @@ pkg_tar(
 # FRR comes from deb.frrouting.org (not in standard Debian repos).
 # sonic-cfggen and Python packages are built from source inside Docker.
 # This layer is the only non-hermetic part — everything else is OCI-native.
+# v2: FRR + supervisor runtime
 apt_install_layer(
     name = "vs_frr_layer",
     packages = [
