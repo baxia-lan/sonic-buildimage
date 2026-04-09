@@ -66,6 +66,10 @@ onie_image(
 # ── Local full build (stub kernel + orchagent via Docker genrules) ─────────────
 LOCAL_FULL_IMAGES = HERMETIC_SERVICE_IMAGES + [
     "//dockers/docker-orchagent:docker_orchagent",
+    # TODO: Add when FRR and more services are ready:
+    # "//dockers/docker-fpm-frr:docker_fpm_frr",
+    # "//dockers/docker-snmp:docker_snmp",
+    # "//dockers/docker-lldp:docker_lldp",
 ]
 
 sonic_rootfs_image(
