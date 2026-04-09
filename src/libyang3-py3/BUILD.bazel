@@ -1,0 +1,34 @@
+"""libyang3 Python bindings — migrated from rules/libyang3-py3.mk.
+
+Clones libyang-python v3.1.0, applies SONiC patches, builds via dpkg-buildpackage.
+"""
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+
+package(default_visibility = ["//visibility:public"])
+
+deb_package_set(
+    name = "libyang3_py3_debs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+    ),
+    build_deps = [
+        "//src/libyang3:libyang3",
+    ],
+    debian_dir = "Makefile",
+    declared_outputs = [
+        "python3-libyang_3.1.0-1_amd64.deb",
+    ],
+    version = "3.1.0",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "libyang3_py3",
+    actual = ":libyang3_py3_debs",
+    visibility = ["//visibility:public"],
+)
