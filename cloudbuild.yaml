@@ -2,11 +2,8 @@ timeout: 7200s
 
 options:
   logging: CLOUD_LOGGING_ONLY
-  pool:
-    name: projects/$PROJECT_ID/locations/us-central1/workerPools/${_PRIMARY_POOL}
 
 substitutions:
-  _PRIMARY_POOL: sonic-primary
   _AFFECTED_LABELS: //bazel/... //tools/... //sources/... //packages/... //images/... //platforms/... //installers/...
 
 steps:
