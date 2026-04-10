@@ -475,3 +475,53 @@ sh_test(
         "requires-docker",
     ],
 )
+
+# ── sairedis unit tests (GTest + Perl compliance) ──────────────────────────
+sh_test(
+    name = "sairedis_unit_tests",
+    timeout = "long",
+    srcs = ["sairedis_tests.sh"],
+    data = [
+        "//build/deb/sonic-swss-common:swss_common",
+        "//src/sonic-sairedis:sairedis",
+        "//src/sonic-dash-api:sonic_dash_api",
+    ],
+    tags = [
+        "manual",
+        "no-sandbox",
+        "requires-docker",
+    ],
+)
+
+# ── swss mock_tests (30 GTest unit tests, 6 binaries) ──────────────────────
+sh_test(
+    name = "swss_mock_tests",
+    timeout = "eternal",
+    srcs = ["swss_mock_tests.sh"],
+    data = [
+        "//build/deb/sonic-swss-common:swss_common",
+        "//src/sonic-sairedis:sairedis",
+        "//src/sonic-swss:swss_deb",
+    ],
+    tags = [
+        "manual",
+        "no-sandbox",
+        "requires-docker",
+    ],
+)
+
+# ── sonic-utilities pytest (636+ test files) ────────────────────────────────
+sh_test(
+    name = "sonic_utilities_tests",
+    timeout = "eternal",
+    srcs = ["sonic_utilities_tests.sh"],
+    data = [
+        "//build/deb/sonic-swss-common:swss_common",
+        "//build/deb/sonic-swss-common:python3_swsscommon",
+    ],
+    tags = [
+        "manual",
+        "no-sandbox",
+        "requires-docker",
+    ],
+)

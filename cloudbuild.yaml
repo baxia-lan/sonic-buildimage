@@ -303,6 +303,93 @@ steps:
     waitFor: ["build-orchagent"]
     timeout: "1800s"
 
+  # ── Step 8c: sairedis unit tests (parallel with VS build) ────────────────────
+  - id: "sairedis-unit-tests"
+    name: "gcr.io/cloud-builders/docker"
+    entrypoint: "bash"
+    args:
+      - "-euo"
+      - "pipefail"
+      - "-c"
+      - |
+        echo ">>> [sairedis-tests] Running sairedis C++ unit tests..."
+        STAGING=$$(mktemp -d)
+        find . -path "*/bazel-bin/*/*.deb" -size +0 2>/dev/null | while read f; do cp "$$f" "$$STAGING/"; done
+        docker run --rm --platform linux/amd64 \
+          -v "$$STAGING:/debs:ro" \
+          -v "$$(pwd)/src/sonic-sairedis:/src:ro" \
+          -e DEBIAN_FRONTEND=noninteractive \
+          debian:bookworm-slim bash -c '
+            set -euo pipefail
+            apt-get update -qq
+            apt-get install -y -qq --no-install-recommends \
+              redis-server build-essential cmake libgtest-dev libgmock-dev \
+              libnl-3-dev libnl-genl-3-dev libnl-route-3-dev libnl-nf-3-dev \
+              libhiredis-dev libzmq3-dev libboost-dev libboost-serialization-dev \
+              libprotobuf-dev protobuf-compiler pkg-config libyang2-dev nlohmann-json3-dev \
+              uuid-dev python3-dev swig autoconf automake libtool \
+              perl aspell aspell-en libjansson-dev libteam-dev libjemalloc-dev >/dev/null 2>&1
+            dpkg --force-overwrite --force-depends -i /debs/*.deb 2>&1 || true
+            apt-get install -f -y -qq 2>/dev/null || true; ldconfig
+            redis-server --daemonize yes --bind 127.0.0.1
+            cp -a /src /tmp/sairedis-test && cd /tmp/sairedis-test
+            find . -name .git -type f -delete 2>/dev/null || true; rm -rf .git
+            git config --global user.email build@sonic && git config --global user.name sonic
+            git init -q && git add -A . && git commit -qm init 2>/dev/null || true
+            ./autogen.sh 2>&1 | tail -3
+            ./configure --with-sai=vs --enable-tests 2>&1 | tail -5
+            make -j$$(nproc) 2>&1 | tail -20
+            cd tests && ./tests --gtest_output=xml:/tmp/sairedis-results.xml 2>&1
+          '
+        echo ">>> [sairedis-tests] DONE"
+    waitFor: ["build-orchagent"]
+    timeout: "1800s"
+
+  # ── Step 8d: swss mock_tests (30 GTest, parallel with VS) ──────────────────
+  - id: "swss-mock-tests"
+    name: "gcr.io/cloud-builders/docker"
+    entrypoint: "bash"
+    args:
+      - "-euo"
+      - "pipefail"
+      - "-c"
+      - |
+        echo ">>> [swss-mock-tests] Running 6 GTest binaries..."
+        STAGING=$$(mktemp -d)
+        find . -path "*/bazel-bin/*/*.deb" -size +0 2>/dev/null | while read f; do cp "$$f" "$$STAGING/"; done
+        docker run --rm --platform linux/amd64 \
+          -v "$$STAGING:/debs:ro" \
+          -v "$$(pwd)/src/sonic-swss:/src:ro" \
+          -e DEBIAN_FRONTEND=noninteractive \
+          debian:bookworm-slim bash -c '
+            set -euo pipefail
+            apt-get update -qq
+            apt-get install -y -qq --no-install-recommends \
+              redis-server build-essential cmake libgtest-dev libgmock-dev \
+              libnl-3-dev libnl-genl-3-dev libnl-route-3-dev libnl-nf-3-dev \
+              libhiredis-dev libzmq3-dev libboost-dev libboost-serialization-dev \
+              libprotobuf-dev protobuf-compiler pkg-config libyang2-dev nlohmann-json3-dev \
+              uuid-dev python3-dev swig autoconf automake libtool \
+              libjansson-dev libteam-dev libjemalloc-dev >/dev/null 2>&1
+            dpkg --force-overwrite --force-depends -i /debs/*.deb 2>&1 || true
+            apt-get install -f -y -qq 2>/dev/null || true; ldconfig
+            redis-server --daemonize yes --bind 127.0.0.1
+            cp -a /src /tmp/swss-test && cd /tmp/swss-test
+            find . -name .git -type f -delete 2>/dev/null || true; rm -rf .git
+            git config --global user.email build@sonic && git config --global user.name sonic
+            git init -q && git add -A . && git commit -qm init 2>/dev/null || true
+            ./autogen.sh 2>&1 | tail -3 && ./configure --enable-tests 2>&1 | tail -5
+            cd tests/mock_tests && make -j$$(nproc) 2>&1 | tail -20
+            FAILED=0
+            for t in tests tests_intfmgrd tests_teammgrd tests_portsyncd tests_fpmsyncd tests_response_publisher; do
+              [ -f "./$$t" ] && { echo ">>> Running $$t"; ./$$t 2>&1 || FAILED=1; } || true
+            done
+            [ $$FAILED -eq 0 ] && echo "ALL PASSED" || { echo "SOME FAILED"; exit 1; }
+          '
+        echo ">>> [swss-mock-tests] DONE"
+    waitFor: ["build-orchagent"]
+    timeout: "2400s"
+
   # ── Step 9: Run pytest ───────────────────────────────────────────────────────
   - id: "pytest-vs"
     name: "gcr.io/cloud-builders/docker"
@@ -344,9 +431,12 @@ steps:
         echo ">>> [pytest-vs] Installing pytest..."
         pip3 install pytest docker redis 2>/dev/null || true
 
-        echo ">>> [pytest-vs] Running test_port.py..."
+        echo ">>> [pytest-vs] Running full VS pytest suite..."
         cd src/sonic-swss/tests
-        python3 -m pytest --imgname=docker-sonic-vs:latest -v test_port.py -x --timeout=300 || TEST_RC=$$?
+        python3 -m pytest --imgname=docker-sonic-vs:latest -v \
+          test_port.py test_acl.py test_route.py test_vlan.py test_crm.py \
+          test_interface.py test_neighbor.py test_nhg.py test_fdb.py \
+          -x --timeout=600 || TEST_RC=$$?
 
         echo ">>> [pytest-vs] Cleanup..."
         docker stop "$$CONTAINER_ID" 2>/dev/null || true
