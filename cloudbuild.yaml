@@ -12,6 +12,7 @@ substitutions:
 steps:
   - id: presubmit
     name: gcr.io/cloud-builders/gcloud
+    allowFailure: true
     entrypoint: bash
     env:
       - USE_BAZEL_VERSION=8.5.0
@@ -19,3 +20,25 @@ steps:
     args:
       - -lc
       - ./ci/gcp/presubmit.sh
+
+  - id: presubmit-summary
+    name: gcr.io/cloud-builders/gcloud
+    waitFor:
+      - presubmit
+    entrypoint: bash
+    args:
+      - -lc
+      - |
+        summary="out/bazel-migration/presubmit/summary.txt"
+        if [[ ! -f "${summary}" ]]; then
+          echo "Missing presubmit summary: ${summary}" >&2
+          exit 1
+        fi
+
+        echo "== presubmit summary =="
+        cat "${summary}"
+
+        status="$(awk -F= '$1=="status" {print $2}' "${summary}" | tail -1)"
+        if [[ "${status}" != "success" ]]; then
+          exit 1
+        fi
