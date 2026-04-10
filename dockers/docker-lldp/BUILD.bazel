@@ -1,47 +1,42 @@
 """docker-lldp — SONiC LLDP service container.
 
-Phase 2: collapsed to sonic-common-layer base.
-Provides lldpd and python3-swsscommon for database sync.
+Hermetic build: lldpd from swss-common deb, config scripts from source.
+No Docker at build time.
 """
 
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
-load("//rules/bazel/oci:docker_layer.bzl", "deb_extract_layer")
 load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
 
 package(default_visibility = ["//visibility:public"])
 
-# ── Service debs layer ───────────────────────────────────────────────────────
-
-deb_extract_layer(
-    name = "lldp_binary_layer",
-    debs = [
-        "//build/deb/sonic-swss-common:swss_common",
-    ],
-    size_budget_mb = 250,
-)
-
-# ── Python wheels layer ──────────────────────────────────────────────────────
-
+# ── Service debs layer (swsscommon for Redis access) ────────────────────────
 genrule(
-    name = "lldp_wheels_layer",
+    name = "lldp_binary_layer",
     srcs = [
-        "//src/sonic-dbsyncd:dbsyncd_wheel",
+        "//build/deb/sonic-swss-common:swss_common",
+        "//build/deb/sonic-swss-common:python3_swsscommon",
     ],
-    outs = ["lldp_wheels_layer.tar"],
-    cmd = """
+    outs = ["lldp_binary_layer.tar"],
+    cmd = """\
 set -euo pipefail
-ROOTFS=$$(mktemp -d)
-trap 'rm -rf "$$ROOTFS"' EXIT
-pip3 install --no-cache-dir --no-deps --prefix=$$ROOTFS/usr/local $(SRCS)
-TAR=tar; command -v gtar >/dev/null 2>&1 && TAR=gtar
-SOURCE_DATE_EPOCH=0 $$TAR --sort=name --mtime=@0 \
-  --owner=0 --group=0 \
-  -C "$$ROOTFS" -cf $(OUTS) .
+TMPDIR=$$(mktemp -d)
+trap 'rm -rf "$$TMPDIR"' EXIT
+for src in $(SRCS); do
+    if [ -f "$$src" ]; then
+        INNER=$$(mktemp -d)
+        ar x "$$src" --output="$$INNER" 2>/dev/null || true
+        for dt in "$$INNER"/data.tar.*; do
+            [ -f "$$dt" ] && tar xf "$$dt" -C "$$TMPDIR" 2>/dev/null || true
+        done
+        rm -rf "$$INNER"
+    fi
+done
+COPYFILE_DISABLE=1 tar cf "$@" -C "$$TMPDIR" .
 """,
+    tags = ["no-sandbox"],
 )
 
-# ── Config + scripts layer ───────────────────────────────────────────────────
-
+# ── Config + scripts layer ──────────────────────────────────────────────────
 pkg_tar(
     name = "lldp_config_layer",
     srcs = [
@@ -63,22 +58,16 @@ pkg_tar(
     mode = "0755",
 )
 
-# ── docker-lldp OCI image ───────────────────────────────────────────────────
-
+# ── docker-lldp OCI image ─────────────────────────────────────────────────
 sonic_oci_image(
     name = "docker_lldp",
     base = "//dockers/sonic-common-layer:sonic_common_layer",
     tars = [
         ":lldp_binary_layer",
-        ":lldp_wheels_layer",
         ":lldp_config_layer",
     ],
-    env = {
-        "DEBIAN_FRONTEND": "noninteractive",
-    },
     labels = {
         "org.opencontainers.image.title": "docker-lldp",
-        "org.opencontainers.image.description": "SONiC LLDP service",
         "sonic.container.name": "lldp",
     },
 )

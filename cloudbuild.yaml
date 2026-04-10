@@ -178,6 +178,7 @@ steps:
         bazel --output_user_root=/workspace/.cache/bazel \
           build //src/sonic-linux-kernel:linux_kernel_debs \
           --config=ci \
+          --spawn_strategy=local \
           2>&1
 
         echo ""
@@ -209,6 +210,8 @@ steps:
         bazel --output_user_root=/workspace/.cache/bazel \
           build //dockers/docker-orchagent:docker_orchagent \
           --config=ci \
+          --spawn_strategy=local \
+          --strategy=CopyToDirectory=local \
           2>&1
 
         echo ""
@@ -240,6 +243,8 @@ steps:
         bazel --output_user_root=/workspace/.cache/bazel \
           build //platform/vs:docker_sonic_vs_tarball \
           --config=ci \
+          --spawn_strategy=local \
+          --strategy=CopyToDirectory=local \
           --check_direct_dependencies=off \
           2>&1
 
@@ -329,6 +334,8 @@ steps:
         bazel --output_user_root=/workspace/.cache/bazel \
           build //platform/broadcom:sonic_broadcom_bin \
           --config=ci \
+          --spawn_strategy=local \
+          --strategy=CopyToDirectory=local \
           2>&1
 
         echo ""

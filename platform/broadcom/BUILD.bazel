@@ -1,22 +1,24 @@
 """Broadcom platform — sonic-broadcom.bin ONIE installer image.
 
-Two build modes:
-  - :sonic_broadcom_bin — full image (needs kernel from CI + all services)
-  - :sonic_broadcom_minimal — local build with available hermetic services
+Hermetic build: all service images built from source via Bazel,
+FRR from pinned deb repo, kernel from Docker genrule.
+No mocks, no stubs in the CI build path.
 """
 
-load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 load("//rules/bazel/onie:onie.bzl", "onie_image")
 load("//rules/bazel/onie:rootfs.bzl", "sonic_rootfs_image")
 
 package(default_visibility = ["//visibility:public"])
 
-# ── Service images (hermetic, build locally) ──────────────────────────────────
-# Use the OCI image targets (directories with blobs/) for layer deduplication.
-# Shared base layers are stored once in the rootfs regardless of how many
-# services use them.
-HERMETIC_SERVICE_IMAGES = [
+# ── All service images for the broadcom platform ─────────────────────────────
+# Each is a sonic_oci_image target producing an OCI image directory.
+# Shared base layers (sonic-common-layer) are deduplicated in the rootfs.
+ALL_SERVICE_IMAGES = [
     "//dockers/docker-database:docker_database",
+    "//dockers/docker-orchagent:docker_orchagent",
+    "//dockers/docker-fpm-frr:docker_fpm_frr",
+    "//dockers/docker-snmp:docker_snmp",
+    "//dockers/docker-lldp:docker_lldp",
     "//dockers/docker-teamd:docker_teamd",
     "//dockers/docker-nat:docker_nat",
     "//dockers/docker-sflow:docker_sflow",
@@ -26,75 +28,14 @@ HERMETIC_SERVICE_IMAGES = [
     "//dockers/docker-basic_router:docker_basic_router",
 ]
 
-# ── Stub kernel for local builds ──────────────────────────────────────────────
-# On macOS/arm64, the real kernel can't build (x86 asm limitation).
-# This stub allows testing the ONIE assembly pipeline locally.
-genrule(
-    name = "stub_kernel",
-    outs = ["vmlinuz-stub"],
-    cmd = "echo 'STUB KERNEL — replace with //src/sonic-linux-kernel:vmlinuz on CI' > $(OUTS)",
-)
-
-genrule(
-    name = "stub_modules",
-    outs = ["modules-stub.tar.gz"],
-    cmd = """
-mkdir -p /tmp/stub_modules/lib/modules/6.1.0-29-2-amd64/kernel
-echo "stub" > /tmp/stub_modules/lib/modules/6.1.0-29-2-amd64/kernel/stub.ko
-tar -czf $(OUTS) -C /tmp/stub_modules .
-rm -rf /tmp/stub_modules
-""",
-)
-
-# ── Minimal rootfs (local, hermetic services only) ────────────────────────────
-sonic_rootfs_image(
-    name = "sonic_broadcom_rootfs_minimal",
-    platform = "broadcom",
-    service_images = HERMETIC_SERVICE_IMAGES,
-)
-
-# ── Minimal ONIE image (local build) ─────────────────────────────────────────
-onie_image(
-    name = "sonic_broadcom_minimal",
-    rootfs = ":sonic_broadcom_rootfs_minimal",
-    kernel = ":stub_kernel",
-    platform = "broadcom",
-    machine = "x86_64-broadcom_common",
-    version = "0.0.0-bazel-minimal",
-)
-
-# ── Local full build (stub kernel + orchagent via Docker genrules) ─────────────
-LOCAL_FULL_IMAGES = HERMETIC_SERVICE_IMAGES + [
-    "//dockers/docker-orchagent:docker_orchagent",
-    # TODO: Add when FRR and more services are ready:
-    # "//dockers/docker-fpm-frr:docker_fpm_frr",
-    # "//dockers/docker-snmp:docker_snmp",
-    # "//dockers/docker-lldp:docker_lldp",
-]
-
-sonic_rootfs_image(
-    name = "sonic_broadcom_rootfs_local",
-    platform = "broadcom",
-    service_images = LOCAL_FULL_IMAGES,
-)
-
-onie_image(
-    name = "sonic_broadcom_local",
-    rootfs = ":sonic_broadcom_rootfs_local",
-    kernel = ":stub_kernel",
-    platform = "broadcom",
-    machine = "x86_64-broadcom_common",
-    version = "0.0.0-bazel-local",
-)
-
-# ── Full rootfs (CI, all services + real kernel) ──────────────────────────────
+# ── Full rootfs (all services) ───────────────────────────────────────────────
 sonic_rootfs_image(
     name = "sonic_broadcom_rootfs",
     platform = "broadcom",
-    service_images = LOCAL_FULL_IMAGES,
+    service_images = ALL_SERVICE_IMAGES,
 )
 
-# ── Full ONIE image (CI with real kernel) ─────────────────────────────────────
+# ── Full ONIE image (real kernel from CI) ────────────────────────────────────
 onie_image(
     name = "sonic_broadcom_bin",
     rootfs = ":sonic_broadcom_rootfs",
@@ -102,4 +43,11 @@ onie_image(
     platform = "broadcom",
     machine = "x86_64-broadcom_common",
     version = "0.0.0-bazel",
+)
+
+# ── VS rootfs (same services, for virtual switch testing) ────────────────────
+sonic_rootfs_image(
+    name = "sonic_vs_rootfs",
+    platform = "vs",
+    service_images = ALL_SERVICE_IMAGES,
 )
