@@ -256,6 +256,53 @@ steps:
     waitFor: ["build-orchagent"]
     timeout: "3600s"
 
+  # ── Step 8b: swss-common unit tests ──────────────────────────────────────────
+  - id: "swss-common-unit-tests"
+    name: "gcr.io/cloud-builders/docker"
+    entrypoint: "bash"
+    args:
+      - "-euo"
+      - "pipefail"
+      - "-c"
+      - |
+        echo ">>> [swss-common-tests] Running swss-common C++ unit tests..."
+        echo ">>> [swss-common-tests] Finding debs..."
+        STAGING=$$(mktemp -d)
+        find . -path "*/sonic-swss-common/*.deb" -size +0 2>/dev/null | while read f; do
+          cp "$$f" "$$STAGING/" 2>/dev/null || true
+        done
+        echo ">>> [swss-common-tests] Found $$(ls $$STAGING/*.deb 2>/dev/null | wc -l) debs"
+
+        docker run --rm --platform linux/amd64 \
+          -v "$$STAGING:/debs:ro" \
+          -v "$$(pwd)/src/sonic-swss-common:/src:ro" \
+          -e DEBIAN_FRONTEND=noninteractive \
+          debian:bookworm-slim bash -c '
+            set -euo pipefail
+            apt-get update -qq
+            apt-get install -y -qq --no-install-recommends \
+              redis-server build-essential cmake \
+              libgtest-dev libgmock-dev \
+              libnl-3-dev libnl-genl-3-dev libnl-route-3-dev libnl-nf-3-dev \
+              libhiredis-dev libzmq3-dev libboost-dev libboost-serialization-dev \
+              libprotobuf-dev protobuf-compiler pkg-config \
+              libyang2-dev nlohmann-json3-dev uuid-dev \
+              python3-dev swig autoconf automake libtool >/dev/null 2>&1
+            dpkg --force-overwrite --force-depends -i /debs/*.deb 2>&1 || true
+            apt-get install -f -y -qq 2>/dev/null || true
+            ldconfig
+            redis-server --daemonize yes --bind 127.0.0.1
+            cp -a /src /tmp/swss-common-test && cd /tmp/swss-common-test
+            ./autogen.sh 2>&1 | tail -3
+            ./configure --enable-tests 2>&1 | tail -5
+            make -j$$(nproc) tests/tests 2>&1 | tail -10
+            echo ">>> Running GTest..."
+            ./tests/tests --gtest_output=xml:/tmp/test-results.xml 2>&1
+          '
+        echo ">>> [swss-common-tests] DONE"
+    waitFor: ["build-orchagent"]
+    timeout: "1800s"
+
   # ── Step 9: Run pytest ───────────────────────────────────────────────────────
   - id: "pytest-vs"
     name: "gcr.io/cloud-builders/docker"

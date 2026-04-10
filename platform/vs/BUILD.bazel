@@ -438,3 +438,40 @@ sh_test(
         "requires-docker",
     ],
 )
+
+# ── VS pytest (test_port.py — ultimate verification) ────────────────────────
+# Runs the sonic-swss integration tests against the Bazel-built docker-sonic-vs.
+# This verifies: orchagent, syncd-vs, redis, swss-common, FRR, supervisord,
+# config generation, and all 40+ services work correctly together.
+#
+# Run: bazel test //platform/vs:pytest_vs --test_output=all
+sh_test(
+    name = "pytest_vs",
+    timeout = "eternal",
+    srcs = ["pytest_vs.sh"],
+    data = [":docker_sonic_vs_tarball"],
+    tags = [
+        "manual",
+        "no-sandbox",
+        "requires-docker",
+    ],
+)
+
+# ── swss-common unit tests ──────────────────────────────────────────────────
+# Runs the C++ GTest unit tests from sonic-swss-common inside a Docker container
+# with Redis. These tests verify: DBConnector, ProducerStateTable, ConsumerStateTable,
+# NotificationProducer, events, JSON serialization, IP address handling, etc.
+sh_test(
+    name = "swss_common_unit_tests",
+    timeout = "long",
+    srcs = ["swss_common_tests.sh"],
+    data = [
+        "//build/deb/sonic-swss-common:swss_common",
+        "//build/deb/sonic-swss-common:swss_common_dev",
+    ],
+    tags = [
+        "manual",
+        "no-sandbox",
+        "requires-docker",
+    ],
+)
