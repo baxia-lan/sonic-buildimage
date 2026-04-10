@@ -1,121 +1,78 @@
-# Migration Progress
+# Make→Bazel Migration Progress
 
-Last updated: 2026-04-09
+Last updated: 2026-04-10
 
-## Done
+## Three Milestones
 
-### Infrastructure
-- [x] Bazel 8.5.1 + bzlmod (MODULE.bazel)
-- [x] rules_distroless 0.3.8 — 190 Debian packages from snapshot.debian.org
-- [x] toolchains_llvm 1.7.0 — Hermetic LLVM/Clang 18
-- [x] debian_sysroot_repo — Bookworm sysroot from 5 .deb packages
-- [x] slim_apt_layer — ELF strip + locale/man/doc removal
-- [x] 217+ BUILD.bazel files (88 submodules + 54 dockers + platform + rules)
-- [x] MODULE.bazel.lock committed for reproducible apt package resolution
-- [x] Hermetic sysroot with 30+ Bookworm dev packages
+### 1. docker-sonic-vs + pytest [IN PROGRESS]
 
-### .deb Packages (29 from source)
-- [x] libnl3 (23 debs, SONiC-patched, dget from Debian pool)
-- [x] sonic-swss-common (7 debs, 386 KB libswsscommon)
-- [x] sonic-sairedis (11 debs, SAI metadata + libsaivs)
-- [x] sonic-dash-api (2 debs, protobuf DASH API)
-- [x] sonic-stp (2 debs)
-- [x] sonic-swss (2 debs, 3.0 MB, orchagent 7.3 MB)
+**Goal**: `bazel build //platform/vs:docker_sonic_vs_tarball` → load → pytest passes
 
-### Docker Images (15 with BUILD.bazel)
-- [x] sonic-common-layer (hermetic, 39 MB)
-- [x] docker-database (hermetic)
-- [x] docker-teamd (hermetic)
-- [x] docker-nat (hermetic)
-- [x] docker-sflow (hermetic)
-- [x] docker-stp (hermetic)
-- [x] docker-iccpd (hermetic)
-- [x] docker-router-advertiser (hermetic)
-- [x] docker-basic_router (hermetic)
-- [x] docker-dhcp-relay (hermetic)
-- [x] docker-eventd (hermetic)
-- [x] docker-platform-monitor (hermetic)
-- [x] docker-sysmgr (hermetic)
-- [x] docker-sonic-mgmt-framework (hermetic)
-- [x] docker-orchagent (Docker genrule, real binary)
+| Component | Status | Verified |
+|---|---|---|
+| OCI image assembly (oci_image, 7 layers) | Done | Analysis passes |
+| Runtime apt packages (rules_distroless) | Done | Layer builds |
+| SONiC .debs (swss-common, sairedis+syncd-vs, swss) | Done | .debs built from source |
+| FRR 10.6.0 (@frr repo, sha256 pinned) | Done | Analysis passes |
+| Python layer (sonic-cfggen, sonic-py-common) | Done | Analysis passes |
+| supervisord.conf + redis.conf + device data | Done | Config layer builds |
+| Boot test (services start) | **NOT DONE** | Waiting for CI |
+| pytest test_port.py | **NOT DONE** | Waiting for CI |
 
-### docker-sonic-vs (OCI image)
-- [x] Hermetic oci_image() with 7 layers (5 hermetic, 2 Docker-based)
-- [x] slim_apt_layer for runtime packages (rules_distroless)
-- [x] deb_extract_layer for Bazel-built SONiC .debs
-- [x] FRR + supervisor layer via apt_install_layer
-- [x] sonic-cfggen + Python packages layer
-- [x] Device data (lanemap.ini, port_config.ini, sai.profile)
-- [x] syncd-vs produced with -Psyncd,vs build profiles
-- [ ] Boot test on native amd64 Linux
-- [ ] sonic-swss pytest passing
+**Blockers**: CI needs to complete end-to-end build + load + pytest on Linux.
 
-### ONIE Image
-- [x] sonic-broadcom.bin local build (stub kernel + 9 services)
-- [x] ONIE sharch self-extracting format
-- [x] Rootfs with OCI layer deduplication
-- [x] Size budget framework (slim_apt_layer, filtered_modules)
+### 2. Cloud Build CI [IN PROGRESS]
 
-### CI/CD
-- [x] GitHub Actions workflow
-- [x] GCS remote cache config (.bazelrc)
-- [x] BuildBuddy config (.bazelrc)
+**Goal**: Push to claude → Cloud Build runs → results visible
 
-### Documentation
-- [x] docs/README_BAZEL.md — Architecture + how to build
-- [x] docs/BUILD_SYSTEM.md — Full build system guide
-- [x] docs/BAZEL_GAPS.md �� Make vs Bazel gap analysis
-- [x] docs/DEMO_TALKING_POINTS.md — Presentation materials
-- [x] demo.sh — Live demo script
+| Component | Status |
+|---|---|
+| cloudbuild.yaml (12 steps, N1_HIGHCPU_32) | Done |
+| GCS remote cache (gs://sonic-bazel-cache) | Configured |
+| GitHub commit status reporting | Done (needs _GITHUB_TOKEN) |
+| GCS summary upload | Done |
+| Bazel state persistence across steps | Done |
+| Trigger on claude branch push | Set up by user |
 
-## In Progress
+**Blockers**: First Cloud Build run needs to complete. No way to check logs without GCP access.
 
-### Kernel
-- [x] SOURCE_DATE_EPOCH empty string fix (dpkg-deb timestamp)
-- [x] cpupower.install background watcher fix (pushed to fork)
-- [ ] CI kernel build passing (watcher fix in pipeline, waiting)
-- [ ] sonic-broadcom.bin with real kernel
+### 3. sonic-broadcom.bin [IN PROGRESS]
 
-### More .deb Packages
-- [ ] FRR (autotools, complex)
-- [ ] snmpd (dget from Debian pool, like libnl3)
-- [ ] sonic-gnmi (Go + deb)
-- [ ] sonic-mgmt-common
-- [ ] gobgp (Go)
-- [ ] lldpd
+**Goal**: `bazel build //platform/broadcom:sonic_broadcom_bin` with real kernel
 
-### More Docker Images
-- [ ] docker-fpm-frr (needs FRR .deb)
-- [ ] docker-snmp (needs snmpd .deb)
-- [ ] docker-lldp (pip wheel issue)
-- [ ] docker-sonic-gnmi (needs mgmt-common)
-- [ ] docker-sonic-telemetry (chains on gnmi)
-- [ ] docker-macsec (needs wpasupplicant)
-- [ ] docker-mux (needs linkmgrd)
-- [ ] docker-syncd-* (vendor SAI)
+| Component | Status | Verified |
+|---|---|---|
+| Kernel compilation (dpkg-buildpackage) | Done | Passes in GH Actions CI |
+| cpupower fix (remove from debian/control) | Done | Verified in CI |
+| Staging dir for outputs | Done | Verified in CI |
+| vmlinuz extraction | Done (abs path fix) | Waiting for CI |
+| kernel_modules_tar extraction | Done (abs path fix) | Waiting for CI |
+| ONIE image assembly (sharch format) | Done | Analysis passes |
+| onie_image_builder.sh --installer fix | Done | Not verified |
+| End-to-end broadcom.bin | **NOT DONE** | Previous CI: disk space error → freed 30GB |
 
-### Python Wheels
-- [ ] sonic-utilities
-- [ ] sonic-host-services
-- [ ] sonic-py-common
-- [ ] sonic-config-engine
-- [ ] sonic-yang-models
-- [ ] sonic-yang-mgmt
-- [ ] sonic-platform-common
+**Blockers**: vmlinuz Docker volume mount fix needs CI verification.
 
-### docker-sonic-vs for pytest (Ultimate Verification Target)
-- [ ] Build FRR .deb (or use upstream Debian FRR)
-- [ ] Build sonic-config-engine (provides sonic-cfggen)
-- [ ] Build Python wheels (sonic-utilities, sonic-py-common, sonic-yang-models)
-- [ ] Assemble docker-sonic-vs with all 40+ services
-- [ ] docker-sonic-vs passes `pytest test_port.py` from sonic-swss/tests
-- [ ] docker-sonic-vs passes full sonic-swss pytest suite
+## Infrastructure
 
-## Not Started
+- Bazel 8.5.1 + bzlmod, MODULE.bazel.lock committed
+- rules_distroless 0.3.8 — 190+ Debian packages from snapshot.debian.org
+- Local Bazel registry for submodule resolution (tools/bazel/registry/)
+- Native cc_library for swss-common (@sonic_swss_common//:swsscommon) — analysis passes
+- Hermetic sysroot with 30+ dev packages
+- 89 submodules + 57 docker images with BUILD.bazel
+- GH Actions + Cloud Build CI pipelines
+- demo.sh with auto-install and submodule sync
 
-- [ ] debdiff verification (Make vs Bazel output comparison)
-- [ ] Reproducibility verification (two builds → identical sha256)
-- [ ] Remote cache/RBE testing (needs GCP credentials)
-- [ ] Upstream PRs to sonic-net
-- [ ] Broadcom SAI platform modules (proprietary)
-- [ ] Full size verification (sonic-broadcom.bin < 400 MB)
+## Honest Assessment
+
+What actually works end-to-end:
+- 9 hermetic Docker images build in seconds (no Docker daemon)
+- Kernel compiles in CI (112 min on GH Actions)
+- All Bazel analysis passes (18/18 targets)
+
+What has NOT been verified on real Linux:
+- docker-sonic-vs image loads and boots
+- pytest passes
+- sonic-broadcom.bin assembles with real kernel
+- Cloud Build runs successfully
