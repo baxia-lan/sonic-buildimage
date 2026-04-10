@@ -134,8 +134,8 @@ PKGEOF
     echo "$${PKG//_/-}" > "$$INFO_DIR/top_level.txt"
 done
 
-TAR=tar; command -v gtar >/dev/null 2>&1 && TAR=gtar
-COPYFILE_DISABLE=1 $$TAR --sort=name --mtime=@0 --owner=0 --group=0 -cf "$@" -C "$$STAGING" .
+TAR=tar; for t in /opt/homebrew/bin/gtar /usr/local/bin/gtar gtar; do command -v "$$t" >/dev/null 2>&1 && TAR="$$t" && break; done
+SORT_FLAG=""; $$TAR --sort=name --help >/dev/null 2>&1 && SORT_FLAG="--sort=name"; COPYFILE_DISABLE=1 $$TAR $$SORT_FLAG --mtime=@0 --owner=0 --group=0 -cf "$@" -C "$$STAGING" .
 """,
 )
 
@@ -212,7 +212,7 @@ sys.exit(main())
 PYEOF
 chmod 755 "$$STAGING/usr/local/bin/supervisorctl"
 
-TAR=tar; command -v gtar >/dev/null 2>&1 && TAR=gtar
-COPYFILE_DISABLE=1 $$TAR --sort=name --mtime=@0 --owner=0 --group=0 -cf "$@" -C "$$STAGING" .
+TAR=tar; for t in /opt/homebrew/bin/gtar /usr/local/bin/gtar gtar; do command -v "$$t" >/dev/null 2>&1 && TAR="$$t" && break; done
+SORT_FLAG=""; $$TAR --sort=name --help >/dev/null 2>&1 && SORT_FLAG="--sort=name"; COPYFILE_DISABLE=1 $$TAR $$SORT_FLAG --mtime=@0 --owner=0 --group=0 -cf "$@" -C "$$STAGING" .
 """,
 )
