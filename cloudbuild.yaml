@@ -23,7 +23,7 @@
 #   9. Build sonic-broadcom.bin (ONIE installer)
 
 substitutions:
-  _PROJECT_ID: "REPLACE_WITH_PROJECT_ID"
+  _PROJECT_ID: "yilanji-sandbox-163694"
   _CACHE_BUCKET: "sonic-bazel-cache"
   _AR_REGION: "us-central1"
   _AR_REPO: "sonic"
