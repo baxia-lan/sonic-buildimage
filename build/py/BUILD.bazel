@@ -135,7 +135,7 @@ PKGEOF
 done
 
 TAR=tar; command -v gtar >/dev/null 2>&1 && TAR=gtar
-$$TAR --sort=name --mtime=@0 --owner=0 --group=0 -cf "$@" -C "$$STAGING" .
+COPYFILE_DISABLE=1 $$TAR --sort=name --mtime=@0 --owner=0 --group=0 -cf "$@" -C "$$STAGING" .
 """,
 )
 
@@ -160,6 +160,7 @@ genrule(
         "@sonic_pip//jinja2",
         "@sonic_pip//markupsafe",
         "@sonic_pip//pyyaml",
+        "@sonic_pip//supervisor",
     ],
     outs = ["pip_deps_layer.tar"],
     cmd = """\
@@ -191,7 +192,27 @@ done
 find "$$STAGING" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 find "$$STAGING" -type f -name "*.pyc" -delete 2>/dev/null || true
 
+# Create supervisord/supervisorctl entry point scripts.
+# pip would normally create these as console_scripts entry points.
+# We generate them manually since the genrule only copies site-packages.
+mkdir -p "$$STAGING/usr/local/bin"
+cat > "$$STAGING/usr/local/bin/supervisord" <<'PYEOF'
+#!/usr/bin/python3
+import sys
+from supervisor.supervisord import main
+sys.exit(main())
+PYEOF
+chmod 755 "$$STAGING/usr/local/bin/supervisord"
+
+cat > "$$STAGING/usr/local/bin/supervisorctl" <<'PYEOF'
+#!/usr/bin/python3
+import sys
+from supervisor.supervisorctl import main
+sys.exit(main())
+PYEOF
+chmod 755 "$$STAGING/usr/local/bin/supervisorctl"
+
 TAR=tar; command -v gtar >/dev/null 2>&1 && TAR=gtar
-$$TAR --sort=name --mtime=@0 --owner=0 --group=0 -cf "$@" -C "$$STAGING" .
+COPYFILE_DISABLE=1 $$TAR --sort=name --mtime=@0 --owner=0 --group=0 -cf "$@" -C "$$STAGING" .
 """,
 )

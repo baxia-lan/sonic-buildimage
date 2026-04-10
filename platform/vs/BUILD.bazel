@@ -65,8 +65,10 @@ deb_extract_layer(
     size_budget_mb = 250,
 )
 
-# ── Layer 3: VS config files + device data ──────────────────────────────────
-pkg_tar(
+# ── Layer 3: VS config files placed at correct container paths ──────────────
+# The Dockerfile.j2 COPY commands place files at specific container paths.
+# This genrule replicates that layout exactly.
+genrule(
     name = "vs_config_layer",
     srcs = glob(
         ["docker-sonic-vs/**"],
@@ -76,9 +78,117 @@ pkg_tar(
             "docker-sonic-vs/sonic-dev.gpg.key",
         ],
     ),
-    mode = "0755",
-    package_dir = "/",
-    strip_prefix = "docker-sonic-vs",
+    outs = ["vs_config_layer.tar"],
+    cmd = """\
+set -euo pipefail
+STAGING=$$(mktemp -d)
+trap 'rm -rf "$$STAGING"' EXIT
+
+# Helper: place a file at the given container path
+place() {
+    local src="$$1" dst="$$2"
+    mkdir -p "$$STAGING/$$(dirname $$dst)"
+    cp "$$src" "$$STAGING/$$dst"
+}
+
+# Find docker-sonic-vs directory from srcs
+VS_DIR=""
+for f in $(SRCS); do
+    case "$$f" in */docker-sonic-vs/start.sh) VS_DIR=$$(dirname "$$f");; esac
+done
+if [ -z "$$VS_DIR" ]; then echo "FAIL: cannot find docker-sonic-vs dir"; exit 1; fi
+
+# Rsyslog config
+place "$$VS_DIR/50-default.conf" "/etc/rsyslog.d/50-default.conf"
+place "$$VS_DIR/etc/rsyslog.conf" "/etc/rsyslog.conf"
+
+# Executables -> /usr/bin/
+for f in start.sh orchagent.sh buffermgrd.sh; do
+    place "$$VS_DIR/$$f" "/usr/bin/$$f"
+    chmod 755 "$$STAGING/usr/bin/$$f"
+done
+
+# Templates -> /usr/share/sonic/templates/
+place "$$VS_DIR/supervisord.conf.j2" "/usr/share/sonic/templates/supervisord.conf.j2"
+place "$$VS_DIR/hostname.j2" "/usr/share/sonic/templates/hostname.j2"
+place "$$VS_DIR/init_cfg.json.j2" "/usr/share/sonic/templates/init_cfg.json.j2"
+
+# Config -> /etc/sonic/
+place "$$VS_DIR/port_breakout_config_db.json" "/etc/sonic/port_breakout_config_db.json"
+place "$$VS_DIR/asic_table.json" "/etc/sonic/asic_table.json"
+place "$$VS_DIR/zero_profiles.json" "/etc/sonic/zero_profiles.json"
+
+# Database config -> /etc/default/sonic-db/
+place "$$VS_DIR/database_config.json" "/etc/default/sonic-db/database_config.json"
+place "$$VS_DIR/default_chassis_cfg.json" "/etc/default/sonic-db/default_chassis_cfg.json"
+
+# Platform files -> device directory
+place "$$VS_DIR/platform.json" "/usr/share/sonic/device/x86_64-kvm_x86_64-r0/platform.json"
+place "$$VS_DIR/platform-dpu-2p.json" "/usr/share/sonic/device/x86_64-kvm_x86_64-r0/platform-dpu-2p.json"
+
+# FRR config
+place "$$VS_DIR/frr/zebra.conf" "/etc/frr/zebra.conf"
+
+# Pre-render supervisord.conf from the Jinja2 template (ENABLE_ASAN=n).
+# Remove all Jinja2 block lines ({%...%}) and any lines between
+# {% if ENABLE_ASAN %} ... {% endif %} blocks, plus {{ }} expressions.
+# This is equivalent to rendering with ENABLE_ASAN="n".
+awk '
+    /^[{][%].*set asan/           { next }
+    /^[{][%].*if ENABLE_ASAN/     { skip=1; next }
+    /^[{][%].*endif/              { skip=0; next }
+    skip                          { next }
+    /^[{][%]/                     { next }
+    { print }
+' "$$VS_DIR/supervisord.conf.j2" > "$$STAGING/etc/supervisor/conf.d/supervisord.conf"
+
+# Set hostname
+echo "docker-sonic-vs" > "$$STAGING/etc/hostname"
+
+# Generate sonic_version.yml stub (normally build-time generated)
+cat > "$$STAGING/etc/sonic/sonic_version.yml" <<'VEREOF'
+build_version: 'bazel.0.0.1'
+debian_version: '12.0'
+kernel_version: '6.1.0'
+asic_type: 'vs'
+commit_id: 'bazel'
+build_date: '19700101'
+build_number: 0
+built_by: 'bazel'
+VEREOF
+
+# Generate a SONiC-compatible redis.conf.
+# The Dockerfile.j2 uses sed to modify the Debian default redis.conf.
+# We generate a complete config matching those modifications.
+mkdir -p "$$STAGING/etc/redis"
+cat > "$$STAGING/etc/redis/redis.conf" <<'REDISEOF'
+bind 127.0.0.1
+port 6379
+daemonize no
+logfile ""
+syslog-enabled no
+databases 100
+save ""
+unixsocket /var/run/redis/redis.sock
+unixsocketperm 777
+client-output-buffer-limit pubsub 0 0 0
+notify-keyspace-events AKE
+protected-mode no
+REDISEOF
+
+# Create required directories
+mkdir -p "$$STAGING/var/warmboot/teamd"
+mkdir -p "$$STAGING/etc/quagga"
+touch "$$STAGING/etc/quagga/zebra.conf"
+mkdir -p "$$STAGING/etc/swss/config.d"
+mkdir -p "$$STAGING/var/run/redis/sonic-db"
+mkdir -p "$$STAGING/var/run/redis"
+mkdir -p "$$STAGING/etc/supervisor/conf.d"
+mkdir -p "$$STAGING/var/log/supervisor"
+
+TAR=tar; command -v gtar >/dev/null 2>&1 && TAR=gtar
+COPYFILE_DISABLE=1 $$TAR --sort=name --mtime=@0 --owner=0 --group=0 -cf "$@" -C "$$STAGING" .
+""",
 )
 
 # Device data (lanemap.ini, port_config.ini, sai.profile, etc.)
@@ -118,7 +228,7 @@ fi
 cp $(location docker-sonic-vs/hwsku.json) "$$F10DIR/hwsku.json"
 
 TAR=tar; command -v gtar >/dev/null 2>&1 && TAR=gtar
-$$TAR --sort=name --mtime=@0 --owner=0 --group=0 -cf "$@" -C "$$STAGING" .
+COPYFILE_DISABLE=1 $$TAR --sort=name --mtime=@0 --owner=0 --group=0 -cf "$@" -C "$$STAGING" .
 """,
 )
 
@@ -132,6 +242,33 @@ pkg_tar(
     ],
     mode = "0755",
     package_dir = "/usr/bin",
+)
+
+# Runtime Jinja2 templates used by start.sh via sonic-cfggen.
+# These live in /usr/share/sonic/templates/ inside the container.
+# Using genrule because files come from different packages and we need
+# to flatten them into a single directory without preserving source paths.
+genrule(
+    name = "vs_templates_layer",
+    srcs = [
+        "//files/image_config:copp/copp_cfg.j2",
+        "//files/build_templates:buffers_config.j2",
+        "//files/build_templates:qos_config.j2",
+        "//files/build_templates:arp_update_vars.j2",
+    ],
+    outs = ["vs_templates_layer.tar"],
+    cmd = """\
+set -euo pipefail
+STAGING=$$(mktemp -d)
+trap 'rm -rf "$$STAGING"' EXIT
+TDIR="$$STAGING/usr/share/sonic/templates"
+mkdir -p "$$TDIR"
+for f in $(SRCS); do
+    cp "$$f" "$$TDIR/$$(basename $$f)"
+done
+TAR=tar; command -v gtar >/dev/null 2>&1 && TAR=gtar
+COPYFILE_DISABLE=1 $$TAR --sort=name --mtime=@0 --owner=0 --group=0 -cf "$@" -C "$$STAGING" .
+""",
 )
 
 # ── Layer 5a: FRR runtime dependencies (hermetic, from rules_distroless) ────
@@ -208,7 +345,7 @@ fi
 
 # Repack with reproducible timestamps
 TAR=tar; command -v gtar >/dev/null 2>&1 && TAR=gtar
-$$TAR --sort=name --mtime=@0 --owner=0 --group=0 -cf "$@" -C "$$TMPDIR" .
+COPYFILE_DISABLE=1 $$TAR --sort=name --mtime=@0 --owner=0 --group=0 -cf "$@" -C "$$TMPDIR" .
 """,
 )
 
@@ -232,7 +369,7 @@ $$TAR --sort=name --mtime=@0 --owner=0 --group=0 -cf "$@" -C "$$TMPDIR" .
 oci_image(
     name = "docker_sonic_vs",
     base = "//dockers/sonic-common-layer:sonic_common_layer",
-    entrypoint = ["/usr/bin/supervisord"],
+    entrypoint = ["/usr/local/bin/supervisord"],
     env = {
         "PLATFORM": "x86_64-kvm_x86_64-r0",
         "HWSKU": "Force10-S6000",
@@ -251,6 +388,7 @@ oci_image(
         ":vs_config_layer",
         ":vs_device_data_layer",
         ":vs_scripts_layer",
+        ":vs_templates_layer",
     ],
 )
 
