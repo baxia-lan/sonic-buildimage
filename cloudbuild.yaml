@@ -1,0 +1,15 @@
+timeout: 900s
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+steps:
+  - name: ubuntu
+    entrypoint: bash
+    args:
+      - -lc
+      - |
+        echo "cloud build smoke ok"
+        echo "branch=${BRANCH_NAME:-unknown}"
+        echo "commit=${COMMIT_SHA:-unknown}"
+        git rev-parse --short HEAD
