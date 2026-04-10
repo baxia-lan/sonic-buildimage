@@ -1,0 +1,31 @@
+load("//bazel/sonic:defs.bzl", "sonic_deb_package")
+
+package(default_visibility = ["//visibility:public"])
+
+sonic_deb_package(
+    name = "deb",
+    builder = "bazel",
+    builder_srcs = ["//platform/broadcom:saibcm_modules_srcs"],
+    deb_pattern = "opennsl-modules_14.3.0.0.0.0.0.0_amd64.deb",
+    legacy_artifact = "opennsl-modules_14.3.0.0.0.0.0.0_$(CONFIGURED_ARCH).deb",
+    migration_stage = "graph_owned",
+    output_name = "opennsl-modules_14.3.0.0.0.0.0.0_amd64.deb",
+    package_arch = "amd64",
+    package_name = "opennsl-modules",
+    package_version = "14.3.0.0.0.0.0.0",
+    source_path = "platform/broadcom/saibcm-modules",
+    source_root = "platform/broadcom/saibcm-modules",
+    source_makefiles = ["platform/broadcom/sai-modules.mk"],
+    legacy_deps = [
+        "LINUX_HEADERS",
+        "LINUX_HEADERS_COMMON",
+    ],
+    metadata = {
+        "legacy_name": "BRCM_OPENNSL_KERNEL",
+        "migration_wave": "phase5_onie",
+    },
+    notes = [
+        "Build still depends on the Linux headers closure from rules/linux-kernel.mk.",
+        "This target makes the Broadcom kernel module payload a Bazel-owned label before the installer concrete builder is replaced.",
+    ],
+)

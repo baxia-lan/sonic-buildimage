@@ -1,0 +1,25 @@
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "saibcm_modules_srcs",
+    srcs = glob(
+        ["saibcm-modules/**"],
+        exclude = ["**/BUILD.bazel"],
+    ),
+)
+
+filegroup(
+    name = "saibcm_modules_dnx_srcs",
+    srcs = glob(
+        ["saibcm-modules-dnx/**"],
+        exclude = ["**/BUILD.bazel"],
+    ),
+)
+
+filegroup(
+    name = "saibcm_modules_legacy_th_srcs",
+    srcs = glob(
+        ["saibcm-modules-legacy-th/**"],
+        exclude = ["**/BUILD.bazel"],
+    ),
+)

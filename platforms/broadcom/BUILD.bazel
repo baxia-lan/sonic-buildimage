@@ -27,9 +27,47 @@ filegroup(
     ],
 )
 
+filegroup(
+    name = "platform_kernel_module_debs",
+    srcs = [
+        "//packages/deb/opennsl-modules:deb",
+        "//packages/deb/opennsl-modules-dnx:deb",
+        "//packages/deb/opennsl-modules-legacy-th:deb",
+    ],
+)
+
+filegroup(
+    name = "onie_kernel_module_debs",
+    srcs = [
+        "//packages/deb/opennsl-modules:deb",
+        "//packages/deb/opennsl-modules-dnx:deb",
+    ],
+)
+
+filegroup(
+    name = "raw_kernel_module_debs",
+    srcs = [
+        "//packages/deb/opennsl-modules:deb",
+    ],
+)
+
+filegroup(
+    name = "aboot_kernel_module_debs",
+    srcs = [
+        "//packages/deb/opennsl-modules:deb",
+        "//packages/deb/opennsl-modules-dnx:deb",
+        "//packages/deb/opennsl-modules-legacy-th:deb",
+    ],
+)
+
 sonic_platform_manifest(
     name = "platform",
     data = BROADCOM_PLATFORM,
+)
+
+sonic_platform_manifest(
+    name = "platform_metadata",
+    data = dict(BROADCOM_PLATFORM, deps = []),
 )
 
 sonic_platform_prepare_targets(BROADCOM_PLATFORM)

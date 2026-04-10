@@ -25,6 +25,10 @@ sonic_deb_package(
     sources = ["//sources/sonic-swss-common:source"],
     submodule_paths = ["src/sonic-swss-common"],
     deps = ["//packages/deb/libswsscommon:deb"],
+    wheel_deps = [
+        "//packages/wheel/sonic_yang_mgmt:wheel",
+        "//packages/wheel/sonic_yang_models:wheel",
+    ],
     metadata = {
         "derived_from": "LIBSWSSCOMMON",
         "legacy_name": "SONIC_DB_CLI",

@@ -23,6 +23,22 @@ BROADCOM_VENDOR_SAI_DEPS = [
     "//platforms/broadcom:vendor_sai_debs",
 ]
 
+BROADCOM_PLATFORM_KERNEL_MODULE_DEPS = [
+    "//platforms/broadcom:platform_kernel_module_debs",
+]
+
+BROADCOM_ONIE_KERNEL_MODULE_DEPS = [
+    "//platforms/broadcom:onie_kernel_module_debs",
+]
+
+BROADCOM_RAW_KERNEL_MODULE_DEPS = [
+    "//platforms/broadcom:raw_kernel_module_debs",
+]
+
+BROADCOM_ABOOT_KERNEL_MODULE_DEPS = [
+    "//platforms/broadcom:aboot_kernel_module_debs",
+]
+
 BROADCOM_LAZY_INSTALLS = [
     "ARISTA_PLATFORM_MODULE_ALL",
     "DELL_S6000_PLATFORM_MODULE",
@@ -164,7 +180,7 @@ BROADCOM_PLATFORM = {
     "platform_name": "broadcom",
     "dependent_machines": ["broadcom-dnx", "broadcom-legacy-th"],
     "configured_arches": COMMON_ARCH_AMD64,
-    "deps": BROADCOM_VENDOR_SAI_DEPS,
+    "deps": BROADCOM_VENDOR_SAI_DEPS + BROADCOM_PLATFORM_KERNEL_MODULE_DEPS,
     "legacy_installs": [
         "PDDF_PLATFORM_MODULE",
         "SYSTEMD_SONIC_GENERATOR",
@@ -196,7 +212,7 @@ BROADCOM_ONIE = {
     "dependent_machines": ["broadcom-dnx", "broadcom-legacy-th"],
     "configured_arches": COMMON_ARCH_AMD64,
     "installer_format": "onie",
-    "deps": BROADCOM_VENDOR_SAI_DEPS,
+    "deps": BROADCOM_VENDOR_SAI_DEPS + BROADCOM_ONIE_KERNEL_MODULE_DEPS,
     "legacy_installs": [
         "PDDF_PLATFORM_MODULE",
         "SYSTEMD_SONIC_GENERATOR",
@@ -224,7 +240,7 @@ BROADCOM_RAW = {
     "platform_name": "broadcom",
     "configured_arches": COMMON_ARCH_AMD64,
     "installer_format": "raw",
-    "deps": BROADCOM_VENDOR_SAI_DEPS,
+    "deps": BROADCOM_VENDOR_SAI_DEPS + BROADCOM_RAW_KERNEL_MODULE_DEPS,
     "legacy_installs": [
         "BRCM_OPENNSL_KERNEL",
         "SYSTEMD_SONIC_GENERATOR",
@@ -249,7 +265,7 @@ BROADCOM_ABOOT = {
     "dependent_machines": ["broadcom-dnx", "broadcom-legacy-th"],
     "configured_arches": COMMON_ARCH_AMD64,
     "installer_format": "aboot",
-    "deps": BROADCOM_VENDOR_SAI_DEPS,
+    "deps": BROADCOM_VENDOR_SAI_DEPS + BROADCOM_ABOOT_KERNEL_MODULE_DEPS,
     "legacy_installs": [
         "FLASHROM",
         "SYSTEMD_SONIC_GENERATOR",

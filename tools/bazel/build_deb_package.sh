@@ -28,6 +28,7 @@ package_version=""
 package_arch="amd64"
 declare -a build_debs=()
 declare -a build_profiles=()
+declare -a dependency_wheels=()
 declare -a src_maps=()
 
 while [[ $# -gt 0 ]]; do
@@ -72,6 +73,10 @@ while [[ $# -gt 0 ]]; do
             build_debs+=("$2")
             shift 2
             ;;
+        --dependency-wheel)
+            dependency_wheels+=("$2")
+            shift 2
+            ;;
         --src-map)
             src_maps+=("$2")
             shift 2
@@ -95,6 +100,24 @@ fi
 
 docker_bin="${DOCKER_BIN:-docker}"
 export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"
+
+resolve_docker_bin() {
+    if [[ "${docker_bin}" == */* ]]; then
+        return
+    fi
+
+    local candidate
+    for candidate in \
+        "${DOCKER_BIN:-}" \
+        "$(command -v docker 2>/dev/null || true)" \
+        "/Applications/Docker.app/Contents/Resources/bin/docker"
+    do
+        if [[ -n "${candidate}" && -x "${candidate}" ]]; then
+            docker_bin="${candidate}"
+            return
+        fi
+    done
+}
 
 configure_docker_host() {
     if [[ -n "${DOCKER_HOST:-}" || -n "${DOCKER_CONTEXT:-}" ]]; then
@@ -122,6 +145,7 @@ configure_docker_host() {
     fi
 }
 
+resolve_docker_bin
 configure_docker_host
 helper_image_ref_script="tools/bazel/legacy_bridge_helper_image_ref.sh"
 helper_image_stable_ref="sonic-bazel-legacy-bridge-helper:bookworm"
@@ -161,13 +185,22 @@ workdir="$(mktemp -d)"
 stage_dir="${workdir}/src"
 out_dir="${workdir}/out"
 deps_dir="${workdir}/build-debs"
+wheel_deps_dir="${workdir}/wheel-deps"
+python_wheels_dir="${workdir}/python-wheels"
 build_dep_count=0
 if [[ "${build_debs+set}" == "set" ]]; then
     build_dep_count="${#build_debs[@]}"
 fi
+wheel_dep_count=0
+if [[ "${dependency_wheels+set}" == "set" ]]; then
+    wheel_dep_count="${#dependency_wheels[@]}"
+fi
 mkdir -p "${stage_dir}" "${out_dir}"
 if (( build_dep_count > 0 )); then
     mkdir -p "${deps_dir}"
+fi
+if (( wheel_dep_count > 0 )); then
+    mkdir -p "${wheel_deps_dir}" "${python_wheels_dir}"
 fi
 
 cleanup() {
@@ -207,6 +240,11 @@ normalize_autotools_timestamps
 for dep in "${build_debs[@]-}"; do
     [[ -n "${dep}" ]] || continue
     cp -p "${dep}" "${deps_dir}/$(basename "${dep}")"
+done
+
+for wheel in "${dependency_wheels[@]-}"; do
+    [[ -n "${wheel}" ]] || continue
+    cp -p "${wheel}" "${wheel_deps_dir}/$(basename "${wheel}")"
 done
 
 rust_build_invoked=0
@@ -272,6 +310,11 @@ if compgen -G '/work/build-debs/*.deb' >/dev/null; then
     for build_dep in /work/build-debs/*.deb; do
         dpkg-deb -x "\${build_dep}" /
     done
+fi
+if compgen -G '/work/wheel-deps/*.whl' >/dev/null; then
+    mkdir -p /work/python-wheels
+    python3 -m pip install --no-cache-dir --no-deps --no-compile --target /work/python-wheels /work/wheel-deps/*.whl
+    export PYTHONPATH="/work/python-wheels:\${PYTHONPATH:-}"
 fi
 dpkg-buildpackage -rfakeroot -b -us -uc -d ${build_profile_args}
 

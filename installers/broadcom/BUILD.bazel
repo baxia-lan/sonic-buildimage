@@ -8,7 +8,7 @@ package(default_visibility = ["//visibility:public"])
 sonic_installer_manifest(
     name = "onie_manifest",
     data = BROADCOM_ONIE,
-    platform = "//platforms/broadcom:platform",
+    platform = "//platforms/broadcom:platform_metadata",
 )
 
 legacy_artifact_bridge(
@@ -52,14 +52,14 @@ cp "$$lock" "$@"
 
 sonic_installer_variant(
     name = "raw",
-    platform = "//platforms/broadcom:platform",
+    platform = "//platforms/broadcom:platform_metadata",
     data = BROADCOM_RAW,
 )
 
 sonic_installer_manifest(
     name = "aboot_manifest",
     data = BROADCOM_ABOOT,
-    platform = "//platforms/broadcom:platform",
+    platform = "//platforms/broadcom:platform_metadata",
 )
 
 legacy_artifact_bridge(

@@ -46,6 +46,7 @@ sonic_deb_package(
     runtime_deps = [
         "//packages/deb/libsairedis:deb",
         "//packages/deb/libswsscommon:deb",
+        "//packages/deb/python3-swsscommon:deb",
         "//packages/deb/libdashapi:deb",
     ],
     legacy_runtime_deps = [
