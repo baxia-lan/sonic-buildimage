@@ -9,27 +9,34 @@ ROOTFS=""
 PLATFORM=""
 MACHINE=""
 VERSION=""
+INSTALLER_SCRIPT=""
 MODULES=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --output)  OUTPUT="$2"; shift 2 ;;
-        --kernel)  KERNEL="$2"; shift 2 ;;
-        --rootfs)  ROOTFS="$2"; shift 2 ;;
-        --platform) PLATFORM="$2"; shift 2 ;;
-        --machine) MACHINE="$2"; shift 2 ;;
-        --version) VERSION="$2"; shift 2 ;;
-        --module)  MODULES+=("$2"); shift 2 ;;
+        --output)    OUTPUT="$2"; shift 2 ;;
+        --kernel)    KERNEL="$2"; shift 2 ;;
+        --rootfs)    ROOTFS="$2"; shift 2 ;;
+        --platform)  PLATFORM="$2"; shift 2 ;;
+        --machine)   MACHINE="$2"; shift 2 ;;
+        --version)   VERSION="$2"; shift 2 ;;
+        --installer) INSTALLER_SCRIPT="$2"; shift 2 ;;
+        --module)    MODULES+=("$2"); shift 2 ;;
         *) echo "Unknown flag: $1" >&2; exit 1 ;;
     esac
 done
+
+[ -z "$OUTPUT" ] && { echo "ERROR: --output required" >&2; exit 1; }
+[ -z "$KERNEL" ] && { echo "ERROR: --kernel required" >&2; exit 1; }
+[ -z "$ROOTFS" ] && { echo "ERROR: --rootfs required" >&2; exit 1; }
+[ -z "$INSTALLER_SCRIPT" ] && { echo "ERROR: --installer required" >&2; exit 1; }
 
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
 # Stage components
 cp "$KERNEL" "$WORK/vmlinuz"
-cp "$ROOTFS" "$WORK/fs.squashfs"
+cp "$ROOTFS" "$WORK/fs.rootfs"
 
 if [ ${#MODULES[@]} -gt 0 ]; then
     for mod in "${MODULES[@]}"; do
@@ -44,18 +51,23 @@ onie_platform=$PLATFORM
 sonic_version=$VERSION
 EOF
 
+# Build list of payload files
+PAYLOAD_FILES="vmlinuz fs.rootfs machine.conf"
+for mod in "${MODULES[@]}"; do
+    PAYLOAD_FILES="$PAYLOAD_FILES $(basename "$mod")"
+done
+
 # Create the self-extracting archive
 PAYLOAD="$WORK/payload.tar.gz"
-# Create payload (--sort may not be available on macOS)
 if tar --sort=name -cf /dev/null --files-from /dev/null 2>/dev/null; then
     SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 --owner=0 --group=0 \
-        -czf "$PAYLOAD" -C "$WORK" vmlinuz fs.squashfs machine.conf
+        -czf "$PAYLOAD" -C "$WORK" $PAYLOAD_FILES
 else
-    SOURCE_DATE_EPOCH=0 tar -czf "$PAYLOAD" -C "$WORK" vmlinuz fs.squashfs machine.conf
+    SOURCE_DATE_EPOCH=0 tar -czf "$PAYLOAD" -C "$WORK" $PAYLOAD_FILES
 fi
 
 # Prepend the installer header
-cat installer/install.sh "$PAYLOAD" > "$OUTPUT"
+cat "$INSTALLER_SCRIPT" "$PAYLOAD" > "$OUTPUT"
 chmod +x "$OUTPUT"
 
 # Size check

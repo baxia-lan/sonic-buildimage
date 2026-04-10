@@ -9,7 +9,6 @@ Produces a self-extracting ONIE installer (.bin) from:
 The generated .bin must fit within the 400 MB size budget defined in CLAUDE.md.
 """
 
-load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 
 # ── onie_image ────────────────────────────────────────────────────────────────
@@ -26,6 +25,7 @@ def _onie_image_impl(ctx):
     args.add("--output", output)
     args.add("--kernel", kernel)
     args.add("--rootfs", rootfs_tar)
+    args.add("--installer", installer_script)
     args.add("--platform", ctx.attr.platform)
     args.add("--machine", ctx.attr.machine)
     args.add("--version", ctx.attr.version)

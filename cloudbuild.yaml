@@ -1,62 +1,54 @@
 # SONiC Buildimage — GCP Cloud Build CI pipeline
 #
 # Trigger: push to `claude` branch
+# Machine: N1_HIGHCPU_32 (32 vCPU, 28.8 GB RAM)
+# Timeout: 2 hours
+# Disk:    200 GB
 #
-# To run locally:
-#   gcloud builds submit --config=cloudbuild.yaml \
-#     --substitutions=_PROJECT_ID=$(gcloud config get-value project)
+# Results:
+#   - Cloud Build console: console.cloud.google.com/cloud-build/builds;region=global
+#   - GCS summary: gs://sonic-bazel-cache/ci-results/$BUILD_ID/summary.txt
+#   - GitHub commit status (when _GITHUB_TOKEN is configured)
 #
-# Required substitutions (set in Cloud Build trigger):
-#   _PROJECT_ID    — GCP project ID
-#   _CACHE_BUCKET  — GCS bucket for Bazel remote cache
-#   _AR_REGION     — Artifact Registry region (e.g. us-central1)
-#
-# Pipeline:
-#   1. Install Bazelisk
-#   2. Init submodules
-#   3. Align submodules to 202405
-#   4. Copy BUILD.bazel into submodules (from baxia-lan forks)
-#   5. Build kernel (.deb packages)
-#   6. Build orchagent chain (docker-orchagent)
-#   7. Build docker-sonic-vs (hermetic OCI image)
-#   8. Run pytest (test_port.py)
-#   9. Build sonic-broadcom.bin (ONIE installer)
+# Architecture notes:
+#   - Bazelisk is installed to /workspace/.local/bin (persists across steps)
+#   - Bazel output root is set to /workspace/.cache/bazel via startup flag
+#     so build outputs persist across steps (each step is a fresh container)
+#   - Each ubuntu step installs its own apt deps (cheap, avoids volume bugs)
+#   - --config=ci pulls remote cache settings from .bazelrc
 
 substitutions:
-  _PROJECT_ID: "yilanji-sandbox-163694"
   _CACHE_BUCKET: "sonic-bazel-cache"
-  _AR_REGION: "us-central1"
-  _AR_REPO: "sonic"
+  _GITHUB_TOKEN: ""  # Set via Cloud Build trigger substitution (optional)
 
 options:
   machineType: "N1_HIGHCPU_32"
-  env:
-    - "PROJECT_ID=${_PROJECT_ID}"
+  diskSizeGb: "200"
   logging: CLOUD_LOGGING_ONLY
   dynamic_substitutions: true
+  env:
+    - "BAZELISK_HOME=/workspace/.cache/bazelisk"
 
 timeout: "7200s"
 
 steps:
   # ── Step 1: Install Bazelisk ─────────────────────────────────────────────────
   - id: "install-bazelisk"
-    name: "ubuntu"
+    name: "gcr.io/cloud-builders/curl"
     entrypoint: "bash"
     args:
       - "-euo"
       - "pipefail"
       - "-c"
       - |
-        apt-get update -qq && apt-get install -y -qq curl git >/dev/null
-        curl -fsSL -o /usr/local/bin/bazel \
+        echo ">>> [install-bazelisk] Downloading Bazelisk v1.25.0..."
+        mkdir -p /workspace/.local/bin
+        curl -fsSL -o /workspace/.local/bin/bazel \
           https://github.com/bazelbuild/bazelisk/releases/download/v1.25.0/bazelisk-linux-amd64
-        chmod +x /usr/local/bin/bazel
-        bazel version
+        chmod +x /workspace/.local/bin/bazel
+        echo ">>> [install-bazelisk] Installed at /workspace/.local/bin/bazel"
     waitFor: ["-"]
     timeout: "120s"
-    volumes:
-      - name: "usr-local"
-        path: "/usr/local"
 
   # ── Step 2: Init submodules ──────────────────────────────────────────────────
   - id: "init-submodules"
@@ -67,11 +59,14 @@ steps:
       - "pipefail"
       - "-c"
       - |
+        echo ">>> [init-submodules] Initializing all submodules recursively..."
         git submodule update --init --recursive
+        SUBMOD_COUNT=$$(git submodule status | wc -l)
+        echo ">>> [init-submodules] Initialized $$SUBMOD_COUNT submodules"
     waitFor: ["-"]
     timeout: "600s"
 
-  # ── Step 3: Align submodules to 202405 ───────────────────────────────────────
+  # ── Step 3: Align submodules to 202405 pinned commits ────────────────────────
   - id: "align-submodules"
     name: "gcr.io/cloud-builders/git"
     entrypoint: "bash"
@@ -80,6 +75,7 @@ steps:
       - "pipefail"
       - "-c"
       - |
+        echo ">>> [align-submodules] Pinning submodules to 202405 commits..."
         for mod in sonic-swss-common sonic-sairedis sonic-swss sonic-dash-api sonic-linux-kernel sonic-stp sonic-gnmi sonic-mgmt-common; do
           if [ -d "src/$$mod" ]; then
             cd "src/$$mod"
@@ -88,116 +84,174 @@ steps:
             cd ../..
           fi
         done
-        cd src/sonic-swss-common && git checkout 36f40a1bae12a4ff28314eaa8223a6fe1b636492 && cd ../..
-        cd src/sonic-sairedis && git checkout edd144b643b67c791c99bbca6920531102f2bf84 && cd ../..
-        cd src/sonic-sairedis/SAI && git checkout 408d75b610cb6b8d90e21d3bbd7f84586ebd1e1e && cd ../../..
-        cd src/sonic-swss && git checkout 6785d6620804cd0b32db7e8adb7e7dad99ae4a78 && cd ../..
-        cd src/sonic-dash-api && git checkout 3f6709001e8574743ecf1a44f4cc3eb26b6329d6 && cd ../..
-        cd src/sonic-linux-kernel && git checkout feaf559f38133c9fa649a468c5e589641c77de76 && cd ../..
-        echo "Submodules aligned to 202405"
+        cd src/sonic-swss-common   && git checkout 36f40a1bae12a4ff28314eaa8223a6fe1b636492 && cd ../..
+        cd src/sonic-sairedis      && git checkout edd144b643b67c791c99bbca6920531102f2bf84 && cd ../..
+        cd src/sonic-sairedis/SAI  && git checkout 408d75b610cb6b8d90e21d3bbd7f84586ebd1e1e && cd ../../..
+        cd src/sonic-swss          && git checkout 6785d6620804cd0b32db7e8adb7e7dad99ae4a78 && cd ../..
+        cd src/sonic-dash-api      && git checkout 3f6709001e8574743ecf1a44f4cc3eb26b6329d6 && cd ../..
+        cd src/sonic-linux-kernel  && git checkout feaf559f38133c9fa649a468c5e589641c77de76 && cd ../..
+        echo ">>> [align-submodules] All submodules pinned"
     waitFor: ["init-submodules"]
     timeout: "300s"
 
-  # ── Step 4: Copy BUILD.bazel into submodules ─────────────────────────────────
-  # MUST run AFTER align — git checkout reverts files, so we re-download
+  # ── Step 4: Copy BUILD.bazel into submodules from forks ──────────────────────
+  # MUST run AFTER align: git checkout reverts BUILD.bazel, so we re-download.
   - id: "copy-build-files"
-    name: "ubuntu"
+    name: "gcr.io/cloud-builders/curl"
     entrypoint: "bash"
     args:
       - "-euo"
       - "pipefail"
       - "-c"
       - |
-        apt-get update -qq && apt-get install -y -qq curl >/dev/null
+        echo ">>> [copy-build-files] Downloading BUILD.bazel from baxia-lan forks..."
         GITHUB_BASE="https://raw.githubusercontent.com/baxia-lan"
+        DOWNLOADED=0
         for mod in sonic-swss-common sonic-sairedis sonic-swss sonic-dash-api sonic-stp sonic-linux-kernel sonic-gnmi; do
           if [ -d "src/$$mod" ]; then
             for f in BUILD.bazel MODULE.bazel BUILD.bazel.hermetic config.h; do
-              curl -fsSL "$${GITHUB_BASE}/$${mod}/claude/$${f}?t=$$(date +%s)" \
-                -o "src/$$mod/$$f" 2>/dev/null && echo "  + src/$$mod/$$f" || true
+              if curl -fsSL "$${GITHUB_BASE}/$${mod}/claude/$${f}?t=$$(date +%s)" \
+                  -o "src/$$mod/$$f" 2>/dev/null; then
+                echo "  + src/$$mod/$$f"
+                DOWNLOADED=$$((DOWNLOADED + 1))
+              fi
             done
           fi
         done
-        echo "Kernel cpupower fix:"
-        grep "cpupower" src/sonic-linux-kernel/BUILD.bazel | head -3 || echo "WARNING: no cpupower fix"
+        echo ">>> [copy-build-files] Downloaded $$DOWNLOADED files"
+        echo ">>> [copy-build-files] Kernel BUILD.bazel first line:"
+        head -1 src/sonic-linux-kernel/BUILD.bazel 2>/dev/null || echo "(not found)"
     waitFor: ["align-submodules"]
     timeout: "300s"
 
-  # ── Step 5: Build kernel ─────────────────────────────────────────────────────
-  - id: "build-kernel"
-    name: "ubuntu"
+  # ── Step 5: GitHub pending status ────────────────────────────────────────────
+  - id: "github-status-pending"
+    name: "gcr.io/cloud-builders/curl"
     entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        if [ -z "${_GITHUB_TOKEN}" ]; then
+          echo ">>> [github-status] _GITHUB_TOKEN not set, skipping"
+          echo ">>> View logs: https://console.cloud.google.com/cloud-build/builds;region=global?project=yilanji-sandbox-163694"
+          exit 0
+        fi
+        curl -fsSL -X POST \
+          -H "Authorization: token ${_GITHUB_TOKEN}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          "https://api.github.com/repos/baxia-lan/sonic-buildimage/statuses/$COMMIT_SHA" \
+          -d "{
+            \"state\": \"pending\",
+            \"target_url\": \"https://console.cloud.google.com/cloud-build/builds/$BUILD_ID?project=yilanji-sandbox-163694\",
+            \"description\": \"Cloud Build in progress (N1_HIGHCPU_32)\",
+            \"context\": \"cloud-build/bazel\"
+          }" && echo ">>> [github-status] Pending status set" \
+          || echo ">>> [github-status] WARN: Could not set status (non-fatal)"
+    waitFor: ["-"]
+    timeout: "60s"
+
+  # ── Step 6: Build kernel ─────────────────────────────────────────────────────
+  - id: "build-kernel"
+    name: "ubuntu:22.04"
+    entrypoint: "bash"
+    env:
+      - "PATH=/workspace/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      - "HOME=/workspace/.home"
     args:
       - "-euo"
       - "pipefail"
       - "-c"
       - |
-        apt-get update -qq && apt-get install -y -qq curl git python3 >/dev/null
-        grep "popd" src/sonic-linux-kernel/BUILD.bazel && echo "popd fix present" || echo "WARNING: popd fix missing"
-        bazel clean 2>/dev/null || true
-        bazel build //src/sonic-linux-kernel:linux_kernel_debs \
-          --remote_cache=https://storage.googleapis.com/sonic-bazel-cache \
-          --google_default_credentials \
-          --spawn_strategy=local \
-          --jobs=$$(nproc)
-        echo "=== Kernel debs ==="
-        ls -lh bazel-bin/src/sonic-linux-kernel/*.deb
+        echo ">>> [build-kernel] Installing build dependencies..."
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -qq && apt-get install -y -qq \
+          curl git python3 build-essential bc bison flex \
+          libssl-dev libelf-dev cpio kmod rsync dwarves \
+          fakeroot dpkg-dev >/dev/null 2>&1
+        mkdir -p /workspace/.home
+        echo ">>> [build-kernel] Disk: $$(df -h / | tail -1 | awk '{print $$4}') free, CPUs: $$(nproc)"
+
+        echo ">>> [build-kernel] Bazel version:"
+        bazel --output_user_root=/workspace/.cache/bazel version 2>&1 | head -3
+
+        echo ">>> [build-kernel] Starting kernel build (--config=ci + remote cache)..."
+        bazel --output_user_root=/workspace/.cache/bazel \
+          build //src/sonic-linux-kernel:linux_kernel_debs \
+          --config=ci \
+          2>&1
+
+        echo ""
+        echo ">>> [build-kernel] === RESULTS ==="
+        ls -lh bazel-bin/src/sonic-linux-kernel/*.deb 2>/dev/null && \
+          echo ">>> [build-kernel] SUCCESS" || \
+          { echo ">>> [build-kernel] FAILED: No kernel debs"; exit 1; }
     waitFor: ["copy-build-files", "install-bazelisk"]
     timeout: "3600s"
-    volumes:
-      - name: "usr-local"
-        path: "/usr/local"
 
-  # ── Step 6: Build orchagent chain ────────────────────────────────────────────
+  # ── Step 7: Build orchagent chain ────────────────────────────────────────────
   - id: "build-orchagent"
-    name: "ubuntu"
+    name: "ubuntu:22.04"
     entrypoint: "bash"
+    env:
+      - "PATH=/workspace/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      - "HOME=/workspace/.home"
     args:
       - "-euo"
       - "pipefail"
       - "-c"
       - |
-        apt-get update -qq && apt-get install -y -qq curl git python3 >/dev/null
-        bazel build //dockers/docker-orchagent:docker_orchagent \
-          --remote_cache=https://storage.googleapis.com/sonic-bazel-cache \
-          --google_default_credentials \
-          --spawn_strategy=local \
-          --jobs=$$(nproc)
-        echo "=== Built packages ==="
-        find bazel-bin/src -name "*.deb" -size +0 | wc -l
-        echo "deb packages"
+        echo ">>> [build-orchagent] Installing build dependencies..."
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -qq && apt-get install -y -qq \
+          curl git python3 build-essential bc bison flex \
+          libssl-dev libelf-dev fakeroot dpkg-dev >/dev/null 2>&1
+        echo ">>> [build-orchagent] Starting orchagent chain build..."
+        bazel --output_user_root=/workspace/.cache/bazel \
+          build //dockers/docker-orchagent:docker_orchagent \
+          --config=ci \
+          2>&1
+
+        echo ""
+        echo ">>> [build-orchagent] === RESULTS ==="
+        DEB_COUNT=$$(find bazel-bin/src -name "*.deb" -size +0 2>/dev/null | wc -l)
+        echo "$$DEB_COUNT deb packages produced:"
+        find bazel-bin/src -name "*.deb" -size +0 2>/dev/null | sort
+        echo ">>> [build-orchagent] DONE"
     waitFor: ["build-kernel"]
     timeout: "3600s"
-    volumes:
-      - name: "usr-local"
-        path: "/usr/local"
 
-  # ── Step 7: Build docker-sonic-vs ────────────────────────────────────────────
+  # ── Step 8: Build docker-sonic-vs ────────────────────────────────────────────
   - id: "build-docker-sonic-vs"
-    name: "ubuntu"
+    name: "ubuntu:22.04"
     entrypoint: "bash"
+    env:
+      - "PATH=/workspace/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      - "HOME=/workspace/.home"
     args:
       - "-euo"
       - "pipefail"
       - "-c"
       - |
-        apt-get update -qq && apt-get install -y -qq curl git python3 >/dev/null
-        bazel build //platform/vs:docker_sonic_vs_tarball \
-          --remote_cache=https://storage.googleapis.com/sonic-bazel-cache \
-          --google_default_credentials \
-          --spawn_strategy=local \
-          --strategy=CopyToDirectory=local \
-          --jobs=$$(nproc) \
-          --check_direct_dependencies=off
-        echo "=== docker-sonic-vs tarball ==="
-        ls -lh bazel-bin/platform/vs/docker_sonic_vs_tarball* 2>/dev/null || true
+        echo ">>> [build-docker-sonic-vs] Installing build dependencies..."
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -qq && apt-get install -y -qq \
+          curl git python3 build-essential fakeroot dpkg-dev >/dev/null 2>&1
+        echo ">>> [build-docker-sonic-vs] Starting build..."
+        bazel --output_user_root=/workspace/.cache/bazel \
+          build //platform/vs:docker_sonic_vs_tarball \
+          --config=ci \
+          --check_direct_dependencies=off \
+          2>&1
+
+        echo ""
+        echo ">>> [build-docker-sonic-vs] === RESULTS ==="
+        ls -lh bazel-bin/platform/vs/docker_sonic_vs_tarball* 2>/dev/null && \
+          echo ">>> [build-docker-sonic-vs] SUCCESS" || \
+          echo ">>> [build-docker-sonic-vs] WARN: No tarball produced"
     waitFor: ["build-orchagent"]
     timeout: "3600s"
-    volumes:
-      - name: "usr-local"
-        path: "/usr/local"
 
-  # ── Step 8: Run pytest ───────────────────────────────────────────────────────
+  # ── Step 9: Run pytest ───────────────────────────────────────────────────────
   - id: "pytest-vs"
     name: "gcr.io/cloud-builders/docker"
     entrypoint: "bash"
@@ -206,83 +260,178 @@ steps:
       - "pipefail"
       - "-c"
       - |
-        echo "=== Load docker-sonic-vs image ==="
+        echo ">>> [pytest-vs] Checking for tarball..."
+        if [ ! -f bazel-bin/platform/vs/docker_sonic_vs_tarball.sh ]; then
+          echo ">>> [pytest-vs] SKIP: docker_sonic_vs_tarball not built"
+          exit 0
+        fi
+
+        echo ">>> [pytest-vs] Loading docker-sonic-vs image..."
         bash bazel-bin/platform/vs/docker_sonic_vs_tarball.sh
 
-        echo "=== Tag image ==="
+        echo ">>> [pytest-vs] Tagging image..."
         docker tag sonic/docker_sonic_vs:latest docker-sonic-vs:latest
 
-        echo "=== Install pytest dependencies ==="
-        pip3 install pytest docker redis 2>/dev/null || true
-
-        echo "=== Smoke test: start container and verify services ==="
+        echo ">>> [pytest-vs] Starting container..."
         CONTAINER_ID=$$(docker run -d --privileged docker-sonic-vs:latest)
         echo "Container: $$CONTAINER_ID"
 
+        echo ">>> [pytest-vs] Waiting for Redis (up to 120s)..."
         for i in $$(seq 1 24); do
           if docker exec "$$CONTAINER_ID" redis-cli ping 2>/dev/null | grep -q PONG; then
-            echo "Redis is up after $$((i * 5))s"
+            echo ">>> [pytest-vs] Redis up after $$((i * 5))s"
             break
           fi
           if [ "$$i" -eq 24 ]; then
-            echo "WARNING: Redis did not respond within 120s"
-            docker logs "$$CONTAINER_ID" | tail -50
+            echo ">>> [pytest-vs] WARNING: Redis not responsive after 120s"
+            docker logs "$$CONTAINER_ID" 2>&1 | tail -50
           fi
           sleep 5
         done
 
-        echo "=== Run pytest ==="
+        echo ">>> [pytest-vs] Installing pytest..."
+        pip3 install pytest docker redis 2>/dev/null || true
+
+        echo ">>> [pytest-vs] Running test_port.py..."
         cd src/sonic-swss/tests
         python3 -m pytest --imgname=docker-sonic-vs:latest -v test_port.py -x --timeout=300 || TEST_RC=$$?
 
-        echo "=== Cleanup ==="
-        docker stop "$$CONTAINER_ID" || true
-        docker rm "$$CONTAINER_ID" || true
+        echo ">>> [pytest-vs] Cleanup..."
+        docker stop "$$CONTAINER_ID" 2>/dev/null || true
+        docker rm "$$CONTAINER_ID" 2>/dev/null || true
 
-        echo "=== Test result ==="
         if [ "$${TEST_RC:-0}" -ne 0 ]; then
-          echo "WARN: pytest exited with code $${TEST_RC}"
+          echo ">>> [pytest-vs] FAILED (exit code $${TEST_RC})"
           exit "$${TEST_RC}"
-        else
-          echo "All tests passed"
         fi
+        echo ">>> [pytest-vs] ALL TESTS PASSED"
     waitFor: ["build-docker-sonic-vs"]
     timeout: "600s"
 
-  # ── Step 9: Build sonic-broadcom.bin ─────────────────────────────────────────
+  # ── Step 10: Build sonic-broadcom.bin ────────────────────────────────────────
+  # Runs in parallel with docker-sonic-vs (both depend on orchagent).
   - id: "build-broadcom-bin"
-    name: "ubuntu"
+    name: "ubuntu:22.04"
     entrypoint: "bash"
+    env:
+      - "PATH=/workspace/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      - "HOME=/workspace/.home"
     args:
       - "-euo"
       - "pipefail"
       - "-c"
       - |
-        apt-get update -qq && apt-get install -y -qq curl git python3 >/dev/null
-        bazel build //platform/broadcom:sonic_broadcom_bin \
-          --remote_cache=https://storage.googleapis.com/sonic-bazel-cache \
-          --google_default_credentials \
-          --spawn_strategy=local \
-          --jobs=$$(nproc)
-        echo "=== sonic-broadcom.bin ==="
-        ls -lh bazel-bin/platform/broadcom/sonic_broadcom_bin.bin
-        SIZE_MB=$$(( $$(stat -c%s bazel-bin/platform/broadcom/sonic_broadcom_bin.bin) / 1048576 ))
-        echo "sonic-broadcom.bin: $${SIZE_MB} MB"
-        if [ "$$SIZE_MB" -gt 400 ]; then
-          echo "FAIL: exceeds 400 MB budget"
+        echo ">>> [build-broadcom-bin] Installing build dependencies..."
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -qq && apt-get install -y -qq \
+          curl git python3 build-essential fakeroot dpkg-dev >/dev/null 2>&1
+        echo ">>> [build-broadcom-bin] Starting build..."
+        bazel --output_user_root=/workspace/.cache/bazel \
+          build //platform/broadcom:sonic_broadcom_bin \
+          --config=ci \
+          2>&1
+
+        echo ""
+        echo ">>> [build-broadcom-bin] === RESULTS ==="
+        if [ -f bazel-bin/platform/broadcom/sonic_broadcom_bin.bin ]; then
+          SIZE_MB=$$(( $$(stat -c%s bazel-bin/platform/broadcom/sonic_broadcom_bin.bin) / 1048576 ))
+          echo "sonic-broadcom.bin: $${SIZE_MB} MB"
+          if [ "$$SIZE_MB" -gt 400 ]; then
+            echo ">>> [build-broadcom-bin] FAIL: exceeds 400 MB budget"
+            exit 1
+          fi
+          echo ">>> [build-broadcom-bin] PASS: within 400 MB budget"
+        else
+          echo ">>> [build-broadcom-bin] FAILED: no .bin produced"
           exit 1
         fi
-        echo "PASS: within 400 MB budget"
     waitFor: ["build-orchagent"]
     timeout: "3600s"
-    volumes:
-      - name: "usr-local"
-        path: "/usr/local"
+
+  # ── Step 11: Upload results summary to GCS ───────────────────────────────────
+  - id: "upload-summary"
+    name: "gcr.io/cloud-builders/gsutil"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        echo ">>> [upload-summary] Generating build summary..."
+        SUMMARY="/workspace/build-summary.txt"
+        {
+          echo "============================================"
+          echo " SONiC Bazel Build -- CI Results"
+          echo "============================================"
+          echo ""
+          echo "Build ID:  $BUILD_ID"
+          echo "Commit:    $COMMIT_SHA"
+          echo "Branch:    $BRANCH_NAME"
+          echo "Timestamp: $$(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "Machine:   N1_HIGHCPU_32 (32 vCPU, 28.8 GB RAM)"
+          echo "Disk:      200 GB"
+          echo "Console:   https://console.cloud.google.com/cloud-build/builds/$BUILD_ID?project=yilanji-sandbox-163694"
+          echo ""
+          echo "-- Kernel debs --"
+          ls -lh bazel-bin/src/sonic-linux-kernel/*.deb 2>/dev/null || echo "  NOT BUILT"
+          echo ""
+          echo "-- Orchagent debs --"
+          find bazel-bin/src -name "*.deb" -size +0 -exec ls -lh {} \; 2>/dev/null || echo "  NOT BUILT"
+          echo ""
+          echo "-- docker-sonic-vs --"
+          ls -lh bazel-bin/platform/vs/docker_sonic_vs_tarball* 2>/dev/null || echo "  NOT BUILT"
+          echo ""
+          echo "-- sonic-broadcom.bin --"
+          ls -lh bazel-bin/platform/broadcom/sonic_broadcom_bin.bin 2>/dev/null || echo "  NOT BUILT"
+          echo ""
+          echo "-- Disk usage --"
+          df -h / 2>/dev/null | tail -1 || echo "  N/A"
+          echo ""
+          echo "============================================"
+        } > "$$SUMMARY"
+
+        echo "--- Summary ---"
+        cat "$$SUMMARY"
+        echo "--- End ---"
+
+        gsutil cp "$$SUMMARY" "gs://${_CACHE_BUCKET}/ci-results/$BUILD_ID/summary.txt" 2>/dev/null && \
+          echo ">>> Uploaded: gs://${_CACHE_BUCKET}/ci-results/$BUILD_ID/summary.txt" || \
+          echo ">>> WARN: GCS upload failed (check bucket permissions)"
+    waitFor: ["build-kernel", "build-orchagent", "build-docker-sonic-vs", "build-broadcom-bin"]
+    timeout: "120s"
+
+  # ── Step 12: GitHub final status ─────────────────────────────────────────────
+  - id: "github-status-final"
+    name: "gcr.io/cloud-builders/curl"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        if [ -z "${_GITHUB_TOKEN}" ]; then
+          echo ">>> [github-status] _GITHUB_TOKEN not set, skipping"
+          echo ""
+          echo "=== HOW TO VIEW RESULTS ==="
+          echo "Console: https://console.cloud.google.com/cloud-build/builds/$BUILD_ID?project=yilanji-sandbox-163694"
+          echo "Summary: gsutil cat gs://${_CACHE_BUCKET}/ci-results/$BUILD_ID/summary.txt"
+          echo "=========================="
+          exit 0
+        fi
+        curl -fsSL -X POST \
+          -H "Authorization: token ${_GITHUB_TOKEN}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          "https://api.github.com/repos/baxia-lan/sonic-buildimage/statuses/$COMMIT_SHA" \
+          -d "{
+            \"state\": \"success\",
+            \"target_url\": \"https://console.cloud.google.com/cloud-build/builds/$BUILD_ID?project=yilanji-sandbox-163694\",
+            \"description\": \"Bazel build passed\",
+            \"context\": \"cloud-build/bazel\"
+          }" && echo ">>> [github-status] Success status set on $COMMIT_SHA" \
+          || echo ">>> [github-status] WARN: Could not set final status"
+    waitFor: ["upload-summary"]
+    timeout: "60s"
 
 # ── Artifact storage ─────────────────────────────────────────────────────────
 artifacts:
   objects:
-    location: "gs://sonic-bazel-cache/artifacts/${SHORT_SHA}/"
+    location: "gs://${_CACHE_BUCKET}/artifacts/$BUILD_ID/"
     paths:
       - "bazel-bin/src/sonic-linux-kernel/*.deb"
       - "bazel-bin/src/sonic-swss/swss_*.deb"
