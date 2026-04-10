@@ -104,6 +104,19 @@ jobs:
 
           echo "=== Install pytest dependencies ==="
           sudo pip3 install pytest docker redis
+          # pytest conftest.py imports swsscommon on the HOST — install from built .deb
+          if [ -f bazel-bin/build/deb/sonic-swss-common/python3-swsscommon_1.0.0_amd64.deb ]; then
+            sudo dpkg -i bazel-bin/build/deb/sonic-swss-common/python3-swsscommon_1.0.0_amd64.deb 2>/dev/null || true
+            sudo dpkg -i bazel-bin/build/deb/sonic-swss-common/libswsscommon_1.0.0_amd64.deb 2>/dev/null || true
+            sudo apt-get install -f -y 2>/dev/null || true
+          elif [ -f bazel-bin/src/sonic-swss-common/python3-swsscommon_1.0.0_amd64.deb ]; then
+            sudo dpkg -i bazel-bin/src/sonic-swss-common/python3-swsscommon_1.0.0_amd64.deb 2>/dev/null || true
+            sudo dpkg -i bazel-bin/src/sonic-swss-common/libswsscommon_1.0.0_amd64.deb 2>/dev/null || true
+            sudo apt-get install -f -y 2>/dev/null || true
+          else
+            echo "WARN: python3-swsscommon .deb not found — pytest will fail on import"
+          fi
+          python3 -c "from swsscommon import swsscommon; print('swsscommon: OK')" || echo "WARN: swsscommon import failed"
 
           echo "=== Build docker-sonic-vs ==="
           bazel build //platform/vs:docker_sonic_vs_tarball \
