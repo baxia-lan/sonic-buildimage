@@ -15,4 +15,4 @@ filegroup(
     ),
 )
 
-exports_files(glob(["*.mk"]))
+exports_files(glob(["*.mk"], allow_empty = True))

@@ -15,6 +15,7 @@ deb_package_set(
             ".git/**",
             "BUILD.bazel",
         ],
+        allow_empty = True,
     ),
     build_deps = [
         "//src/libyang3:libyang3",
