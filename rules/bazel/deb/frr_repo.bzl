@@ -50,10 +50,16 @@ def _frr_deb_repo_impl(rctx):
             if rctx.path(leftover).exists:
                 rctx.execute(["rm", "-f", leftover])
 
-    # Repack each extracted rootfs into a .tar for use as OCI layer input
+    # Repack each extracted rootfs into a .tar for use as OCI layer input.
+    # Use GNU tar for --sort/--mtime/--owner/--group (BSD tar on macOS lacks these).
+    tar_bin = "tar"
+    gtar_result = rctx.execute(["which", "gtar"])
+    if gtar_result.return_code == 0:
+        tar_bin = gtar_result.stdout.strip()
+
     for pkg_name, rootfs_dir in data_tars.items():
-        rctx.execute([
-            "tar",
+        tar_result = rctx.execute([
+            tar_bin,
             "--sort=name",
             "--mtime=@0",
             "--owner=0",
@@ -64,6 +70,8 @@ def _frr_deb_repo_impl(rctx):
             rootfs_dir,
             ".",
         ])
+        if tar_result.return_code != 0:
+            fail("Failed to repack {}: {}".format(pkg_name, tar_result.stderr))
 
     # Generate BUILD.bazel exposing the tars and raw debs
     pkg_names = sorted(data_tars.keys())

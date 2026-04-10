@@ -136,7 +136,7 @@ steps:
         grep "popd" src/sonic-linux-kernel/BUILD.bazel && echo "popd fix present" || echo "WARNING: popd fix missing"
         bazel clean 2>/dev/null || true
         bazel build //src/sonic-linux-kernel:linux_kernel_debs \
-          --remote_cache=https://storage.googleapis.com/$${_CACHE_BUCKET:-sonic-bazel-cache} \
+          --remote_cache=https://storage.googleapis.com/sonic-bazel-cache \
           --google_default_credentials \
           --spawn_strategy=local \
           --jobs=$$(nproc)

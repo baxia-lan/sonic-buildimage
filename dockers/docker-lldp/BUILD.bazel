@@ -33,7 +33,8 @@ set -euo pipefail
 ROOTFS=$$(mktemp -d)
 trap 'rm -rf "$$ROOTFS"' EXIT
 pip3 install --no-cache-dir --no-deps --prefix=$$ROOTFS/usr/local $(SRCS)
-SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \
+TAR=tar; command -v gtar >/dev/null 2>&1 && TAR=gtar
+SOURCE_DATE_EPOCH=0 $$TAR --sort=name --mtime=@0 \
   --owner=0 --group=0 \
   -C "$$ROOTFS" -cf $(OUTS) .
 """,

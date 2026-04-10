@@ -129,6 +129,11 @@ _sysroot_repo(
     },
 )
 
+# ── cppzmq headers — fetched at repository_rule time, NOT during build ────────
+_cppzmq = use_repo_rule("//rules/bazel/deb:cppzmq_repo.bzl", "cppzmq_headers")
+
+_cppzmq(name = "cppzmq")
+
 # ── FRR (Free Range Routing) packages — pinned from deb.frrouting.org ────────
 # FRR is not in standard Debian repos (bookworm has 8.4.x, SONiC needs 10.x).
 # Downloaded at fetch time with sha256 pins. No network at build time.

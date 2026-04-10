@@ -44,7 +44,7 @@ docker run --rm --platform linux/amd64 \
   -v "$$PATCH_DIR:/patches:ro" \
   -v "$$STAGING:/output" \
   -e DEBIAN_FRONTEND=noninteractive \
-  debian:bookworm-slim \
+  debian:bookworm-slim@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0c2280647e1310bc1642182655d \
   bash -o pipefail -c '
     unset SOURCE_DATE_EPOCH
     apt-get update -qq

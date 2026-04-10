@@ -7,7 +7,7 @@ This enables the same BUILD files to work on both platforms without
 modification — the developer experience matches CI behavior.
 """
 
-_DEBIAN_IMAGE = "debian:bookworm-slim"
+_DEBIAN_IMAGE = "debian:bookworm-slim@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0c2280647e1310bc1642182655d"
 
 def docker_genrule(
         name,

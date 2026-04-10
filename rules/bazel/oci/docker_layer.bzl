@@ -4,7 +4,7 @@ These genrule wrappers execute apt-get and dpkg operations inside Docker
 containers, enabling the build to work on both Linux and macOS.
 """
 
-_DEBIAN_IMAGE = "debian:bookworm-slim"
+_DEBIAN_IMAGE = "debian:bookworm-slim@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0c2280647e1310bc1642182655d"
 
 # Snapshot mirror for reproducible apt installs.
 _APT_SNAPSHOT_URL = "https://snapshot.debian.org/archive/debian/20260401T000000Z"

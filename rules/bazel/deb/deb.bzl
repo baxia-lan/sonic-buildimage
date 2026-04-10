@@ -26,7 +26,7 @@ load("@bazel_skylib//lib:paths.bzl", "paths")
 # Docker image for building .deb packages.
 # On CI (amd64 native), this runs natively. On macOS arm64, --platform linux/amd64
 # forces qemu emulation to produce amd64 .deb packages.
-_BUILD_IMAGE = "debian:bookworm-slim"
+_BUILD_IMAGE = "debian:bookworm-slim@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0c2280647e1310bc1642182655d"
 
 # Snapshot mirror for reproducible apt installs.
 # All builds use the same package versions regardless of build date.

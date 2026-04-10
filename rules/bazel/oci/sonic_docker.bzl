@@ -115,7 +115,9 @@ find "$$TMPDIR" -type f -name "*.pyc" -delete 2>/dev/null || true
 find "$$TMPDIR" -type f -name "*.pyo" -delete 2>/dev/null || true
 
 # 7. Repack filtered contents into a single output tarball.
-tar cf "$@" -C "$$TMPDIR" .
+#    Use COPYFILE_DISABLE=1 to prevent macOS BSD tar from embedding
+#    AppleDouble/xattr PAX headers (com.apple.provenance) which break docker load.
+COPYFILE_DISABLE=1 tar cf "$@" -C "$$TMPDIR" .
 """
 
 def slim_apt_layer(name, srcs, visibility = None):
