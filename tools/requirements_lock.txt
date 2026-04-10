@@ -11,6 +11,7 @@ j2cli==0.3.10
 
 # Supervisor
 supervisor==4.2.5
+setuptools==69.5.1
 
 # sonic-cfggen dependencies
 pyangbind==0.8.1
