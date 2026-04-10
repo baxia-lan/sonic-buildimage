@@ -1,15 +1,21 @@
-timeout: 900s
+timeout: 7200s
 
 options:
   logging: CLOUD_LOGGING_ONLY
+  pool:
+    name: projects/$PROJECT_ID/locations/us-central1/workerPools/${_PRIMARY_POOL}
+
+substitutions:
+  _PRIMARY_POOL: sonic-primary
+  _AFFECTED_LABELS: //bazel/... //tools/... //sources/... //packages/... //images/... //platforms/... //installers/...
 
 steps:
-  - name: ubuntu
+  - id: presubmit
+    name: gcr.io/cloud-builders/gcloud
     entrypoint: bash
+    env:
+      - USE_BAZEL_VERSION=8.5.0
+      - SONIC_AFFECTED_LABELS=${_AFFECTED_LABELS}
     args:
       - -lc
-      - |
-        echo "cloud build smoke ok"
-        echo "branch=${BRANCH_NAME:-unknown}"
-        echo "commit=${COMMIT_SHA:-unknown}"
-        git rev-parse --short HEAD
+      - ./ci/gcp/presubmit.sh
