@@ -107,7 +107,7 @@ steps:
         echo ">>> [copy-build-files] Downloading BUILD.bazel from baxia-lan forks..."
         GITHUB_BASE="https://raw.githubusercontent.com/baxia-lan"
         DOWNLOADED=0
-        for mod in sonic-swss-common sonic-sairedis sonic-swss sonic-dash-api sonic-stp sonic-linux-kernel sonic-gnmi; do
+        for mod in sonic-swss-common sonic-sairedis sonic-swss sonic-dash-api sonic-stp sonic-linux-kernel sonic-gnmi sonic-platform-daemons sonic-utilities sonic-host-services; do
           if [ -d "src/$$mod" ]; then
             for f in BUILD.bazel MODULE.bazel BUILD.bazel.hermetic config.h; do
               if curl -fsSL "$${GITHUB_BASE}/$${mod}/claude/$${f}?t=$$(date +%s)" \
