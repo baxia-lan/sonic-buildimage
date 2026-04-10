@@ -2,6 +2,26 @@ load("//rules/bazel/wheel:wheel.bzl", "sonic_wheel")
 
 package(default_visibility = ["//visibility:public"])
 
+exports_files(
+    [
+        "sonic_py_common/__init__.py",
+        "sonic_py_common/daemon_base.py",
+        "sonic_py_common/device_info.py",
+        "sonic_py_common/general.py",
+        "sonic_py_common/interface.py",
+        "sonic_py_common/logger.py",
+        "sonic_py_common/multi_asic.py",
+        "sonic_py_common/port_util.py",
+        "sonic_py_common/security_cipher.py",
+        "sonic_py_common/sidecar_common.py",
+        "sonic_py_common/sonic_db_dump_load.py",
+        "sonic_py_common/syslogger.py",
+        "sonic_py_common/task_base.py",
+        "sonic_py_common/util.py",
+    ],
+    visibility = ["//visibility:public"],
+)
+
 sonic_wheel(
     name = "sonic_py_common_wheel",
     distribution = "sonic_py_common",

@@ -13,6 +13,9 @@ exports_files(
         "smartswitch_config.py",
         "sonic_yang_cfg_generator.py",
         "sonic-cfggen",
+        "data/l1intf.j2",
+        "data/l2switch.j2",
+        "data/l3intf.j2",
     ],
     visibility = ["//visibility:public"],
 )

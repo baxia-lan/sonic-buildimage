@@ -19,20 +19,20 @@ genrule(
     name = "sonic_python_layer",
     srcs = [
         # sonic-py-common
-        "//src/sonic-py-common/sonic_py_common:__init__.py",
-        "//src/sonic-py-common/sonic_py_common:daemon_base.py",
-        "//src/sonic-py-common/sonic_py_common:device_info.py",
-        "//src/sonic-py-common/sonic_py_common:general.py",
-        "//src/sonic-py-common/sonic_py_common:interface.py",
-        "//src/sonic-py-common/sonic_py_common:logger.py",
-        "//src/sonic-py-common/sonic_py_common:multi_asic.py",
-        "//src/sonic-py-common/sonic_py_common:port_util.py",
-        "//src/sonic-py-common/sonic_py_common:security_cipher.py",
-        "//src/sonic-py-common/sonic_py_common:sidecar_common.py",
-        "//src/sonic-py-common/sonic_py_common:sonic_db_dump_load.py",
-        "//src/sonic-py-common/sonic_py_common:syslogger.py",
-        "//src/sonic-py-common/sonic_py_common:task_base.py",
-        "//src/sonic-py-common/sonic_py_common:util.py",
+        "//src/sonic-py-common:sonic_py_common/__init__.py",
+        "//src/sonic-py-common:sonic_py_common/daemon_base.py",
+        "//src/sonic-py-common:sonic_py_common/device_info.py",
+        "//src/sonic-py-common:sonic_py_common/general.py",
+        "//src/sonic-py-common:sonic_py_common/interface.py",
+        "//src/sonic-py-common:sonic_py_common/logger.py",
+        "//src/sonic-py-common:sonic_py_common/multi_asic.py",
+        "//src/sonic-py-common:sonic_py_common/port_util.py",
+        "//src/sonic-py-common:sonic_py_common/security_cipher.py",
+        "//src/sonic-py-common:sonic_py_common/sidecar_common.py",
+        "//src/sonic-py-common:sonic_py_common/sonic_db_dump_load.py",
+        "//src/sonic-py-common:sonic_py_common/syslogger.py",
+        "//src/sonic-py-common:sonic_py_common/task_base.py",
+        "//src/sonic-py-common:sonic_py_common/util.py",
         # sonic-config-engine modules
         "//src/sonic-config-engine:__init__.py",
         "//src/sonic-config-engine:asic_sensors_config.py",
@@ -44,9 +44,9 @@ genrule(
         "//src/sonic-config-engine:sonic_yang_cfg_generator.py",
         # sonic-config-engine script and data
         "//src/sonic-config-engine:sonic-cfggen",
-        "//src/sonic-config-engine/data:l1intf.j2",
-        "//src/sonic-config-engine/data:l2switch.j2",
-        "//src/sonic-config-engine/data:l3intf.j2",
+        "//src/sonic-config-engine:data/l1intf.j2",
+        "//src/sonic-config-engine:data/l2switch.j2",
+        "//src/sonic-config-engine:data/l3intf.j2",
         # sonic-yang-models
         "//src/sonic-yang-models:yang_model_files",
         # sonic-yang-mgmt
@@ -68,20 +68,20 @@ mkdir -p "$$STAGING/usr/share/sonic/templates"
 mkdir -p "$$STAGING/usr/local/yang-models"
 
 # sonic-py-common: package directory under site-packages
-for f in $(locations //src/sonic-py-common/sonic_py_common:__init__.py) \
-         $(locations //src/sonic-py-common/sonic_py_common:daemon_base.py) \
-         $(locations //src/sonic-py-common/sonic_py_common:device_info.py) \
-         $(locations //src/sonic-py-common/sonic_py_common:general.py) \
-         $(locations //src/sonic-py-common/sonic_py_common:interface.py) \
-         $(locations //src/sonic-py-common/sonic_py_common:logger.py) \
-         $(locations //src/sonic-py-common/sonic_py_common:multi_asic.py) \
-         $(locations //src/sonic-py-common/sonic_py_common:port_util.py) \
-         $(locations //src/sonic-py-common/sonic_py_common:security_cipher.py) \
-         $(locations //src/sonic-py-common/sonic_py_common:sidecar_common.py) \
-         $(locations //src/sonic-py-common/sonic_py_common:sonic_db_dump_load.py) \
-         $(locations //src/sonic-py-common/sonic_py_common:syslogger.py) \
-         $(locations //src/sonic-py-common/sonic_py_common:task_base.py) \
-         $(locations //src/sonic-py-common/sonic_py_common:util.py); do
+for f in $(locations //src/sonic-py-common:sonic_py_common/__init__.py) \
+         $(locations //src/sonic-py-common:sonic_py_common/daemon_base.py) \
+         $(locations //src/sonic-py-common:sonic_py_common/device_info.py) \
+         $(locations //src/sonic-py-common:sonic_py_common/general.py) \
+         $(locations //src/sonic-py-common:sonic_py_common/interface.py) \
+         $(locations //src/sonic-py-common:sonic_py_common/logger.py) \
+         $(locations //src/sonic-py-common:sonic_py_common/multi_asic.py) \
+         $(locations //src/sonic-py-common:sonic_py_common/port_util.py) \
+         $(locations //src/sonic-py-common:sonic_py_common/security_cipher.py) \
+         $(locations //src/sonic-py-common:sonic_py_common/sidecar_common.py) \
+         $(locations //src/sonic-py-common:sonic_py_common/sonic_db_dump_load.py) \
+         $(locations //src/sonic-py-common:sonic_py_common/syslogger.py) \
+         $(locations //src/sonic-py-common:sonic_py_common/task_base.py) \
+         $(locations //src/sonic-py-common:sonic_py_common/util.py); do
     cp "$$f" "$$SITE/sonic_py_common/"
 done
 
@@ -102,9 +102,9 @@ cp $(location //src/sonic-config-engine:sonic-cfggen) "$$STAGING/usr/local/bin/s
 chmod 755 "$$STAGING/usr/local/bin/sonic-cfggen"
 
 # sonic-config-engine data templates
-cp $(location //src/sonic-config-engine/data:l1intf.j2) "$$STAGING/usr/share/sonic/templates/"
-cp $(location //src/sonic-config-engine/data:l2switch.j2) "$$STAGING/usr/share/sonic/templates/"
-cp $(location //src/sonic-config-engine/data:l3intf.j2) "$$STAGING/usr/share/sonic/templates/"
+cp $(location //src/sonic-config-engine:data/l1intf.j2) "$$STAGING/usr/share/sonic/templates/"
+cp $(location //src/sonic-config-engine:data/l2switch.j2) "$$STAGING/usr/share/sonic/templates/"
+cp $(location //src/sonic-config-engine:data/l3intf.j2) "$$STAGING/usr/share/sonic/templates/"
 
 # sonic-yang-models: YANG files
 for f in $(locations //src/sonic-yang-models:yang_model_files); do
