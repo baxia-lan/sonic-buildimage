@@ -61,12 +61,17 @@ jobs:
             --manifest apt/bookworm.yaml \
             --lock apt/bookworm.lock.json || echo "Lockfile generation failed — using placeholder"
 
+      - name: Free disk space for kernel build
+        run: |
+          echo "Before: $(df -h / | tail -1 | awk '{print $4}') free"
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
+          sudo rm -rf /usr/share/swift /usr/local/.ghcup /opt/hostedtoolcache
+          sudo docker image prune -af 2>/dev/null || true
+          echo "After: $(df -h / | tail -1 | awk '{print $4}') free"
+
       - name: Build kernel
         run: |
-          # Verify the cpupower fix is in the BUILD.bazel
-          grep "popd" src/sonic-linux-kernel/BUILD.bazel && echo "popd fix present" || echo "WARNING: popd fix missing"
-          # Clean to avoid cached failures
-          bazel clean 2>/dev/null || true
+          echo "Disk: $(df -h / | tail -1 | awk '{print $4}') free"
           bazel build //src/sonic-linux-kernel:linux_kernel_debs \
             --spawn_strategy=local --jobs=4
           ls -lh bazel-bin/src/sonic-linux-kernel/*.deb

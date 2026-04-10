@@ -40,7 +40,7 @@ build:ci --remote_cache=https://storage.googleapis.com/sonic-bazel-cache
 build:ci --google_default_credentials
 build:ci --remote_upload_local_results=true
 build:ci --remote_download_toplevel
-build:ci --jobs=64
+build:ci --jobs=HOST_CPUS
 build:ci --noshow_progress
 
 # ── Remote Build Execution (--config=rbe) ─────────────────────────────────────
