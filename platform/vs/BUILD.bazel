@@ -274,6 +274,7 @@ genrule(
         "//files/build_templates:buffers_config.j2",
         "//files/build_templates:qos_config.j2",
         "//files/build_templates:arp_update_vars.j2",
+        "//files/build_templates:swss_vars.j2",
     ],
     outs = ["vs_templates_layer.tar"],
     cmd = """\
