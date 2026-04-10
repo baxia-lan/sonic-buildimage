@@ -103,7 +103,7 @@ jobs:
           set -euo pipefail
 
           echo "=== Install pytest dependencies ==="
-          pip3 install pytest docker redis
+          sudo pip3 install pytest docker redis
 
           echo "=== Build docker-sonic-vs ==="
           bazel build //platform/vs:docker_sonic_vs_tarball \
@@ -150,6 +150,11 @@ jobs:
 
       - name: Build sonic-broadcom.bin
         run: |
+          # First extract vmlinuz and modules from kernel .deb
+          bazel build //src/sonic-linux-kernel:vmlinuz //src/sonic-linux-kernel:kernel_modules_tar \
+            --spawn_strategy=local --jobs=4
+          ls -lh bazel-bin/src/sonic-linux-kernel/vmlinuz-extracted 2>/dev/null || echo "vmlinuz extraction failed"
+          # Then build the full ONIE image
           bazel build //platform/broadcom:sonic_broadcom_bin \
             --spawn_strategy=local --jobs=4
           ls -lh bazel-bin/platform/broadcom/sonic_broadcom_bin.bin
