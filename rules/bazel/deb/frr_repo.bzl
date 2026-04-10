@@ -52,24 +52,22 @@ def _frr_deb_repo_impl(rctx):
 
     # Repack each extracted rootfs into a .tar for use as OCI layer input.
     # Use GNU tar for --sort/--mtime/--owner/--group (BSD tar on macOS lacks these).
+    # Find GNU tar (needed for --sort/--mtime/--owner/--group)
     tar_bin = "tar"
-    gtar_result = rctx.execute(["which", "gtar"])
-    if gtar_result.return_code == 0:
-        tar_bin = gtar_result.stdout.strip()
+    for candidate in ["/opt/homebrew/bin/gtar", "/usr/local/bin/gtar", "gtar"]:
+        result = rctx.execute(["which", candidate])
+        if result.return_code == 0:
+            tar_bin = result.stdout.strip()
+            break
 
     for pkg_name, rootfs_dir in data_tars.items():
-        tar_result = rctx.execute([
-            tar_bin,
-            "--sort=name",
-            "--mtime=@0",
-            "--owner=0",
-            "--group=0",
-            "-cf",
-            pkg_name + ".tar",
-            "-C",
-            rootfs_dir,
-            ".",
-        ])
+        # Try GNU tar flags; fall back to plain tar if they fail
+        tar_args = [tar_bin, "-cf", pkg_name + ".tar", "-C", rootfs_dir, "."]
+        sort_result = rctx.execute([tar_bin, "--sort=name", "--help"])
+        if sort_result.return_code == 0:
+            tar_args = [tar_bin, "--sort=name", "--mtime=@0", "--owner=0", "--group=0",
+                        "-cf", pkg_name + ".tar", "-C", rootfs_dir, "."]
+        tar_result = rctx.execute(tar_args)
         if tar_result.return_code != 0:
             fail("Failed to repack {}: {}".format(pkg_name, tar_result.stderr))
 

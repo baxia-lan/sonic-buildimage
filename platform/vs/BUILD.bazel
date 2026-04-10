@@ -42,9 +42,27 @@ slim_apt_layer(
         "@bookworm_python3-protobuf_3.21.12-3_amd64//:data",
         "@bookworm_python3-netifaces_0.11.0-2-p-b1_amd64//:data",
         "@bookworm_python3-yaml_6.0-3-p-b2_amd64//:data",
-        # Libraries
+        # Libraries — runtime deps for syncd/orchagent/swss binaries
         "@bookworm_libteam5_1.31-1_amd64//:data",
         "@bookworm_libteamdctl0_1.31-1_amd64//:data",
+        "@bookworm_libhiredis0.14_0.14.1-3_amd64//:data",
+        "@bookworm_libzmq5_4.3.4-6_amd64//:data",
+        "@bookworm_libnl-3-200_3.7.0-0.2-p-b1_amd64//:data",
+        "@bookworm_libnl-genl-3-200_3.7.0-0.2-p-b1_amd64//:data",
+        "@bookworm_libnl-route-3-200_3.7.0-0.2-p-b1_amd64//:data",
+        "@bookworm_libnl-nf-3-200_3.7.0-0.2-p-b1_amd64//:data",
+        "@bookworm_libboost-serialization1.74.0_1.74.0-p-ds1-21_amd64//:data",
+        "@bookworm_libjansson4_2.14-2_amd64//:data",
+        "@bookworm_libjemalloc2_5.3.0-1_amd64//:data",
+        "@bookworm_libyang2_2.1.30-2_amd64//:data",
+        "@bookworm_libprotobuf32_3.21.12-3_amd64//:data",
+        "@bookworm_libssl3_3.0.18-1_deb12u2_amd64//:data",
+        # System
+        "@bookworm_rsyslog_8.2302.0-1-p-deb12u1_amd64//:data",
+        "@bookworm_python3_3.11.2-1-p-b1_amd64//:data",
+        "@bookworm_libc6_2.36-9-p-deb12u13_amd64//:data",
+        "@bookworm_libstdc-p--p-6_12.2.0-14-p-deb12u1_amd64//:data",
+        "@bookworm_libgcc-s1_12.2.0-14-p-deb12u1_amd64//:data",
     ],
 )
 
