@@ -1,43 +1,7 @@
-"""GCC tool map — maps Bazel actions to hermetic GCC binaries."""
+"""GCC tool map — placeholder for future hermetic GCC toolchain.
 
-load("@rules_cc//cc/toolchains:cc_toolchain.bzl", "cc_tool", "cc_tool_map")
+Currently unused: the build uses toolchains_llvm from MODULE.bazel.
+This file exists to prevent package loading errors.
+"""
 
 package(default_visibility = ["//visibility:public"])
-
-cc_tool_map(
-    name = "tool_map",
-    tools = {
-        "@rules_cc//cc/toolchains/actions:ar_actions": ":ar",
-        "@rules_cc//cc/toolchains/actions:assembly_actions": ":gcc",
-        "@rules_cc//cc/toolchains/actions:c_compile": ":gcc",
-        "@rules_cc//cc/toolchains/actions:cpp_compile_actions": ":gxx",
-        "@rules_cc//cc/toolchains/actions:link_actions": ":gxx",
-        "@rules_cc//cc/toolchains/actions:objcopy_embed_data": ":objcopy",
-        "@rules_cc//cc/toolchains/actions:strip": ":strip",
-    },
-)
-
-cc_tool(
-    name = "gcc",
-    src = "@gcc-linux-x86_64//:bin/x86_64-linux-gcc",
-)
-
-cc_tool(
-    name = "gxx",
-    src = "@gcc-linux-x86_64//:bin/x86_64-linux-g++",
-)
-
-cc_tool(
-    name = "ar",
-    src = "@gcc-linux-x86_64//:bin/x86_64-linux-gcc-ar",
-)
-
-cc_tool(
-    name = "objcopy",
-    src = "@gcc-linux-x86_64//:bin/objcopy",
-)
-
-cc_tool(
-    name = "strip",
-    src = "@gcc-linux-x86_64//:bin/strip",
-)

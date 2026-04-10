@@ -14,7 +14,7 @@ SNMPD_VERSION = "5.9.3+dfsg-2+deb12u1"
 
 filegroup(
     name = "patches",
-    srcs = glob(["patch-5.9.3+dfsg/**"]),
+    srcs = glob(["patch-5.9.3+dfsg/**"], allow_empty = True),
 )
 
 deb_package_set(

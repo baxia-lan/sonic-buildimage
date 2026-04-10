@@ -8,4 +8,4 @@ exports_files(glob([
     "*.sh",
     "*.conf",
     "*.py",
-]))
+], allow_empty = True))

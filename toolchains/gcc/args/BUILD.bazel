@@ -1,63 +1,7 @@
-"""Compiler and linker args wired to Debian sysroot packages.
+"""Compiler args — placeholder for future hermetic GCC toolchain.
 
-All include paths and library paths come from packages resolved by
-rules_distroless at fetch time — no host system headers or libraries used.
+Currently unused: the build uses toolchains_llvm from MODULE.bazel.
+This file exists to prevent package loading errors.
 """
 
-load("@rules_cc//cc/toolchains:cc_toolchain.bzl", "cc_args")
-
 package(default_visibility = ["//visibility:public"])
-
-# ── C compilation args ────────────────────────────────────────────────────────
-cc_args(
-    name = "c_compile",
-    actions = ["@rules_cc//cc/toolchains/actions:c_compile"],
-    args = [
-        "-nostdinc",
-        "-isystem", "external/gcc-linux-x86_64/lib/gcc/x86_64-linux/12.5.0/include",
-        "-isystem", "external/bookworm/usr/include",
-        "-isystem", "external/bookworm/usr/include/x86_64-linux-gnu",
-        "-Wall",
-        "-Wextra",
-        "-fPIC",
-        "-fstack-protector-strong",
-    ],
-)
-
-# ── C++ compilation args ──────────────────────────────────────────────────────
-cc_args(
-    name = "cpp_compile",
-    actions = ["@rules_cc//cc/toolchains/actions:cpp_compile_actions"],
-    args = [
-        "-nostdinc",
-        "-nostdinc++",
-        "-isystem", "external/gcc-linux-x86_64/lib/gcc/x86_64-linux/12.5.0/include",
-        "-isystem", "external/bookworm/usr/include",
-        "-isystem", "external/bookworm/usr/include/x86_64-linux-gnu",
-        "-isystem", "external/bookworm/usr/include/c++/12",
-        "-isystem", "external/bookworm/usr/include/x86_64-linux-gnu/c++/12",
-        "-std=c++17",
-        "-Wall",
-        "-Wextra",
-        "-fPIC",
-        "-fstack-protector-strong",
-    ],
-)
-
-# ── Linker args ───────────────────────────────────────────────────────────────
-cc_args(
-    name = "link",
-    actions = ["@rules_cc//cc/toolchains/actions:link_actions"],
-    args = [
-        "-nostdlib",
-        "-L", "external/bookworm/lib/x86_64-linux-gnu",
-        "-L", "external/bookworm/usr/lib/x86_64-linux-gnu",
-        "-L", "external/gcc-linux-x86_64/lib/gcc/x86_64-linux/12.5.0",
-        "-Wl,-rpath=/lib/x86_64-linux-gnu",
-        "-lpthread",
-        "-lm",
-        "-ldl",
-        "-lc",
-        "-lgcc_s",
-    ],
-)
