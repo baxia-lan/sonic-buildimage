@@ -159,6 +159,16 @@ _frr_repo(
     },
 )
 
+# ── phy-credo firmware (SONIC_ONLINE_DEBS equivalent) ────────────────────────
+_http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
+
+_http_file(
+    name = "phy_credo",
+    url = "https://github.com/aristanetworks/sonic-firmware/raw/24716c4e03f223d8e18afff786ac427f6ac77fe0/phy/phy-credo_1.0_amd64.deb",
+    sha256 = "",  # TODO: pin sha256 after first download
+    downloaded_file_path = "phy-credo_1.0_amd64.deb",
+)
+
 # ── Debian packages (hermetic, resolved at fetch time) ───────────────────────
 # All runtime and build-time Debian packages resolved from pinned snapshots.
 # No apt-get runs during build actions.
