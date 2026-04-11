@@ -346,7 +346,7 @@ STAGING=$$(mktemp -d)
 docker run --rm --platform linux/amd64 \
   -v "$$STAGING:/output" \
   -e DEBIAN_FRONTEND=noninteractive \
-  debian:bookworm-slim bash -o pipefail -c '
+  debian:bookworm-slim@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0c2280647e1310bc1642182655d bash -o pipefail -c '
     set -euo pipefail
     echo "deb https://snapshot.debian.org/archive/debian/20260401T000000Z bookworm main" > /etc/apt/sources.list
     apt-get update -qq
@@ -374,7 +374,6 @@ cp "$$STAGING/layer.tar" "$$OUT"
 rm -rf "$$STAGING"
 """,
     tags = [
-        "no-cache",
         "no-sandbox",
         "requires-docker",
     ],
