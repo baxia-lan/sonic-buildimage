@@ -29,21 +29,29 @@ filegroup(
 
 exports_files(glob(["*.mk"], allow_empty = True))
 
-# ── Same service images as VS/broadcom ───────────────────────────────────────
-ALL_SERVICE_IMAGES = [
-    "//dockers/docker-database:docker_database_tarball",
-    "//dockers/docker-orchagent:docker_orchagent_tarball",
-    "//dockers/docker-fpm-frr:docker_fpm_frr_tarball",
-    "//dockers/docker-snmp:docker_snmp_tarball",
-    "//dockers/docker-lldp:docker_lldp_tarball",
-    "//dockers/docker-teamd:docker_teamd_tarball",
-    "//dockers/docker-nat:docker_nat_tarball",
-    "//dockers/docker-sflow:docker_sflow_tarball",
-    "//dockers/docker-stp:docker_stp_tarball",
-    "//dockers/docker-iccpd:docker_iccpd_tarball",
-    "//dockers/docker-router-advertiser:docker_router_advertiser_tarball",
-    "//dockers/docker-basic_router:docker_basic_router_tarball",
+# ── Service image tarballs (Docker-loadable format) ─────────────────���───────
+_SERVICE_TARBALL_TARGETS = [
+    ("docker-database", "docker_database"),
+    ("docker-orchagent", "docker_orchagent"),
+    ("docker-fpm-frr", "docker_fpm_frr"),
+    ("docker-snmp", "docker_snmp"),
+    ("docker-lldp", "docker_lldp"),
+    ("docker-teamd", "docker_teamd"),
+    ("docker-nat", "docker_nat"),
+    ("docker-sflow", "docker_sflow"),
+    ("docker-stp", "docker_stp"),
+    ("docker-iccpd", "docker_iccpd"),
+    ("docker-router-advertiser", "docker_router_advertiser"),
+    ("docker-basic_router", "docker_basic_router"),
 ]
+
+[filegroup(
+    name = name + "_tar",
+    srcs = ["//dockers/" + pkg + ":" + name + "_tarball"],
+    output_group = "tarball",
+) for pkg, name in _SERVICE_TARBALL_TARGETS]
+
+ALL_SERVICE_IMAGES = [":" + name + "_tar" for _, name in _SERVICE_TARBALL_TARGETS]
 
 # ── Rootfs with all SONiC service images ─────────────────────────────────────
 sonic_rootfs_image(
