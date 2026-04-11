@@ -50,9 +50,13 @@ slim_apt_layer(
         "@bookworm_libjansson4_2.14-2_amd64//:data",
         "@bookworm_libdbus-1-3_1.14.10-1_deb12u1_amd64//:data",
         "@bookworm_libssl3_3.0.18-1_deb12u2_amd64//:data",
+        # Python 3.11 — the binary (python3.11-minimal) needs libexpat1
+        # for the xml module and the distroless base doesn't include it.
         "@bookworm_python3.11-minimal_3.11.2-6-p-deb12u6_amd64//:data",
         "@bookworm_libpython3.11-minimal_3.11.2-6-p-deb12u6_amd64//:data",
         "@bookworm_libpython3.11-stdlib_3.11.2-6-p-deb12u6_amd64//:data",
+        "@bookworm_python3-minimal_3.11.2-1-p-b1_amd64//:data",
+        "@bookworm_libexpat1_2.5.0-1-p-deb12u2_amd64//:data",
     ],
 )
 
