@@ -20,6 +20,7 @@ def _onie_image_impl(ctx):
     kernel = ctx.file.kernel
     platform_modules = ctx.files.platform_modules
     installer_script = ctx.file.installer_script
+    sharch_body = ctx.file.sharch_body
 
     args = ctx.actions.args()
     args.add("--output", output)
@@ -33,7 +34,7 @@ def _onie_image_impl(ctx):
         args.add("--module", m)
 
     ctx.actions.run(
-        inputs = [rootfs_tar, kernel, installer_script] + platform_modules,
+        inputs = [rootfs_tar, kernel, installer_script, sharch_body] + platform_modules,
         outputs = [output],
         executable = ctx.executable._onie_builder,
         arguments = [args],
@@ -69,7 +70,12 @@ onie_image = rule(
         "installer_script": attr.label(
             allow_single_file = [".sh"],
             default = "//installer:install.sh",
-            doc = "ONIE installer shell script header.",
+            doc = "ONIE installer shell script (embedded in payload).",
+        ),
+        "sharch_body": attr.label(
+            allow_single_file = [".sh"],
+            default = "//installer:sharch_body.sh",
+            doc = "Self-extracting archive header template.",
         ),
         "platform": attr.string(
             mandatory = True,
