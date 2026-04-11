@@ -136,6 +136,32 @@ _cppzmq = use_repo_rule("//rules/bazel/deb:cppzmq_repo.bzl", "cppzmq_headers")
 
 _cppzmq(name = "cppzmq")
 
+# ── Hermetic builder Docker image (all build deps pre-installed) ──────────────
+# Pre-installs all dpkg-buildpackage dependencies at fetch time so that
+# deb_package_set genrules have zero network access during build actions.
+# Per CLAUDE.md: "Network access only in repository_rules, never in build actions."
+_builder_image = use_repo_rule("//rules/bazel/deb:builder_image_repo.bzl", "sonic_builder_image_repo")
+
+_builder_image(
+    name = "sonic_builder",
+    base_image = "debian:bookworm-slim@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0c2280647e1310bc1642182655d",
+    apt_snapshot = "https://snapshot.debian.org/archive/debian/20260401T000000Z",
+    packages = [
+        "build-essential", "dpkg-dev", "fakeroot", "debhelper", "cmake",
+        "libnl-3-dev", "libnl-genl-3-dev", "libnl-route-3-dev", "libnl-nf-3-dev",
+        "libhiredis-dev", "swig", "libgtest-dev", "libgmock-dev", "libboost-dev",
+        "libboost-serialization-dev", "libzmq3-dev", "pkg-config",
+        "dh-exec", "nlohmann-json3-dev", "python3-dev", "libprotobuf-dev",
+        "protobuf-compiler", "autoconf", "automake", "libtool", "libyang2-dev",
+        "curl", "uuid-dev", "ca-certificates", "libclang-dev", "clang",
+        "autoconf-archive", "doxygen", "graphviz",
+        "perl", "libxml-simple-perl", "git",
+        "aspell", "aspell-en",
+        "libjansson-dev", "libteam-dev", "libjemalloc-dev",
+        "libssl-dev", "libelf-dev",
+    ],
+)
+
 # ── FRR (Free Range Routing) packages — pinned from deb.frrouting.org ────────
 # FRR is not in standard Debian repos (bookworm has 8.4.x, SONiC needs 10.x).
 # Downloaded at fetch time with sha256 pins. No network at build time.
