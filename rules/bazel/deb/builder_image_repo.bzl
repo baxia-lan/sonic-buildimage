@@ -44,15 +44,41 @@ ENV PATH="/root/.cargo/bin:${{PATH}}"
 
     rctx.file("Dockerfile", dockerfile)
 
+    # Find docker binary — rctx.execute uses restricted PATH
+    docker_bin = rctx.which("docker")
+    if not docker_bin:
+        for candidate in ["/usr/bin/docker", "/usr/local/bin/docker",
+                          "/opt/homebrew/bin/docker"]:
+            if rctx.path(candidate).exists:
+                docker_bin = candidate
+                break
+    if not docker_bin:
+        # Skip builder image if Docker not available (CI will use fallback)
+        rctx.file("image_id.txt", "")
+        rctx.file("image_tag.txt", "")
+        rctx.file("BUILD.bazel", """\
+package(default_visibility = ["//visibility:public"])
+exports_files(["image_id.txt", "image_tag.txt"])
+""")
+        return
+
     # Build the image
     tag = "sonic-builder:local"
-    result = rctx.execute(["docker", "build", "--platform", "linux/amd64",
-                            "-t", tag, "-f", "Dockerfile", "."])
+    result = rctx.execute([docker_bin, "build", "--platform", "linux/amd64",
+                            "-t", tag, "-f", "Dockerfile", "."],
+                            timeout = 600)
     if result.return_code != 0:
-        fail("Failed to build sonic-builder image: " + result.stderr)
+        # Non-fatal: fall back to base image + apt-get in genrules
+        rctx.file("image_id.txt", "")
+        rctx.file("image_tag.txt", "")
+        rctx.file("BUILD.bazel", """\
+package(default_visibility = ["//visibility:public"])
+exports_files(["image_id.txt", "image_tag.txt"])
+""")
+        return
 
     # Save the image digest
-    inspect = rctx.execute(["docker", "inspect", "--format", "{{.Id}}", tag])
+    inspect = rctx.execute([docker_bin, "inspect", "--format", "{{.Id}}", tag])
     if inspect.return_code != 0:
         fail("Failed to inspect builder image: " + inspect.stderr)
     image_id = inspect.stdout.strip()
