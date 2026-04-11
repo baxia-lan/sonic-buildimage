@@ -1,0 +1,167 @@
+"""alpinevs platform — sonic-alpinevs.img.gz disk image.
+
+AlpineVS is a SONiC variant running on x86_64-kvm_x86_64-r0 platform.
+It uses the same service images as the VS platform but packages them
+as a bootable raw disk image (.img.gz) for KVM/QEMU instead of an
+ONIE installer.
+
+Build:
+  bazel build //platform/alpinevs:sonic_alpinevs_img \
+    --spawn_strategy=local
+"""
+
+load("//rules/bazel/onie:rootfs.bzl", "sonic_rootfs_image")
+
+package(default_visibility = ["//visibility:public"])
+
+# ── Platform files ───────────────────────────────────────────────────────────
+filegroup(
+    name = "platform_files",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            ".git/**",
+            "BUILD.bazel",
+        ],
+        allow_empty = True,
+    ),
+)
+
+exports_files(glob(["*.mk"], allow_empty = True))
+
+# ── Same service images as VS/broadcom ───────────────────────────────────────
+ALL_SERVICE_IMAGES = [
+    "//dockers/docker-database:docker_database",
+    "//dockers/docker-orchagent:docker_orchagent",
+    "//dockers/docker-fpm-frr:docker_fpm_frr",
+    "//dockers/docker-snmp:docker_snmp",
+    "//dockers/docker-lldp:docker_lldp",
+    "//dockers/docker-teamd:docker_teamd",
+    "//dockers/docker-nat:docker_nat",
+    "//dockers/docker-sflow:docker_sflow",
+    "//dockers/docker-stp:docker_stp",
+    "//dockers/docker-iccpd:docker_iccpd",
+    "//dockers/docker-router-advertiser:docker_router_advertiser",
+    "//dockers/docker-basic_router:docker_basic_router",
+]
+
+# ── Rootfs with all SONiC service images ─────────────────────────────────────
+sonic_rootfs_image(
+    name = "alpinevs_rootfs",
+    platform = "vs",
+    service_images = ALL_SERVICE_IMAGES,
+)
+
+# ── Raw disk image (.img.gz) for KVM/QEMU ───────────────────────────────────
+# Creates a bootable disk image containing:
+#   - GRUB bootloader
+#   - Linux kernel
+#   - SONiC rootfs with all service containers
+# The image is gzipped for distribution.
+genrule(
+    name = "sonic_alpinevs_img",
+    srcs = [
+        ":alpinevs_rootfs",
+        "//src/sonic-linux-kernel:vmlinuz",
+        "//src/sonic-linux-kernel:kernel_modules_tar",
+    ],
+    outs = ["sonic-alpinevs.img.gz"],
+    cmd = """
+set -euo pipefail
+ROOTFS=$(location :alpinevs_rootfs)
+KERNEL=$(location //src/sonic-linux-kernel:vmlinuz)
+MODULES=$(location //src/sonic-linux-kernel:kernel_modules_tar)
+OUT=$$(cd $$(dirname $(OUTS)) && pwd)/$$(basename $(OUTS))
+
+# Create a raw disk image with GRUB and SONiC rootfs.
+# This runs inside Docker because it needs loop devices and GRUB tools.
+STAGING=$$(mktemp -d)
+cp "$$ROOTFS" "$$STAGING/rootfs.tar.gz"
+cp "$$KERNEL" "$$STAGING/vmlinuz"
+cp "$$MODULES" "$$STAGING/modules.tar"
+
+docker run --rm --privileged --platform linux/amd64 \
+  -v "$$STAGING:/input:ro" \
+  -v "$$(dirname $$OUT):/output" \
+  -e DEBIAN_FRONTEND=noninteractive \
+  debian:bookworm-slim bash -o pipefail -c '
+    set -euo pipefail
+    apt-get update -qq
+    apt-get install -y -qq --no-install-recommends \
+      grub2-common grub-pc-bin dosfstools parted kmod cpio gzip >/dev/null 2>&1
+
+    # Create 2 GB raw disk image
+    IMG=/tmp/sonic-alpinevs.img
+    dd if=/dev/zero of=$$IMG bs=1M count=2048 status=none
+
+    # Partition: 256MB boot (FAT32) + rest root (ext4)
+    parted -s $$IMG mklabel msdos
+    parted -s $$IMG mkpart primary fat32 1MiB 257MiB
+    parted -s $$IMG set 1 boot on
+    parted -s $$IMG mkpart primary ext4 257MiB 100%
+
+    # Setup loop device
+    LOOP=$$(losetup --show -fP $$IMG)
+    trap "losetup -d $$LOOP" EXIT
+
+    # Format partitions
+    mkfs.vfat $${LOOP}p1
+    mkfs.ext4 -q $${LOOP}p2
+
+    # Mount and populate
+    BOOTMNT=/tmp/boot
+    ROOTMNT=/tmp/root
+    mkdir -p $$BOOTMNT $$ROOTMNT
+    mount $${LOOP}p1 $$BOOTMNT
+    mount $${LOOP}p2 $$ROOTMNT
+
+    # Install kernel
+    cp /input/vmlinuz $$BOOTMNT/vmlinuz
+
+    # Install rootfs
+    tar xzf /input/rootfs.tar.gz -C $$ROOTMNT 2>/dev/null || true
+
+    # Install kernel modules
+    tar xf /input/modules.tar -C $$ROOTMNT 2>/dev/null || true
+
+    # Install GRUB
+    grub-install --target=i386-pc --boot-directory=$$BOOTMNT --no-floppy $$LOOP 2>/dev/null || true
+
+    cat > $$BOOTMNT/grub/grub.cfg <<GRUBEOF
+set default=0
+set timeout=5
+menuentry "SONiC" {
+    linux /vmlinuz root=/dev/sda2 rw console=ttyS0,115200 net.ifnames=0
+}
+GRUBEOF
+
+    # Cleanup mounts
+    umount $$BOOTMNT $$ROOTMNT
+
+    # Compress
+    gzip -c $$IMG > /output/sonic-alpinevs.img.gz
+    SIZE_MB=$$(( $$(stat -c%s /output/sonic-alpinevs.img.gz) / 1048576 ))
+    echo "sonic-alpinevs.img.gz: $$SIZE_MB MB"
+  '
+
+rm -rf "$$STAGING"
+""",
+    tags = [
+        "no-cache",
+        "no-sandbox",
+        "requires-docker",
+    ],
+)
+
+# ── AlpineVS test (boot test) ───────────────────────────────────────────────
+sh_test(
+    name = "alpinevs_test",
+    timeout = "eternal",
+    srcs = ["alpinevs_test.sh"],
+    data = [":sonic_alpinevs_img"],
+    tags = [
+        "manual",
+        "no-sandbox",
+        "requires-docker",
+    ],
+)
