@@ -14,6 +14,7 @@ deb_package_set(
         exclude = [
             ".git/**",
             "BUILD.bazel",
+            "Makefile",
         ],
         allow_empty = True,
     ),
