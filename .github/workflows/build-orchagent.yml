@@ -98,7 +98,6 @@ jobs:
             --spawn_strategy=local --jobs=4 || echo "Some images failed"
 
       - name: Run pytest verification (docker-sonic-vs)
-        continue-on-error: true
         run: |
           set -euo pipefail
 
@@ -155,7 +154,7 @@ jobs:
 
           echo "=== Test result ==="
           if [ "${TEST_RC:-0}" -ne 0 ]; then
-            echo "WARN: pytest exited with code ${TEST_RC} (continue-on-error enabled)"
+            echo "FAIL: pytest exited with code ${TEST_RC}"
             exit "${TEST_RC}"
           else
             echo "All tests passed"

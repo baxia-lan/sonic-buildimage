@@ -1,0 +1,41 @@
+"""Acceptance gates — hard fail tests for migration completion.
+
+These are NOT unit tests. Each gate verifies an end-to-end acceptance
+criterion. All gates must pass before the migration is declared complete.
+
+Run all: bazel test //acceptance:all
+Run one: bazel test //acceptance:vs_pytest
+"""
+
+package(default_visibility = ["//visibility:public"])
+
+# ── Gate 1: docker-sonic-vs.gz + full pytest ──────────────────────────────────
+sh_test(
+    name = "vs_pytest",
+    srcs = ["vs_pytest.sh"],
+    timeout = "eternal",
+    tags = ["requires-docker"],
+)
+
+# ── Gate 2: Cloud Build verification ─────────────────────────────────────────
+sh_test(
+    name = "cloud_build",
+    srcs = ["cloud_build.sh"],
+    timeout = "long",
+)
+
+# ── Gate 3: sonic-broadcom.bin ────────────────────────────────────────────────
+sh_test(
+    name = "broadcom_bin",
+    srcs = ["broadcom_bin.sh"],
+    timeout = "eternal",
+    tags = ["requires-docker"],
+)
+
+# ── Gate 4: sonic-alpinevs.img.gz ─────────────────────────────────────────────
+sh_test(
+    name = "alpinevs",
+    srcs = ["alpinevs.sh"],
+    timeout = "eternal",
+    tags = ["requires-docker"],
+)
