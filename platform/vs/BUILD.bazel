@@ -178,9 +178,10 @@ place /tmp/supervisord.conf.rendered "/etc/supervisor/conf.d/supervisord.conf"
 # Set hostname
 echo "docker-sonic-vs" > "$$STAGING/etc/hostname"
 
-# Python3 symlink — common layer has python3.11 but not python3
+# Python symlinks — bookworm-slim has python3.11 and python3 but not python.
+# sonic-cfggen uses #!/usr/bin/env python (not python3).
 mkdir -p "$$STAGING/usr/bin"
-ln -sf python3.11 "$$STAGING/usr/bin/python3"
+ln -sf python3 "$$STAGING/usr/bin/python"
 
 # Generate sonic_version.yml stub (normally build-time generated)
 cat > "$$STAGING/etc/sonic/sonic_version.yml" <<'VEREOF'
