@@ -161,6 +161,30 @@ _frr_repo(
     },
 )
 
+# ── FRR runtime dependencies (hermetic, fetched at bazel-fetch time) ──────────
+# These are shared libraries FRR links against that aren't resolved by
+# rules_distroless (possibly renamed in 2026 snapshot due to t64 transition).
+# Downloaded at fetch time with sha256 pins. No network at build time.
+_runtime_deps_repo = use_repo_rule("//rules/bazel/deb:runtime_deps_repo.bzl", "runtime_deps_repo")
+
+_runtime_deps_repo(
+    name = "frr_runtime_deps",
+    packages = {
+        "libjson-c5": [
+            _SNAPSHOT + "/j/json-c/libjson-c5_0.16-2_amd64.deb",
+            "d0e1ed8637d1c26b9720f6057d6355f18378bba5cc2553e459d1632783c00d70",
+        ],
+        "libc-ares2": [
+            _SNAPSHOT + "/c/c-ares/libc-ares2_1.18.1-3_amd64.deb",
+            "087fd5c2ac883202e1786ab45617cdab7f77bc7f060d58cca177ddf6b6c3fa73",
+        ],
+        "libprotobuf-c1": [
+            _SNAPSHOT + "/p/protobuf-c/libprotobuf-c1_1.4.1-1+b1_amd64.deb",
+            "e99b3091938bfbd55b24e95587b868ba735e38e4adbcb9942c6993f2de3ba1bf",
+        ],
+    },
+)
+
 # ── phy-credo firmware (SONIC_ONLINE_DEBS equivalent) ────────────────────────
 _http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 

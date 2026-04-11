@@ -332,52 +332,10 @@ slim_apt_layer(
     ],
 )
 
-# ── Layer 5a-extra: FRR shared library deps not resolved by rules_distroless ──
-# Some FRR deps (libjson-c5, libc-ares2, libprotobuf-c1) aren't in the apt
-# extension output (likely renamed in 2026 snapshot due to t64 transition).
-# Install them from apt inside a Docker container using snapshot.debian.org.
-genrule(
-    name = "vs_frr_extra_deps",
-    outs = ["vs_frr_extra_deps.tar"],
-    cmd = """\
-set -euo pipefail
-OUT=$$(cd $$(dirname $(OUTS)) && pwd)/$$(basename $(OUTS))
-STAGING=$$(mktemp -d)
-docker run --rm --platform linux/amd64 \
-  -v "$$STAGING:/output" \
-  -e DEBIAN_FRONTEND=noninteractive \
-  debian:bookworm-slim@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0c2280647e1310bc1642182655d bash -o pipefail -c '
-    set -euo pipefail
-    echo "deb https://snapshot.debian.org/archive/debian/20260401T000000Z bookworm main" > /etc/apt/sources.list
-    apt-get update -qq
-    apt-get install -y -qq --no-install-recommends \
-      libjson-c5 libc-ares2 libprotobuf-c1 libpcre2-8-0 libtinfo6 libncursesw6
-    ROOTFS=$$(mktemp -d)
-    for pkg in libjson-c5 libc-ares2 libprotobuf-c1; do
-      dpkg -L $$pkg 2>/dev/null | while read f; do
-        if [ -f "$$f" ]; then
-          mkdir -p "$$ROOTFS/$$(dirname $$f)"
-          cp -a "$$f" "$$ROOTFS/$$f"
-        fi
-      done
-    done
-    for lib in /usr/lib/x86_64-linux-gnu/libjson-c.so* /usr/lib/x86_64-linux-gnu/libcares.so* /usr/lib/x86_64-linux-gnu/libprotobuf-c.so*; do
-      if [ -e "$$lib" ]; then
-        mkdir -p "$$ROOTFS/$$(dirname $$lib)"
-        cp -a "$$lib" "$$ROOTFS/$$lib"
-      fi
-    done
-    SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 --owner=0 --group=0 \
-      -C "$$ROOTFS" -cf /output/layer.tar .
-  '
-cp "$$STAGING/layer.tar" "$$OUT"
-rm -rf "$$STAGING"
-""",
-    tags = [
-        "no-sandbox",
-        "requires-docker",
-    ],
-)
+# ── Layer 5a-extra: FRR runtime deps (hermetic, from @frr_runtime_deps) ───────
+# libjson-c5, libc-ares2, libprotobuf-c1 — downloaded at fetch time from
+# snapshot.debian.org with sha256 pins. No Docker, no network at build time.
+# See MODULE.bazel for URLs and hashes.
 
 # ── Layer 5b: FRR binaries (hermetic, from @frr repo) ──────────────────────
 # FRR 10.x .deb packages downloaded from deb.frrouting.org at fetch time.
@@ -468,7 +426,7 @@ oci_image(
         ":vs_runtime_apt",
         ":vs_sonic_debs",
         ":vs_frr_deps",
-        ":vs_frr_extra_deps",
+        "@frr_runtime_deps//:layer",
         ":vs_frr_layer",
         "//build/py:sonic_python_layer",
         "//build/py:pip_deps_layer",
