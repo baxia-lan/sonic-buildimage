@@ -206,6 +206,7 @@ jobs:
             '
 
       - name: Build sonic-broadcom.bin
+        if: always() && !cancelled()
         run: |
           # First extract vmlinuz and modules from kernel .deb
           bazel build //src/sonic-linux-kernel:vmlinuz //src/sonic-linux-kernel:kernel_modules_tar \
@@ -223,6 +224,7 @@ jobs:
           fi
 
       - name: Verify outputs
+        if: always() && !cancelled()
         run: |
           echo "=== Packages ==="
           find bazel-bin/src -name "*.deb" -size +0 -exec ls -lh {} \; | wc -l
