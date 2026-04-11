@@ -105,6 +105,31 @@ jobs:
           docker tag sonic/docker_sonic_vs:latest docker-sonic-vs:latest
           docker images docker-sonic-vs
 
+      - name: Verify docker-sonic-vs contents
+        run: |
+          set -euo pipefail
+          echo "=== Check entrypoint and interpreter chain ==="
+          CID=$(docker create docker-sonic-vs:latest)
+          docker export $CID | tar tf - | grep -E 'supervisord|python3$|python3\.11$|ld-linux' | sort
+          echo "=== Check supervisord script ==="
+          docker export $CID | tar xf - -O usr/local/bin/supervisord | head -3
+          echo "=== Check python3 symlink ==="
+          docker export $CID | tar tvf - | grep -E 'usr/bin/python3$'
+          echo "=== Check python3.11 binary ==="
+          docker export $CID | tar tvf - | grep -E 'usr/bin/python3\.11$'
+          echo "=== Check ld-linux ==="
+          docker export $CID | tar tvf - | grep 'ld-linux'
+          echo "=== Quick boot test ==="
+          docker rm $CID
+          TESTCID=$(docker run -d --privileged docker-sonic-vs:latest)
+          sleep 5
+          echo "--- Container logs ---"
+          docker logs $TESTCID 2>&1 | tail -30
+          echo "--- supervisorctl status ---"
+          docker exec $TESTCID supervisorctl status 2>&1 | head -20 || echo "supervisorctl failed"
+          docker stop $TESTCID 2>/dev/null || true
+          docker rm $TESTCID 2>/dev/null || true
+
       - name: Run pytest (docker-sonic-vs)
         run: |
           set -euo pipefail
