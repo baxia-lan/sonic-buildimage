@@ -44,7 +44,7 @@ docker run --rm --privileged \
     apt-get update -qq
     apt-get install -y -qq --no-install-recommends \
       python3 python3-pip python3-dev \
-      docker.io iproute2 util-linux kmod \
+      docker.io iproute2 util-linux kmod ethtool procps \
       libhiredis0.14 libzmq5 \
       libnl-3-200 libnl-genl-3-200 libnl-route-3-200 libnl-nf-3-200 \
       libboost-serialization1.74.0 libyang2 libprotobuf32 \
