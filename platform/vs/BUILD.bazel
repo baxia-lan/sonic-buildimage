@@ -342,8 +342,9 @@ genrule(
     cmd = """\
 set -euo pipefail
 OUT=$$(cd $$(dirname $(OUTS)) && pwd)/$$(basename $(OUTS))
+STAGING=$$(mktemp -d)
 docker run --rm --platform linux/amd64 \
-  -v "$$OUT:/output/layer.tar" \
+  -v "$$STAGING:/output" \
   -e DEBIAN_FRONTEND=noninteractive \
   debian:bookworm-slim bash -o pipefail -c '
     set -euo pipefail
@@ -351,7 +352,6 @@ docker run --rm --platform linux/amd64 \
     apt-get update -qq
     apt-get install -y -qq --no-install-recommends \
       libjson-c5 libc-ares2 libprotobuf-c1 libpcre2-8-0 libtinfo6 libncursesw6
-    # Extract just the installed library files into the layer
     ROOTFS=$$(mktemp -d)
     for pkg in libjson-c5 libc-ares2 libprotobuf-c1; do
       dpkg -L $$pkg 2>/dev/null | while read f; do
@@ -361,7 +361,6 @@ docker run --rm --platform linux/amd64 \
         fi
       done
     done
-    # Also grab libjson-c.so symlinks
     for lib in /usr/lib/x86_64-linux-gnu/libjson-c.so* /usr/lib/x86_64-linux-gnu/libcares.so* /usr/lib/x86_64-linux-gnu/libprotobuf-c.so*; do
       if [ -e "$$lib" ]; then
         mkdir -p "$$ROOTFS/$$(dirname $$lib)"
@@ -371,6 +370,8 @@ docker run --rm --platform linux/amd64 \
     SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 --owner=0 --group=0 \
       -C "$$ROOTFS" -cf /output/layer.tar .
   '
+cp "$$STAGING/layer.tar" "$$OUT"
+rm -rf "$$STAGING"
 """,
     tags = [
         "no-cache",
