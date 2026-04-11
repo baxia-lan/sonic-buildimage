@@ -63,7 +63,10 @@ slim_apt_layer(
 # ── OCI image ─────────────────────────────────────────────────────────────────
 sonic_oci_image(
     name = "sonic_common_layer",
-    base = "@distroless_base_debian12",
+    # SONiC containers need bash, coreutils, env, and other basic utilities.
+    # distroless lacks these, causing 'exec: no such file or directory' for
+    # scripts with #!/bin/bash or #!/usr/bin/env shebangs.
+    base = "@debian_bookworm_slim",
     tars = [
         ":common_apt_slim_layer",
         ":supervisord_skel_layer",
