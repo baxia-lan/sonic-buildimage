@@ -4,6 +4,82 @@ Treat this file as an execution protocol, not advisory guidance.
 If behavior and this document conflict, follow the document.
 During any `compact`, preserve and carry forward all rules.
 
+## Global Agent Rules (from ~/.claude/CLAUDE.md — MANDATORY)
+
+### Compacting Rules
+When compressing context, preserve in priority order:
+1. This file and all project CLAUDE.md rules (NEVER summarize, weaken, or drop)
+2. Architecture decisions and design rationale
+3. Modified files and their key changes
+4. Current verification status (pass/fail with evidence)
+5. Current dominant blocker and next action
+6. Open TODOs, known issues, and rollback notes
+7. Tool outputs (can delete content, keep pass/fail only)
+
+Never forget, weaken, or silently summarize away any development principles.
+After any compact or context reset, reread CLAUDE.md and the active execution
+state before taking the next action.
+
+### Global Execution Protocol
+Stopping requires an explicit reason. Valid reasons:
+- `missing_permissions` or `missing_credentials`
+- `destructive_action_requires_approval`
+- `conflicting_requirements`
+- `would_require_guessing`
+
+These are NEVER valid stop reasons:
+- "A subtask completed"
+- "CI is running"
+- "Tests passed"
+- "An artifact was generated"
+- "This feels like a good handoff point"
+
+If no valid stop reason applies, continue executing.
+
+After Every Completed Subgoal, record:
+- `current_dominant_blocker`: what is blocking progress?
+- `highest_value_next_action`: what to do right now?
+- `what_can_break`: what assumptions are untested?
+- `what_can_run_in_parallel`: what independent work can subagents do?
+
+If `highest_value_next_action` is non-empty and no valid stop reason exists,
+take that action immediately. Do not summarize and stop.
+
+### Global Verification Rules
+1. Rerun the most direct end-to-end check immediately after each change
+2. Do not commit until the check passes
+3. Static analysis alone does NOT count as verification
+4. Must have runtime evidence: actual build output, test result, file content
+5. If verification fails, fix and re-verify before moving on
+
+### Global No Fake Completion
+- No `continue-on-error` in CI. Failure is failure.
+- No stubs, mocks, or canned outputs to simulate completion.
+- No marking tasks "done" without runtime evidence.
+- "Code written" is not "task done".
+- Done requires: implementation + integration + verification + next-step exhaustion.
+- State exactly what was verified and what was not.
+
+### Global Subagent Management
+- Give each subagent concrete scope, explicit ownership, clear output.
+- Prefer disjoint write scopes so parallel work does not conflict.
+- The main agent owns plan, sequencing, integration, verification, and final acceptance.
+- Subagents do not decide that work is finished.
+- Review every subagent result: read actual diffs, rerun checks, require evidence.
+- Reject work that is hacked together, mocked out, or presented without real support.
+
+### Global Git Safety
+- Never rewrite git history.
+- Never use `git push --force`, `git rebase`, `git reset --hard`, `git commit --amend`.
+- Prefer additive follow-up commits.
+
+### Global Quality Bar
+- Do not claim success based only on code generation.
+- Validate with the strongest relevant checks: tests, linters, local runs, diff review.
+- Match verification to risk. Higher-risk changes require stronger proof.
+- Surface unfinished edges, risks, and assumptions clearly.
+- Never confuse "implemented something" with "solved the task."
+
 ## Project Goal
 Migrate this repo from GNU Make → Bazel (bzlmod), fully hermetic.
 Based on Aspect's work: https://github.com/thesayyn/sonic-buildimage
