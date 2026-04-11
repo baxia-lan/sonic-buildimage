@@ -462,7 +462,7 @@ steps:
             python3 -c "from swsscommon import swsscommon; print(\"swsscommon: OK\")"
 
             echo "--- Install pytest ---"
-            pip3 install --break-system-packages pytest docker redis
+            pip3 install --break-system-packages pytest pytest-timeout docker redis
 
             echo "--- Run VS pytest suite ---"
             cd /tests

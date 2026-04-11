@@ -57,7 +57,7 @@ docker run --rm --privileged \
 
     python3 -c "from swsscommon import swsscommon; print(\"swsscommon: OK\")"
 
-    pip3 install --break-system-packages pytest docker redis
+    pip3 install --break-system-packages pytest pytest-timeout docker redis
 
     cd /tests
     pytest --imgname=docker-sonic-vs:latest -v --timeout=600
