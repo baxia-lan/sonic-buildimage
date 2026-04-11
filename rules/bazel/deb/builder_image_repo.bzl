@@ -30,7 +30,11 @@ RUN echo "deb {snapshot} bookworm main" > /etc/apt/sources.list && \\
     echo "deb {snapshot_sec} bookworm-security main" >> /etc/apt/sources.list && \\
     apt-get update -qq && \\
     apt-get install -y -qq --no-install-recommends {packages} && \\
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \\
+    curl -sSL https://raw.githubusercontent.com/zeromq/cppzmq/v4.10.0/zmq.hpp -o /usr/include/zmq.hpp && \\
+    curl -sSL https://raw.githubusercontent.com/zeromq/cppzmq/v4.10.0/zmq_addon.hpp -o /usr/include/zmq_addon.hpp && \\
+    curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal 2>/dev/null
+ENV PATH="/root/.cargo/bin:${{PATH}}"
 """.format(
         base = base,
         snapshot = snapshot,
