@@ -54,6 +54,16 @@ jobs:
           sudo chmod +x /usr/local/bin/bazel
           bazel version
 
+      - name: Setup remote cache credentials
+        if: env.GCP_SA_KEY != ''
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          echo "$GCP_SA_KEY" | base64 -d > /tmp/gcp-key.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json" >> $GITHUB_ENV
+          echo "BAZEL_CACHE_FLAGS=--config=github" >> $GITHUB_ENV
+          echo "Remote cache enabled (GCS: sonic-bazel-cache)"
+
       - name: Free disk space for kernel build
         run: |
           echo "Before: $(df -h / | tail -1 | awk '{print $4}') free"
@@ -66,13 +76,13 @@ jobs:
         run: |
           echo "Disk: $(df -h / | tail -1 | awk '{print $4}') free"
           bazel build //src/sonic-linux-kernel:linux_kernel_debs \
-            --spawn_strategy=local --jobs=4
+            --spawn_strategy=local --jobs=4 ${BAZEL_CACHE_FLAGS:-}
           ls -lh bazel-bin/src/sonic-linux-kernel/*.deb
 
       - name: Build orchagent chain
         run: |
           bazel build //dockers/docker-orchagent:docker_orchagent \
-            --spawn_strategy=local --jobs=4
+            --spawn_strategy=local --jobs=4 ${BAZEL_CACHE_FLAGS:-}
           echo "=== Built packages ==="
           find bazel-bin/src -name "*.deb" -size +0 | wc -l
           echo "deb packages"
@@ -88,14 +98,14 @@ jobs:
             //dockers/docker-iccpd:docker_iccpd \
             //dockers/docker-router-advertiser:docker_router_advertiser \
             //dockers/docker-basic_router:docker_basic_router \
-            --spawn_strategy=local --jobs=4
+            --spawn_strategy=local --jobs=4 ${BAZEL_CACHE_FLAGS:-}
 
       - name: Build and load docker-sonic-vs
         run: |
           set -euo pipefail
           echo "=== Build docker-sonic-vs ==="
           bazel build //platform/vs:docker_sonic_vs_tarball \
-            --spawn_strategy=local --jobs=4
+            --spawn_strategy=local --jobs=4 ${BAZEL_CACHE_FLAGS:-}
 
           echo "=== Verify swss-common debs exist ==="
           ls -lh bazel-bin/src/sonic-swss-common/*.deb
@@ -192,11 +202,11 @@ jobs:
         run: |
           # First extract vmlinuz and modules from kernel .deb
           bazel build //src/sonic-linux-kernel:vmlinuz //src/sonic-linux-kernel:kernel_modules_tar \
-            --spawn_strategy=local --jobs=4
+            --spawn_strategy=local --jobs=4 ${BAZEL_CACHE_FLAGS:-}
           ls -lh bazel-bin/src/sonic-linux-kernel/vmlinuz-extracted 2>/dev/null || echo "vmlinuz extraction failed"
           # Then build the full ONIE image
           bazel build //platform/broadcom:sonic_broadcom_bin \
-            --spawn_strategy=local --jobs=4
+            --spawn_strategy=local --jobs=4 ${BAZEL_CACHE_FLAGS:-}
           ls -lh bazel-bin/platform/broadcom/sonic_broadcom_bin.bin
           SIZE_MB=$(( $(stat -c%s bazel-bin/platform/broadcom/sonic_broadcom_bin.bin) / 1048576 ))
           echo "sonic-broadcom.bin: $SIZE_MB MB"

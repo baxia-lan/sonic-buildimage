@@ -46,6 +46,18 @@ build:ci --spawn_strategy=local
 build:ci --strategy=CopyToDirectory=local
 build:ci --verbose_failures
 
+# ── GitHub Actions CI (--config=github) ──────────────────────────────────────
+# Uses same GCS remote cache as Cloud Build. Requires GOOGLE_APPLICATION_CREDENTIALS
+# secret set in GitHub Actions (base64-encoded service account JSON key).
+build:github --remote_cache=https://storage.googleapis.com/sonic-bazel-cache
+build:github --google_default_credentials
+build:github --remote_upload_local_results=true
+build:github --remote_download_toplevel
+build:github --jobs=HOST_CPUS
+build:github --spawn_strategy=local
+build:github --strategy=CopyToDirectory=local
+build:github --verbose_failures
+
 # ── Remote Build Execution (--config=rbe) ─────────────────────────────────────
 build:rbe --config=ci
 build:rbe --remote_executor=grpcs://remotebuildexecution.googleapis.com
