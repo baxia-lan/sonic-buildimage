@@ -214,7 +214,9 @@ def deb_package_set(
         outs = resolved_outputs,
         cmd = _cmd,
         tags = [
-            "no-cache",
+            # no-cache removed: apt sources are pinned to snapshot.debian.org
+            # so the output is deterministic. This enables remote cache for
+            # kernel and other deb builds (100min→2min on cache hit).
             "requires-docker",
             "no-sandbox",
         ],

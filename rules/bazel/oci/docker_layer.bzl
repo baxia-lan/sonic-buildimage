@@ -88,7 +88,7 @@ docker run --rm --platform linux/amd64 \
             size_check = size_check,
             snapshot_url = _APT_SNAPSHOT_URL,
         ),
-        tags = ["requires-docker", "no-sandbox", "no-cache"],
+        tags = ["requires-docker", "no-sandbox"],
         visibility = visibility,
     )
 
