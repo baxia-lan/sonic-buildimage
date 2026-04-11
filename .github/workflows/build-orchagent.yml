@@ -125,7 +125,7 @@ jobs:
           docker images docker-sonic-vs
 
       - name: Verify docker-sonic-vs contents
-        continue-on-error: true  # informational — must not block pytest
+        # No continue-on-error per CLAUDE.md: "Failure is failure"
         run: |
           set -uo pipefail  # no -e: let all checks run
           echo "=== Quick boot test (60s) ==="
