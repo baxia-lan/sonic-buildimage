@@ -119,6 +119,14 @@ steps:
           fi
         done
         echo ">>> [copy-build-files] Downloaded $$DOWNLOADED files"
+        # Copy overlay files for submodules without forks
+        for overlay in build/overlays/*/; do
+          TARGET=$$(basename "$$overlay" | sed 's/^platform-/platform\//; s/^swss-common-/src\/sonic-swss-common\//')
+          if [ -d "$$TARGET" ]; then
+            cp "$$overlay"* "$$TARGET/" 2>/dev/null || true
+            echo "  + $$TARGET overlay copied"
+          fi
+        done
         echo ">>> [copy-build-files] Kernel BUILD.bazel first line:"
         head -1 src/sonic-linux-kernel/BUILD.bazel 2>/dev/null || echo "(not found)"
     waitFor: ["align-submodules"]
