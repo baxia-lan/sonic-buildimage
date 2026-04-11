@@ -161,6 +161,7 @@ genrule(
         "@sonic_pip//markupsafe",
         "@sonic_pip//pyyaml",
         "@sonic_pip//supervisor",
+        "@sonic_pip//setuptools",
     ],
     outs = ["pip_deps_layer.tar"],
     cmd = """\
