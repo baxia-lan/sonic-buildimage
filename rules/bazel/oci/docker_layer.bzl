@@ -53,15 +53,19 @@ OUT=$$(cd $$(dirname $(OUTS)) && pwd)/$$(basename $(OUTS))
 mkdir -p $$(dirname "$$OUT")
 touch "$$OUT"
 
+BUILDER_IMAGE=$$(docker image inspect sonic-builder:local >/dev/null 2>&1 && echo sonic-builder:local || echo {image})
 docker run --rm --platform linux/amd64 \
   -v "$$OUT:/output/layer.tar" \
   -e DEBIAN_FRONTEND=noninteractive \
-  {image} \
+  $$BUILDER_IMAGE \
   bash -o pipefail -c '
     unset SOURCE_DATE_EPOCH
-    echo "deb {snapshot_url} bookworm main" > /etc/apt/sources.list
-    apt-get update -qq
-    apt-get install -y -qq --no-install-recommends {packages}
+    # Install packages only if not in builder image
+    if ! dpkg -l {first_pkg} >/dev/null 2>&1; then
+      echo "deb {snapshot_url} bookworm main" > /etc/apt/sources.list
+      apt-get update -qq
+      apt-get install -y -qq --no-install-recommends {packages}
+    fi
     {pip_cmd}
     # Strip debug symbols
     find / -name "*.so*" -type f -exec strip --strip-debug {{}} \\; 2>/dev/null || true
@@ -82,6 +86,7 @@ docker run --rm --platform linux/amd64 \
   '
 """.format(
             image = _DEBIAN_IMAGE,
+            first_pkg = packages[0] if packages else "bash",
             packages = " ".join(packages),
             pip_cmd = pip_cmd,
             post_cmds = post_cmds,
