@@ -13,20 +13,31 @@ package(default_visibility = ["//visibility:public"])
 # ── All service images for the broadcom platform ─────────────────────────────
 # Each is a sonic_oci_image target producing an OCI image directory.
 # Shared base layers (sonic-common-layer) are deduplicated in the rootfs.
-ALL_SERVICE_IMAGES = [
-    "//dockers/docker-database:docker_database",
-    "//dockers/docker-orchagent:docker_orchagent",
-    "//dockers/docker-fpm-frr:docker_fpm_frr",
-    "//dockers/docker-snmp:docker_snmp",
-    "//dockers/docker-lldp:docker_lldp",
-    "//dockers/docker-teamd:docker_teamd",
-    "//dockers/docker-nat:docker_nat",
-    "//dockers/docker-sflow:docker_sflow",
-    "//dockers/docker-stp:docker_stp",
-    "//dockers/docker-iccpd:docker_iccpd",
-    "//dockers/docker-router-advertiser:docker_router_advertiser",
-    "//dockers/docker-basic_router:docker_basic_router",
+# ── Service image tarballs (Docker-loadable format) ─────────────────────────
+# rules_oci oci_load produces a shell script by default. To get actual tar
+# files for embedding in the rootfs, use output_group="tarball" via filegroup.
+_SERVICE_TARBALL_TARGETS = [
+    ("docker-database", "docker_database"),
+    ("docker-orchagent", "docker_orchagent"),
+    ("docker-fpm-frr", "docker_fpm_frr"),
+    ("docker-snmp", "docker_snmp"),
+    ("docker-lldp", "docker_lldp"),
+    ("docker-teamd", "docker_teamd"),
+    ("docker-nat", "docker_nat"),
+    ("docker-sflow", "docker_sflow"),
+    ("docker-stp", "docker_stp"),
+    ("docker-iccpd", "docker_iccpd"),
+    ("docker-router-advertiser", "docker_router_advertiser"),
+    ("docker-basic_router", "docker_basic_router"),
 ]
+
+[filegroup(
+    name = name + "_tar",
+    srcs = ["//dockers/" + pkg + ":" + name + "_tarball"],
+    output_group = "tarball",
+) for pkg, name in _SERVICE_TARBALL_TARGETS]
+
+ALL_SERVICE_IMAGES = [":" + name + "_tar" for _, name in _SERVICE_TARBALL_TARGETS]
 
 # ── Full rootfs (all services) ───────────────────────────────────────────────
 sonic_rootfs_image(
