@@ -32,9 +32,10 @@ def docker_genrule(
         tags:           Bazel tags.
         visibility:     Bazel visibility.
     """
+    _APT_SNAPSHOT = "https://snapshot.debian.org/archive/debian/20260401T000000Z"
     apt_install = ""
     if extra_packages:
-        apt_install = "apt-get update -qq && apt-get install -y -qq --no-install-recommends %s && " % " ".join(extra_packages)
+        apt_install = "echo 'deb %s bookworm main' > /etc/apt/sources.list && apt-get update -qq && apt-get install -y -qq --no-install-recommends %s && " % (_APT_SNAPSHOT, " ".join(extra_packages))
 
     native.genrule(
         name = name,
