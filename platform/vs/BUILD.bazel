@@ -159,6 +159,20 @@ awk '
     /^[{][%]/                     { next }
     { print }
 ' "$$VS_DIR/supervisord.conf.j2" > /tmp/supervisord.conf.rendered
+
+# Add stub entries for programs referenced by start.sh but defined in other
+# docker images (docker-sysmgr). Without these, supervisorctl start fails
+# and start.sh exits non-zero (bash -e).
+cat >> /tmp/supervisord.conf.rendered <<'STUBEOF'
+
+[program:rebootbackend]
+command=/bin/true
+priority=28
+autostart=false
+autorestart=false
+startsecs=0
+startretries=0
+STUBEOF
 place /tmp/supervisord.conf.rendered "/etc/supervisor/conf.d/supervisord.conf"
 
 # Set hostname

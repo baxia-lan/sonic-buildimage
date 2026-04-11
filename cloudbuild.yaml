@@ -390,7 +390,11 @@ steps:
     waitFor: ["build-orchagent"]
     timeout: "2400s"
 
-  # ── Step 9: Run pytest ───────────────────────────────────────────────────────
+  # ── Step 9: Run pytest (inside bookworm container for lib compat) ────────────
+  # The swss-common debs are built for Debian bookworm. Running pytest on the
+  # Cloud Build host (Ubuntu) would fail due to mismatched shared libraries.
+  # Instead, run pytest inside a bookworm container with docker.sock access.
+  # conftest.py creates its own VS containers via the Docker Python client.
   - id: "pytest-vs"
     name: "gcr.io/cloud-builders/docker"
     entrypoint: "bash"
@@ -401,54 +405,67 @@ steps:
       - |
         echo ">>> [pytest-vs] Checking for tarball..."
         if [ ! -f bazel-bin/platform/vs/docker_sonic_vs_tarball.sh ]; then
-          echo ">>> [pytest-vs] SKIP: docker_sonic_vs_tarball not built"
-          exit 0
+          echo ">>> [pytest-vs] FAIL: docker_sonic_vs_tarball not built"
+          exit 1
         fi
 
         echo ">>> [pytest-vs] Loading docker-sonic-vs image..."
         bash bazel-bin/platform/vs/docker_sonic_vs_tarball.sh
-
-        echo ">>> [pytest-vs] Tagging image..."
         docker tag sonic/docker_sonic_vs:latest docker-sonic-vs:latest
 
-        echo ">>> [pytest-vs] Starting container..."
-        CONTAINER_ID=$$(docker run -d --privileged docker-sonic-vs:latest)
-        echo "Container: $$CONTAINER_ID"
+        echo ">>> [pytest-vs] Verifying swss-common debs..."
+        ls -lh bazel-bin/src/sonic-swss-common/*.deb
 
-        echo ">>> [pytest-vs] Waiting for Redis (up to 120s)..."
-        for i in $$(seq 1 24); do
-          if docker exec "$$CONTAINER_ID" redis-cli ping 2>/dev/null | grep -q PONG; then
-            echo ">>> [pytest-vs] Redis up after $$((i * 5))s"
-            break
-          fi
-          if [ "$$i" -eq 24 ]; then
-            echo ">>> [pytest-vs] WARNING: Redis not responsive after 120s"
-            docker logs "$$CONTAINER_ID" 2>&1 | tail -50
-          fi
-          sleep 5
-        done
+        DEBS_DIR=$$(realpath bazel-bin/src/sonic-swss-common)
+        TESTS_DIR=$$(realpath src/sonic-swss/tests)
 
-        echo ">>> [pytest-vs] Installing pytest..."
-        pip3 install pytest docker redis 2>/dev/null || true
+        mkdir -p /var/run/redis-vs
 
-        echo ">>> [pytest-vs] Running full VS pytest suite..."
-        cd src/sonic-swss/tests
-        python3 -m pytest --imgname=docker-sonic-vs:latest -v \
-          test_port.py test_acl.py test_route.py test_vlan.py test_crm.py \
-          test_interface.py test_neighbor.py test_nhg.py test_fdb.py \
-          -x --timeout=600 || TEST_RC=$$?
+        echo ">>> [pytest-vs] Running pytest inside bookworm container..."
+        docker run --rm --privileged \
+          --pid=host \
+          --network=host \
+          -v /var/run/docker.sock:/var/run/docker.sock \
+          -v /var/run/redis-vs:/var/run/redis-vs \
+          -v /var/run/netns:/var/run/netns \
+          -v "$$DEBS_DIR:/debs:ro" \
+          -v "$$TESTS_DIR:/tests" \
+          -e DEBIAN_FRONTEND=noninteractive \
+          debian:bookworm-slim bash -c '
+            set -euo pipefail
 
-        echo ">>> [pytest-vs] Cleanup..."
-        docker stop "$$CONTAINER_ID" 2>/dev/null || true
-        docker rm "$$CONTAINER_ID" 2>/dev/null || true
+            echo "--- Install runtime dependencies ---"
+            apt-get update -qq
+            apt-get install -y -qq --no-install-recommends \
+              python3 python3-pip python3-dev \
+              docker.io iproute2 util-linux \
+              libhiredis0.14 libzmq5 \
+              libnl-3-200 libnl-genl-3-200 libnl-route-3-200 libnl-nf-3-200 \
+              libboost-serialization1.74.0 libyang2 libprotobuf32 \
+              libssl3 libjemalloc2 libjansson4 uuid-runtime
 
-        if [ "$${TEST_RC:-0}" -ne 0 ]; then
-          echo ">>> [pytest-vs] FAILED (exit code $${TEST_RC})"
-          exit "$${TEST_RC}"
-        fi
+            echo "--- Install swss-common debs ---"
+            dpkg --force-overwrite --force-depends -i \
+              /debs/libswsscommon_1.0.0_amd64.deb \
+              /debs/python3-swsscommon_1.0.0_amd64.deb
+            ldconfig
+
+            echo "--- Verify swsscommon ---"
+            python3 -c "from swsscommon import swsscommon; print(\"swsscommon: OK\")"
+
+            echo "--- Install pytest ---"
+            pip3 install --break-system-packages pytest docker redis
+
+            echo "--- Run VS pytest suite ---"
+            cd /tests
+            pytest --imgname=docker-sonic-vs:latest -v \
+              test_port.py test_acl.py test_route.py test_vlan.py test_crm.py \
+              test_interface.py test_neighbor.py test_nhg.py test_fdb.py \
+              -x --timeout=600
+          '
         echo ">>> [pytest-vs] ALL TESTS PASSED"
     waitFor: ["build-docker-sonic-vs"]
-    timeout: "600s"
+    timeout: "3600s"
 
   # ── Step 10: Build sonic-broadcom.bin ────────────────────────────────────────
   # Runs in parallel with docker-sonic-vs (both depend on orchagent).

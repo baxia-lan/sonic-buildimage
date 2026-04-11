@@ -37,7 +37,7 @@ jobs:
         run: |
           # MUST run AFTER align — git checkout reverts files, so we re-download
           GITHUB_BASE="https://raw.githubusercontent.com/baxia-lan"
-          for mod in sonic-swss-common sonic-sairedis sonic-swss sonic-dash-api sonic-stp sonic-linux-kernel sonic-gnmi; do
+          for mod in sonic-swss-common sonic-sairedis sonic-swss sonic-dash-api sonic-stp sonic-linux-kernel sonic-gnmi sonic-platform-daemons sonic-utilities sonic-host-services; do
             if [ -d "src/$mod" ]; then
               for f in BUILD.bazel MODULE.bazel BUILD.bazel.hermetic config.h; do
                 curl -fsSL "${GITHUB_BASE}/${mod}/claude/${f}?t=$(date +%s)" \
@@ -53,13 +53,6 @@ jobs:
           sudo curl -Lo /usr/local/bin/bazel https://github.com/bazelbuild/bazelisk/releases/download/v1.25.0/bazelisk-linux-amd64
           sudo chmod +x /usr/local/bin/bazel
           bazel version
-
-      - name: Generate apt lockfile
-        run: |
-          # Generate the rules_distroless lockfile from the manifest
-          bazel run @rules_distroless//apt:lock -- \
-            --manifest apt/bookworm.yaml \
-            --lock apt/bookworm.lock.json || echo "Lockfile generation failed — using placeholder"
 
       - name: Free disk space for kernel build
         run: |
@@ -95,70 +88,80 @@ jobs:
             //dockers/docker-iccpd:docker_iccpd \
             //dockers/docker-router-advertiser:docker_router_advertiser \
             //dockers/docker-basic_router:docker_basic_router \
-            --spawn_strategy=local --jobs=4 || echo "Some images failed"
+            --spawn_strategy=local --jobs=4
 
-      - name: Run pytest verification (docker-sonic-vs)
+      - name: Build and load docker-sonic-vs
         run: |
           set -euo pipefail
-
-          echo "=== Install pytest dependencies ==="
-          sudo pip3 install pytest docker redis
-          # pytest conftest.py imports swsscommon on the HOST — install from built .deb
-          if [ -f bazel-bin/build/deb/sonic-swss-common/python3-swsscommon_1.0.0_amd64.deb ]; then
-            sudo dpkg -i bazel-bin/build/deb/sonic-swss-common/python3-swsscommon_1.0.0_amd64.deb 2>/dev/null || true
-            sudo dpkg -i bazel-bin/build/deb/sonic-swss-common/libswsscommon_1.0.0_amd64.deb 2>/dev/null || true
-            sudo apt-get install -f -y 2>/dev/null || true
-          elif [ -f bazel-bin/src/sonic-swss-common/python3-swsscommon_1.0.0_amd64.deb ]; then
-            sudo dpkg -i bazel-bin/src/sonic-swss-common/python3-swsscommon_1.0.0_amd64.deb 2>/dev/null || true
-            sudo dpkg -i bazel-bin/src/sonic-swss-common/libswsscommon_1.0.0_amd64.deb 2>/dev/null || true
-            sudo apt-get install -f -y 2>/dev/null || true
-          else
-            echo "WARN: python3-swsscommon .deb not found — pytest will fail on import"
-          fi
-          python3 -c "from swsscommon import swsscommon; print('swsscommon: OK')" || echo "WARN: swsscommon import failed"
-
           echo "=== Build docker-sonic-vs ==="
           bazel build //platform/vs:docker_sonic_vs_tarball \
             --spawn_strategy=local --jobs=4
 
+          echo "=== Verify swss-common debs exist ==="
+          ls -lh bazel-bin/src/sonic-swss-common/*.deb
+
           echo "=== Load docker-sonic-vs image ==="
           bash bazel-bin/platform/vs/docker_sonic_vs_tarball.sh
-
-          echo "=== Tag image ==="
           docker tag sonic/docker_sonic_vs:latest docker-sonic-vs:latest
+          docker images docker-sonic-vs
 
-          echo "=== Smoke test: start container and verify services ==="
-          CONTAINER_ID=$(docker run -d --privileged docker-sonic-vs:latest)
-          echo "Container: $CONTAINER_ID"
+      - name: Run pytest (docker-sonic-vs)
+        run: |
+          set -euo pipefail
 
-          # Wait for services to come up (up to 120s)
-          for i in $(seq 1 24); do
-            if docker exec "$CONTAINER_ID" redis-cli ping 2>/dev/null | grep -q PONG; then
-              echo "Redis is up after $((i * 5))s"
-              break
-            fi
-            if [ "$i" -eq 24 ]; then
-              echo "WARNING: Redis did not respond within 120s"
-              docker logs "$CONTAINER_ID" | tail -50
-            fi
-            sleep 5
-          done
+          # pytest conftest.py imports swsscommon (linked against bookworm libs),
+          # creates network namespaces via nsenter/ip-netns, and manages containers
+          # via docker.sock. CI runner is Ubuntu 24.04 with incompatible libraries.
+          #
+          # Solution: run pytest inside a bookworm container with full host access:
+          #   --pid=host    → nsenter works with host PIDs from docker inspect
+          #   --network=host → ip netns operates on host network namespaces
+          #   --privileged  → CAP_NET_ADMIN for network namespace operations
+          #   docker.sock   → conftest.py creates VS containers on host Docker
+          #   /var/run/redis-vs → shared redis socket mount between containers
+          DEBS_DIR=$(realpath bazel-bin/src/sonic-swss-common)
+          TESTS_DIR=$(realpath src/sonic-swss/tests)
+          sudo mkdir -p /var/run/redis-vs
 
-          echo "=== Run pytest ==="
-          cd src/sonic-swss/tests
-          sudo pytest --imgname=docker-sonic-vs:latest -v test_port.py -x --timeout=300 || TEST_RC=$?
+          echo "=== Run pytest inside bookworm container ==="
+          docker run --rm --privileged \
+            --pid=host \
+            --network=host \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v /var/run/redis-vs:/var/run/redis-vs \
+            -v /var/run/netns:/var/run/netns \
+            -v "${DEBS_DIR}:/debs:ro" \
+            -v "${TESTS_DIR}:/tests" \
+            -e DEBIAN_FRONTEND=noninteractive \
+            debian:bookworm-slim bash -c '
+              set -euo pipefail
 
-          echo "=== Cleanup ==="
-          docker stop "$CONTAINER_ID" || true
-          docker rm "$CONTAINER_ID" || true
+              echo "--- Install runtime dependencies ---"
+              apt-get update -qq
+              apt-get install -y -qq --no-install-recommends \
+                python3 python3-pip python3-dev \
+                docker.io iproute2 util-linux \
+                libhiredis0.14 libzmq5 \
+                libnl-3-200 libnl-genl-3-200 libnl-route-3-200 libnl-nf-3-200 \
+                libboost-serialization1.74.0 libyang2 libprotobuf32 \
+                libssl3 libjemalloc2 libjansson4 uuid-runtime
 
-          echo "=== Test result ==="
-          if [ "${TEST_RC:-0}" -ne 0 ]; then
-            echo "FAIL: pytest exited with code ${TEST_RC}"
-            exit "${TEST_RC}"
-          else
-            echo "All tests passed"
-          fi
+              echo "--- Install swss-common debs ---"
+              dpkg --force-overwrite --force-depends -i \
+                /debs/libswsscommon_1.0.0_amd64.deb \
+                /debs/python3-swsscommon_1.0.0_amd64.deb
+              ldconfig
+
+              echo "--- Verify swsscommon import ---"
+              python3 -c "from swsscommon import swsscommon; print(\"swsscommon: OK\")"
+
+              echo "--- Install pytest ---"
+              pip3 install --break-system-packages pytest docker redis
+
+              echo "--- Run VS pytest suite ---"
+              cd /tests
+              pytest --imgname=docker-sonic-vs:latest -v test_port.py -x --timeout=600
+            '
 
       - name: Build sonic-broadcom.bin
         run: |
