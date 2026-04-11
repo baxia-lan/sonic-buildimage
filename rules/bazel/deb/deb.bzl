@@ -167,6 +167,8 @@ def deb_package_set(
         "  " + _BUILD_IMAGE + " \\",
         "  bash -o pipefail -c '",
         "    unset SOURCE_DATE_EPOCH",
+        "    echo \"deb " + _APT_SNAPSHOT_URL + " bookworm main\" > /etc/apt/sources.list",
+        "    echo \"deb https://snapshot.debian.org/archive/debian-security/" + _APT_SNAPSHOT + " bookworm-security main\" >> /etc/apt/sources.list",
         "    apt-get update -qq",
         "    apt-get install -y -qq --no-install-recommends " + _COMMON_BUILD_DEPS,
         "    curl -sSL https://raw.githubusercontent.com/zeromq/cppzmq/v4.10.0/zmq.hpp -o /usr/include/zmq.hpp",
