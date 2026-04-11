@@ -72,7 +72,7 @@ def sonic_rootfs_image(
             "echo '{\"build_version\": \"0.0.0-bazel\", \"built_by\": \"bazel\"}' > \"$$WORK/etc/sonic/sonic_version.yml\"",
             "",
             "# Create compressed rootfs",
-            "tar -czf $(OUTS) -C \"$$WORK\" .",
+            "SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 --owner=0 --group=0 -czf $(OUTS) -C \"$$WORK\" . 2>/dev/null || tar -czf $(OUTS) -C \"$$WORK\" .",
             "",
             "# Report size",
             "SIZE_MB=$$(( $$(wc -c < $(OUTS)) / 1048576 ))",
