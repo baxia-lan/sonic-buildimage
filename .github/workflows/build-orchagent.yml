@@ -138,14 +138,25 @@ jobs:
           docker export $CID | tar tvf - | grep -E 'usr/bin/python3\.11$'
           echo "=== Check ld-linux ==="
           docker export $CID | tar tvf - | grep 'ld-linux'
-          echo "=== Quick boot test ==="
+          echo "=== Quick boot test (60s) ==="
           docker rm $CID
           TESTCID=$(docker run -d --privileged docker-sonic-vs:latest)
-          sleep 5
+          # Wait up to 60s for services to start
+          for i in $(seq 1 12); do
+            if docker exec $TESTCID supervisorctl status 2>/dev/null | grep -q RUNNING; then
+              echo "Services starting after $((i * 5))s"
+              break
+            fi
+            sleep 5
+          done
           echo "--- Container logs ---"
-          docker logs $TESTCID 2>&1 | tail -30
+          docker logs $TESTCID 2>&1 | tail -50
           echo "--- supervisorctl status ---"
-          docker exec $TESTCID supervisorctl status 2>&1 | head -20 || echo "supervisorctl failed"
+          docker exec $TESTCID supervisorctl status 2>&1 || echo "supervisorctl failed"
+          echo "--- Key shared libraries ---"
+          docker exec $TESTCID ldd /usr/bin/orchagent 2>&1 | head -20 || echo "orchagent ldd failed"
+          docker exec $TESTCID ldd /usr/bin/syncd 2>&1 | head -20 || echo "syncd ldd failed"
+          docker exec $TESTCID python3 -c "from swsscommon import swsscommon; print('swsscommon OK')" 2>&1 || echo "swsscommon import failed inside container"
           docker stop $TESTCID 2>/dev/null || true
           docker rm $TESTCID 2>/dev/null || true
 
