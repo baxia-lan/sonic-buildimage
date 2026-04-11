@@ -332,6 +332,52 @@ slim_apt_layer(
     ],
 )
 
+# ── Layer 5a-extra: FRR shared library deps not resolved by rules_distroless ──
+# Some FRR deps (libjson-c5, libc-ares2, libprotobuf-c1) aren't in the apt
+# extension output (likely renamed in 2026 snapshot due to t64 transition).
+# Install them from apt inside a Docker container using snapshot.debian.org.
+genrule(
+    name = "vs_frr_extra_deps",
+    outs = ["vs_frr_extra_deps.tar"],
+    cmd = """\
+set -euo pipefail
+OUT=$$(cd $$(dirname $(OUTS)) && pwd)/$$(basename $(OUTS))
+docker run --rm --platform linux/amd64 \
+  -v "$$OUT:/output/layer.tar" \
+  -e DEBIAN_FRONTEND=noninteractive \
+  debian:bookworm-slim bash -o pipefail -c '
+    set -euo pipefail
+    apt-get update -qq
+    apt-get install -y -qq --no-install-recommends \
+      libjson-c5 libc-ares2 libprotobuf-c1 libpcre2-8-0 libtinfo6 libncursesw6
+    # Extract just the installed library files into the layer
+    ROOTFS=$$(mktemp -d)
+    for pkg in libjson-c5 libc-ares2 libprotobuf-c1; do
+      dpkg -L $$pkg 2>/dev/null | while read f; do
+        if [ -f "$$f" ]; then
+          mkdir -p "$$ROOTFS/$$(dirname $$f)"
+          cp -a "$$f" "$$ROOTFS/$$f"
+        fi
+      done
+    done
+    # Also grab libjson-c.so symlinks
+    for lib in /usr/lib/x86_64-linux-gnu/libjson-c.so* /usr/lib/x86_64-linux-gnu/libcares.so* /usr/lib/x86_64-linux-gnu/libprotobuf-c.so*; do
+      if [ -e "$$lib" ]; then
+        mkdir -p "$$ROOTFS/$$(dirname $$lib)"
+        cp -a "$$lib" "$$ROOTFS/$$lib"
+      fi
+    done
+    SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 --owner=0 --group=0 \
+      -C "$$ROOTFS" -cf /output/layer.tar .
+  '
+""",
+    tags = [
+        "no-cache",
+        "no-sandbox",
+        "requires-docker",
+    ],
+)
+
 # ── Layer 5b: FRR binaries (hermetic, from @frr repo) ──────────────────────
 # FRR 10.x .deb packages downloaded from deb.frrouting.org at fetch time.
 # Pinned by sha256 in MODULE.bazel. No Docker, no apt-get at build time.
@@ -421,6 +467,7 @@ oci_image(
         ":vs_runtime_apt",
         ":vs_sonic_debs",
         ":vs_frr_deps",
+        ":vs_frr_extra_deps",
         ":vs_frr_layer",
         "//build/py:sonic_python_layer",
         "//build/py:pip_deps_layer",
