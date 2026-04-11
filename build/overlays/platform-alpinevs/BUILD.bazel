@@ -31,18 +31,18 @@ exports_files(glob(["*.mk"], allow_empty = True))
 
 # ── Same service images as VS/broadcom ───────────────────────────────────────
 ALL_SERVICE_IMAGES = [
-    "//dockers/docker-database:docker_database",
-    "//dockers/docker-orchagent:docker_orchagent",
-    "//dockers/docker-fpm-frr:docker_fpm_frr",
-    "//dockers/docker-snmp:docker_snmp",
-    "//dockers/docker-lldp:docker_lldp",
-    "//dockers/docker-teamd:docker_teamd",
-    "//dockers/docker-nat:docker_nat",
-    "//dockers/docker-sflow:docker_sflow",
-    "//dockers/docker-stp:docker_stp",
-    "//dockers/docker-iccpd:docker_iccpd",
-    "//dockers/docker-router-advertiser:docker_router_advertiser",
-    "//dockers/docker-basic_router:docker_basic_router",
+    "//dockers/docker-database:docker_database_tarball",
+    "//dockers/docker-orchagent:docker_orchagent_tarball",
+    "//dockers/docker-fpm-frr:docker_fpm_frr_tarball",
+    "//dockers/docker-snmp:docker_snmp_tarball",
+    "//dockers/docker-lldp:docker_lldp_tarball",
+    "//dockers/docker-teamd:docker_teamd_tarball",
+    "//dockers/docker-nat:docker_nat_tarball",
+    "//dockers/docker-sflow:docker_sflow_tarball",
+    "//dockers/docker-stp:docker_stp_tarball",
+    "//dockers/docker-iccpd:docker_iccpd_tarball",
+    "//dockers/docker-router-advertiser:docker_router_advertiser_tarball",
+    "//dockers/docker-basic_router:docker_basic_router_tarball",
 ]
 
 # ── Rootfs with all SONiC service images ─────────────────────────────────────
