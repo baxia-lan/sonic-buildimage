@@ -48,11 +48,14 @@ jobs:
           echo "Kernel cpupower fix:"
           grep "cpupower" src/sonic-linux-kernel/BUILD.bazel | head -3 || echo "WARNING: no cpupower fix"
 
-          # Copy platform overlay files (for submodules without forks)
-          if [ -d build/overlays/platform-alpinevs ]; then
-            cp build/overlays/platform-alpinevs/* platform/alpinevs/ 2>/dev/null || true
-            echo "  + platform/alpinevs overlay copied"
-          fi
+          # Copy overlay files for submodules without forks
+          for overlay in build/overlays/*/; do
+            TARGET=$(basename "$overlay" | sed 's/^platform-/platform\//; s/^swss-common-/src\/sonic-swss-common\//')
+            if [ -d "$TARGET" ]; then
+              cp "$overlay"* "$TARGET/" 2>/dev/null || true
+              echo "  + $TARGET overlay copied"
+            fi
+          done
 
       - name: Install Bazelisk
         run: |
