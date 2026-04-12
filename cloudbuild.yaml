@@ -127,6 +127,18 @@ steps:
             echo "  + $$TARGET overlay copied"
           fi
         done
+        # Enable remote caching and reproducibility:
+        # 1. Remove no-cache tags — all deb builds use pinned snapshot.debian.org
+        #    + sha256-pinned Docker images, so outputs are safe to cache.
+        # 2. Set SOURCE_DATE_EPOCH=0 instead of unsetting — makes .deb outputs
+        #    deterministic (Debian reproducible builds support).
+        echo ">>> [copy-build-files] Enabling reproducible builds + remote caching..."
+        find src -name BUILD.bazel -exec sed -i \
+          -e 's/, "no-cache"//g' \
+          -e 's/"no-cache", //g' \
+          -e 's/"no-cache"//g' \
+          -e 's/unset SOURCE_DATE_EPOCH/export SOURCE_DATE_EPOCH=0/g' \
+          {} +
         echo ">>> [copy-build-files] Kernel BUILD.bazel first line:"
         head -1 src/sonic-linux-kernel/BUILD.bazel 2>/dev/null || echo "(not found)"
     waitFor: ["align-submodules"]
@@ -436,6 +448,7 @@ steps:
           -v /var/run/docker.sock:/var/run/docker.sock \
           -v /var/run/redis-vs:/var/run/redis-vs \
           -v /var/run/netns:/var/run/netns \
+          -v /lib/modules:/lib/modules:ro \
           -v "$$DEBS_DIR:/debs:ro" \
           -v "$$TESTS_DIR:/tests" \
           -e DEBIAN_FRONTEND=noninteractive \

@@ -166,7 +166,7 @@ def deb_package_set(
         "  -e DEBIAN_FRONTEND=noninteractive \\",
         "  " + _BUILD_IMAGE + " \\",
         "  bash -o pipefail -c '",
-        "    unset SOURCE_DATE_EPOCH",
+        "    export SOURCE_DATE_EPOCH=0",
         "    echo \"deb " + _APT_SNAPSHOT_URL + " bookworm main\" > /etc/apt/sources.list",
         "    echo \"deb https://snapshot.debian.org/archive/debian-security/" + _APT_SNAPSHOT + " bookworm-security main\" >> /etc/apt/sources.list",
         "    apt-get update -qq",

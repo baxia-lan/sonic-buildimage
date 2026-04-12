@@ -35,6 +35,7 @@ docker run --rm --privileged \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /var/run/redis-vs:/var/run/redis-vs \
   -v /var/run/netns:/var/run/netns \
+  -v /lib/modules:/lib/modules:ro \
   -v "${DEBS_DIR}:/debs:ro" \
   -v "${TESTS_DIR}:/tests" \
   -e DEBIAN_FRONTEND=noninteractive \

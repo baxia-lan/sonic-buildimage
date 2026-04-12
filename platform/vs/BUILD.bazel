@@ -417,6 +417,10 @@ oci_image(
     env = {
         "PLATFORM": "x86_64-kvm_x86_64-r0",
         "HWSKU": "Force10-S6000",
+        # CONTAINER_NAME required by supervisor-proc-exit-listener in
+        # supervisord_env.conf. Without it, supervisord refuses to start:
+        # "Format string contains names which cannot be expanded"
+        "CONTAINER_NAME": "vs",
     },
     labels = {
         "org.opencontainers.image.title": "docker-sonic-vs",

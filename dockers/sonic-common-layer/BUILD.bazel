@@ -17,7 +17,12 @@ genrule(
     name = "supervisord_skel_layer",
     srcs = [
         "//files/supervisord:base.conf",
-        "//files/supervisord:supervisord_env.conf",
+        # NOTE: supervisord_env.conf EXCLUDED — it references
+        # supervisor-proc-exit-listener binary which is not installed in
+        # Bazel-built images. Including it causes supervisord to crash:
+        # "Format string contains names which cannot be expanded"
+        # The proc-exit-listener is a production monitoring feature;
+        # each service's own supervisord.conf defines its actual programs.
     ],
     outs = ["supervisord_skel_layer.tar"],
     cmd = """\
@@ -25,12 +30,7 @@ set -euo pipefail
 STAGING=$$(mktemp -d)
 trap 'rm -rf "$$STAGING"' EXIT
 mkdir -p "$$STAGING/etc/supervisor/conf.d"
-for src in $(SRCS); do
-  case "$$src" in
-    */base.conf) cp "$$src" "$$STAGING/etc/supervisor/supervisord.conf" ;;
-    */supervisord_env.conf) cp "$$src" "$$STAGING/etc/supervisor/conf.d/supervisord_env.conf" ;;
-  esac
-done
+cp $(location //files/supervisord:base.conf) "$$STAGING/etc/supervisor/supervisord.conf"
 # Also create required directories
 mkdir -p "$$STAGING/var/log/supervisor"
 mkdir -p "$$STAGING/var/run"

@@ -58,7 +58,7 @@ docker run --rm --platform linux/amd64 \
   -e DEBIAN_FRONTEND=noninteractive \
   {image} \
   bash -o pipefail -c '
-    unset SOURCE_DATE_EPOCH
+    export SOURCE_DATE_EPOCH=0
     echo "deb {snapshot_url} bookworm main" > /etc/apt/sources.list
     apt-get update -qq
     apt-get install -y -qq --no-install-recommends {packages}
