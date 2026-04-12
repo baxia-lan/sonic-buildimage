@@ -159,6 +159,15 @@ docker run --rm --platform linux/amd64 \
       [ -s "$$deb" ] && dpkg-deb -x "$$deb" "$$ROOTFS" 2>/dev/null || true
     done
     {strip_cmd}
+    # Fix usrmerge: move ./bin/, ./sbin/, ./lib/ into ./usr/ to avoid
+    # shadowing base image symlinks (/bin -> /usr/bin) in OCI layers.
+    for d in bin sbin lib; do
+      if [ -d "$$ROOTFS/$$d" ] && [ ! -L "$$ROOTFS/$$d" ]; then
+        mkdir -p "$$ROOTFS/usr/$$d"
+        cp -a "$$ROOTFS/$$d/." "$$ROOTFS/usr/$$d/" 2>/dev/null || true
+        rm -rf "$$ROOTFS/$$d"
+      fi
+    done
     if [ -d "$$ROOTFS" ] && [ "$$(ls -A $$ROOTFS 2>/dev/null)" ]; then
       SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 --owner=0 --group=0 \\
         -C "$$ROOTFS" -cf /output/layer.tar .
@@ -220,6 +229,15 @@ for src in $(SRCS); do
             [ -f "$$dt" ] && tar xf "$$dt" -C "$$ROOTFS" 2>/dev/null || true
         done
         rm -rf "$$INNER"
+    fi
+done
+# Fix usrmerge: move ./bin/, ./sbin/, ./lib/ into ./usr/ to avoid
+# shadowing base image symlinks (/bin -> /usr/bin) in OCI layers.
+for d in bin sbin lib; do
+    if [ -d "$$ROOTFS/$$d" ] && [ ! -L "$$ROOTFS/$$d" ]; then
+        mkdir -p "$$ROOTFS/usr/$$d"
+        cp -a "$$ROOTFS/$$d/." "$$ROOTFS/usr/$$d/" 2>/dev/null || true
+        rm -rf "$$ROOTFS/$$d"
     fi
 done
 COPYFILE_DISABLE=1 tar cf "$@" -C "$$ROOTFS" .

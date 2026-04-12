@@ -171,6 +171,16 @@ jobs:
           set -uo pipefail  # no -e: let all checks run
           echo "=== Quick boot test (60s) ==="
           TESTCID=$(docker run -d --privileged docker-sonic-vs:latest)
+
+          # Diagnostic: check if essential binaries exist
+          echo "--- Filesystem diagnostics ---"
+          docker exec $TESTCID ls -la /bin 2>&1 | head -3 || echo "/bin missing"
+          docker exec $TESTCID ls -la /usr/bin/bash /bin/bash 2>&1 || echo "bash NOT found"
+          docker exec $TESTCID ls -la /usr/bin/start.sh 2>&1 || echo "start.sh NOT found"
+          docker exec $TESTCID head -1 /usr/bin/start.sh 2>&1 || echo "cannot read start.sh"
+          docker exec $TESTCID bash -c 'echo bash works' 2>&1 || echo "bash BROKEN"
+          docker exec $TESTCID ls /usr/lib/x86_64-linux-gnu/libpython3.11* 2>&1 || echo "libpython3.11 NOT found"
+
           for i in $(seq 1 12); do
             if docker exec $TESTCID supervisorctl status 2>/dev/null | grep -q RUNNING; then
               echo "Services starting after $((i * 5))s"
@@ -205,6 +215,12 @@ jobs:
           DEBS_DIR=$(realpath bazel-bin/src/sonic-swss-common)
           TESTS_DIR=$(realpath src/sonic-swss/tests)
           sudo mkdir -p /var/run/redis-vs
+
+          # Pre-pull debian:jessie — conftest.py DVS fixture needs it as a
+          # base container for network namespaces. Pre-pulling avoids Docker
+          # Hub rate limits and reduces DVS creation time.
+          echo "=== Pre-pulling debian:jessie ==="
+          docker pull debian:jessie 2>/dev/null || echo "WARN: debian:jessie pull failed"
 
           # Pre-load kernel modules on the HOST — conftest.py calls
           # modprobe team inside the pytest container, which shares the

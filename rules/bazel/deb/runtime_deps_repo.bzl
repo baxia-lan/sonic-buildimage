@@ -38,6 +38,20 @@ def _runtime_deps_repo_impl(rctx):
         rctx.execute(["rm", "-f", deb_path, "debian-binary",
                        "control.tar.xz", "control.tar.gz", "control.tar.zst"])
 
+    # Fix usrmerge: Debian bookworm packages may ship files in bin/, sbin/,
+    # lib/ instead of usr/bin/, etc. Move them to avoid shadowing the base
+    # image's /bin -> /usr/bin symlinks in OCI layers.
+    for d in ["bin", "sbin", "lib"]:
+        src = rootfs_dir + "/" + d
+        dst = rootfs_dir + "/usr/" + d
+        result = rctx.execute(["test", "-d", src])
+        if result.return_code == 0:
+            link_result = rctx.execute(["test", "-L", src])
+            if link_result.return_code != 0:
+                rctx.execute(["mkdir", "-p", dst])
+                rctx.execute(["sh", "-c", "cp -a " + src + "/. " + dst + "/"])
+                rctx.execute(["rm", "-rf", src])
+
     # Repack into a single tar for OCI layer use
     tar_bin = "tar"
     for candidate in ["/opt/homebrew/bin/gtar", "/usr/local/bin/gtar", "gtar"]:

@@ -94,6 +94,7 @@ sonic_oci_image(
     base = "@debian_bookworm_slim",
     tars = [
         ":common_apt_slim_layer",
+        "@python_runtime_deps//:layer",
         ":supervisord_skel_layer",
         ":rsyslog_layer",
     ],

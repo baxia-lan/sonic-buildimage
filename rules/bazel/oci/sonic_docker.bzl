@@ -114,7 +114,20 @@ find "$$TMPDIR" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || tru
 find "$$TMPDIR" -type f -name "*.pyc" -delete 2>/dev/null || true
 find "$$TMPDIR" -type f -name "*.pyo" -delete 2>/dev/null || true
 
-# 7. Repack filtered contents into a single output tarball.
+# 7. Fix usrmerge: Debian bookworm packages (e.g. iproute2) may ship files
+#    in ./bin/, ./sbin/, ./lib/ instead of ./usr/bin/, etc. When these become
+#    OCI layers on top of a base image with /bin -> /usr/bin symlinks, the
+#    layer directories shadow the symlinks, breaking /bin/bash and friends.
+#    Merge these into ./usr/ and re-create compatibility symlinks.
+for d in bin sbin lib; do
+    if [ -d "$$TMPDIR/$$d" ] && [ ! -L "$$TMPDIR/$$d" ]; then
+        mkdir -p "$$TMPDIR/usr/$$d"
+        cp -a "$$TMPDIR/$$d/." "$$TMPDIR/usr/$$d/" 2>/dev/null || true
+        rm -rf "$$TMPDIR/$$d"
+    fi
+done
+
+# 8. Repack filtered contents into a single output tarball.
 #    Use COPYFILE_DISABLE=1 to prevent macOS BSD tar from embedding
 #    AppleDouble/xattr PAX headers (com.apple.provenance) which break docker load.
 COPYFILE_DISABLE=1 tar cf "$@" -C "$$TMPDIR" .

@@ -211,6 +211,20 @@ _runtime_deps_repo(
     },
 )
 
+# libpython3.11 — shared library needed by SWIG-generated Python bindings
+# (python3-swsscommon etc.). The libpython3.11-minimal from rules_distroless
+# provides the interpreter, but the SWIG .so modules link against the shared
+# library (libpython3.11.so.1.0) which is only in the full libpython3.11 pkg.
+_runtime_deps_repo(
+    name = "python_runtime_deps",
+    packages = {
+        "libpython3.11": [
+            _SNAPSHOT + "/p/python3.11/libpython3.11_3.11.2-6+deb12u6_amd64.deb",
+            "6a824827e991ff23555954a3496a4a49be660dcdd0e7dbb1dc80171782fbd463",
+        ],
+    },
+)
+
 # ── phy-credo firmware (SONIC_ONLINE_DEBS equivalent) ────────────────────────
 _http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 
