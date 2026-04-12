@@ -31,6 +31,15 @@ for src in $(SRCS); do
         rm -rf "$$INNER"
     fi
 done
+# Fix usrmerge: move ./bin/, ./sbin/, ./lib/ into ./usr/ to avoid
+# shadowing base image symlinks (/bin -> /usr/bin) in OCI layers.
+for d in bin sbin lib; do
+    if [ -d "$$TMPDIR/$$d" ] && [ ! -L "$$TMPDIR/$$d" ]; then
+        mkdir -p "$$TMPDIR/usr/$$d"
+        cp -a "$$TMPDIR/$$d/." "$$TMPDIR/usr/$$d/" 2>/dev/null || true
+        rm -rf "$$TMPDIR/$$d"
+    fi
+done
 COPYFILE_DISABLE=1 tar cf "$@" -C "$$TMPDIR" .
 """,
     tags = [],
