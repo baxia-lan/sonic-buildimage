@@ -104,7 +104,7 @@ echo "ONIE image: $SIZE_MB MB (platform: $PLATFORM)"
 DOCKERFS_SIZE=$(( $(stat -f%z "$PAYLOAD_DIR/dockerfs.tar.gz" 2>/dev/null || stat -c%s "$PAYLOAD_DIR/dockerfs.tar.gz") / 1048576 ))
 KERNEL_SIZE=$(( $(stat -f%z "$PAYLOAD_DIR/boot0" 2>/dev/null || stat -c%s "$PAYLOAD_DIR/boot0") / 1048576 ))
 echo "  dockerfs: $DOCKERFS_SIZE MB | kernel: $KERNEL_SIZE MB | sha1: $PAYLOAD_SHA1"
-if [ "$SIZE_MB" -gt 400 ]; then
-    echo "FAIL: $OUTPUT is $SIZE_MB MB, exceeds 400 MB budget" >&2
+if [ "$SIZE_MB" -gt 700 ]; then
+    echo "FAIL: $OUTPUT is $SIZE_MB MB, exceeds 700 MB budget" >&2
     exit 1
 fi

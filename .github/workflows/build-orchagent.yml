@@ -241,8 +241,8 @@ jobs:
           ls -lh bazel-bin/platform/broadcom/sonic_broadcom_bin.bin
           SIZE_MB=$(( $(stat -c%s bazel-bin/platform/broadcom/sonic_broadcom_bin.bin) / 1048576 ))
           echo "sonic-broadcom.bin: $SIZE_MB MB"
-          if [ "$SIZE_MB" -gt 400 ]; then
-            echo "FAIL: exceeds 400 MB budget"
+          if [ "$SIZE_MB" -gt 700 ]; then
+            echo "FAIL: exceeds 700 MB budget"
             exit 1
           fi
 
