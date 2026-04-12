@@ -112,6 +112,10 @@ jobs:
               echo "Enabling deb-src in DEB822 format..."
               sudo sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
             fi
+            # Kernel 6.17+ needs libdw-dev for gendwarfksyms (dwarf.h).
+            # The upstream script doesn't install it.
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq libdw-dev 2>/dev/null || true
             # Best-effort: build_and_install_module.sh may fail if kernel
             # headers/source are unavailable for the Azure kernel.
             # The conftest.py patch (in pytest step) makes this non-fatal.
