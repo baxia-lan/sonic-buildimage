@@ -5,6 +5,10 @@ on:
     branches: [claude]
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -103,6 +107,12 @@ jobs:
           echo "Kernel: $(uname -r)"
           if ! sudo modprobe team 2>/dev/null; then
             echo "team module not found — building from kernel source (upstream method)..."
+            # Ubuntu 24.04 uses DEB822 format — enable deb-src before the script runs.
+            # The upstream script only handles old /etc/apt/sources.list format.
+            if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+              echo "Enabling deb-src in DEB822 format..."
+              sudo sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
+            fi
             sudo bash src/sonic-swss-common/.azure-pipelines/build_and_install_module.sh
           fi
           lsmod | grep team && echo "team module: loaded" || echo "team module: NOT loaded"
