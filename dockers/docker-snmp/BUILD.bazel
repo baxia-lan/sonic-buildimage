@@ -43,7 +43,7 @@ for src in $(SRCS); do
 done
 COPYFILE_DISABLE=1 tar cf "$@" -C "$$TMPDIR" .
 """,
-    tags = ["no-sandbox"],
+    tags = [],
 )
 
 # ── Config + scripts layer ─────────────────────────────────────────────────

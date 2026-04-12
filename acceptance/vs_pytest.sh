@@ -60,6 +60,14 @@ docker run --rm --privileged \
 
     pip3 install --break-system-packages pytest pytest-timeout docker redis
 
+    # Patch conftest.py: make modprobe team non-fatal.
+    # Azure/cloud kernels may not have team.ko. Tests not using team
+    # (e.g. test_port.py) should still pass.
+    sed -i \
+      -e "s/if subprocess.check_call.*modprobe.*team.*/subprocess.call([\"\/sbin\/modprobe\", \"team\"])  # patched: non-fatal/" \
+      -e "/Cannot install kernel team module/d" \
+      /tests/conftest.py
+
     cd /tests
     pytest --imgname=docker-sonic-vs:latest -v --timeout=600
   '

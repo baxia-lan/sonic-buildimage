@@ -217,7 +217,7 @@ _http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http
 _http_file(
     name = "phy_credo",
     url = "https://github.com/aristanetworks/sonic-firmware/raw/24716c4e03f223d8e18afff786ac427f6ac77fe0/phy/phy-credo_1.0_amd64.deb",
-    sha256 = "",  # TODO: pin sha256 after first download
+    sha256 = "83d80954cde22ed16509aec22baeb36545d8cf486dc409755f325d5585004cce",
     downloaded_file_path = "phy-credo_1.0_amd64.deb",
 )
 
