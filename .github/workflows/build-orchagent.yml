@@ -177,9 +177,14 @@ jobs:
           docker exec $TESTCID ls -la /bin 2>&1 | head -3 || echo "/bin missing"
           docker exec $TESTCID ls -la /usr/bin/bash /bin/bash 2>&1 || echo "bash NOT found"
           docker exec $TESTCID ls -la /usr/bin/start.sh 2>&1 || echo "start.sh NOT found"
-          docker exec $TESTCID head -1 /usr/bin/start.sh 2>&1 || echo "cannot read start.sh"
           docker exec $TESTCID bash -c 'echo bash works' 2>&1 || echo "bash BROKEN"
           docker exec $TESTCID ls /usr/lib/x86_64-linux-gnu/libpython3.11* 2>&1 || echo "libpython3.11 NOT found"
+          docker exec $TESTCID ls -la /usr/bin/sonic-cfggen /usr/local/bin/sonic-cfggen 2>&1 || echo "sonic-cfggen NOT found"
+          docker exec $TESTCID ls -d /usr/share/sonic/device/x86_64-kvm_x86_64-r0/Force10-S6000 2>&1 || echo "Force10-S6000 HWSKU NOT found"
+          docker exec $TESTCID ls /usr/share/sonic/device/x86_64-kvm_x86_64-r0/Force10-S6000/lanemap.ini 2>&1 || echo "lanemap.ini NOT found"
+          # Try running start.sh manually to see the actual error
+          echo "--- start.sh test run ---"
+          docker exec $TESTCID bash -c 'export PLATFORM=x86_64-kvm_x86_64-r0 HWSKU=Force10-S6000; bash -x /usr/bin/start.sh 2>&1 | head -30' 2>&1 || echo "start.sh failed (expected)"
 
           BOOTED=false
           for i in $(seq 1 24); do
