@@ -40,11 +40,20 @@ COPYFILE_DISABLE=1 $$TAR $$SORT_FLAG --mtime=@0 --owner=0 --group=0 -cf "$@" -C 
 """,
 )
 
-pkg_tar(
+genrule(
     name = "rsyslog_layer",
     srcs = ["//files/rsyslog:rsyslog.conf"],
-    remap_paths = {"files/rsyslog/rsyslog.conf": "/etc/rsyslog.conf"},
-    mode = "0644",
+    outs = ["rsyslog_layer.tar"],
+    cmd = """\
+set -euo pipefail
+STAGING=$$(mktemp -d)
+trap 'rm -rf "$$STAGING"' EXIT
+mkdir -p "$$STAGING/etc"
+cp $(location //files/rsyslog:rsyslog.conf) "$$STAGING/etc/rsyslog.conf"
+TAR=tar; for t in /opt/homebrew/bin/gtar /usr/local/bin/gtar gtar; do command -v "$$t" >/dev/null 2>&1 && TAR="$$t" && break; done
+SORT_FLAG=""; $$TAR --sort=name --help >/dev/null 2>&1 && SORT_FLAG="--sort=name"
+COPYFILE_DISABLE=1 $$TAR $$SORT_FLAG --mtime=@0 --owner=0 --group=0 -cf "$@" -C "$$STAGING" .
+""",
 )
 
 # ── Runtime packages — slimmed (strip ELF, remove man/doc/locale/pycache) ─────
