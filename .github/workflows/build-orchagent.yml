@@ -178,6 +178,16 @@ jobs:
           TESTS_DIR=$(realpath src/sonic-swss/tests)
           sudo mkdir -p /var/run/redis-vs
 
+          # Pre-load kernel modules on the HOST — conftest.py calls
+          # modprobe team inside the pytest container, which shares the
+          # host kernel (--pid=host). Loading on the host ensures the
+          # module is available regardless of /lib/modules mount state.
+          echo "=== Pre-loading kernel modules ==="
+          sudo modprobe team || echo "WARN: team module not available"
+          sudo modprobe team_mode_loadbalance 2>/dev/null || true
+          sudo modprobe team_mode_roundrobin 2>/dev/null || true
+          lsmod | grep team || echo "WARN: team not in lsmod"
+
           echo "=== Run pytest inside bookworm container ==="
           docker run --rm --privileged \
             --pid=host \
