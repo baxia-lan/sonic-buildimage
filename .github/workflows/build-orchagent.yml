@@ -181,21 +181,26 @@ jobs:
           docker exec $TESTCID bash -c 'echo bash works' 2>&1 || echo "bash BROKEN"
           docker exec $TESTCID ls /usr/lib/x86_64-linux-gnu/libpython3.11* 2>&1 || echo "libpython3.11 NOT found"
 
-          for i in $(seq 1 12); do
+          BOOTED=false
+          for i in $(seq 1 24); do
             if docker exec $TESTCID supervisorctl status 2>/dev/null | grep -q RUNNING; then
               echo "Services starting after $((i * 5))s"
+              BOOTED=true
               break
             fi
             sleep 5
           done
           echo "--- Container logs ---"
-          docker logs $TESTCID 2>&1 | tail -60
+          docker logs $TESTCID 2>&1 | tail -80
           echo "--- supervisorctl status ---"
           docker exec $TESTCID supervisorctl status 2>&1 || echo "supervisorctl not available"
           echo "--- Shared library check ---"
-          docker exec $TESTCID ldd /usr/bin/orchagent 2>&1 | head -20 || true
           docker exec $TESTCID python3 -c "from swsscommon import swsscommon; print('swsscommon OK')" 2>&1 || true
           docker stop $TESTCID 2>/dev/null; docker rm $TESTCID 2>/dev/null
+          if [ "$BOOTED" = false ]; then
+            echo "FAIL: No services reached RUNNING state in 120s"
+            exit 1
+          fi
           echo "=== Verification complete ==="
 
       - name: Run pytest (docker-sonic-vs)
@@ -278,6 +283,13 @@ jobs:
                 -e "/Cannot install kernel team module/d" \
                 /tests/conftest.py
               grep -n "modprobe" /tests/conftest.py | head -3
+
+              echo "--- Patch conftest.py: increase service readiness timeout ---"
+              # CI runners (2 vCPU) are slow. The default 60s timeout for
+              # check_services_ready may not be enough. Increase to 120s.
+              sed -i "s/def check_services_ready(self, timeout=60)/def check_services_ready(self, timeout=120)/" \
+                /tests/conftest.py
+              grep -n "check_services_ready" /tests/conftest.py | head -3
 
               echo "--- Run VS pytest suite ---"
               cd /tests
