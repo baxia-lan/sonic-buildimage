@@ -106,16 +106,19 @@ jobs:
           # pytest conftest.py requires: modprobe team
           echo "Kernel: $(uname -r)"
           if ! sudo modprobe team 2>/dev/null; then
-            echo "team module not found — building from kernel source (upstream method)..."
+            echo "team module not found — attempting to build from kernel source..."
             # Ubuntu 24.04 uses DEB822 format — enable deb-src before the script runs.
-            # The upstream script only handles old /etc/apt/sources.list format.
             if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
               echo "Enabling deb-src in DEB822 format..."
               sudo sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
             fi
-            sudo bash src/sonic-swss-common/.azure-pipelines/build_and_install_module.sh
+            # Best-effort: build_and_install_module.sh may fail if kernel
+            # headers/source are unavailable for the Azure kernel.
+            # The conftest.py patch (in pytest step) makes this non-fatal.
+            sudo bash src/sonic-swss-common/.azure-pipelines/build_and_install_module.sh || \
+              echo "WARN: kernel module build failed — conftest.py patch will handle this"
           fi
-          lsmod | grep team && echo "team module: loaded" || echo "team module: NOT loaded"
+          lsmod | grep team && echo "team module: loaded" || echo "team module: NOT available (conftest.py patched)"
 
       # NOTE: Kernel build removed from critical path.
       # VS image does NOT need kernel. Kernel is built on-demand by

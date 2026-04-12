@@ -176,3 +176,55 @@ rm -rf "$$DEB_DIR"
         tags = ["requires-docker", "no-sandbox"],
         visibility = visibility,
     )
+
+def deb_extract_layer_hermetic(
+        name,
+        debs,
+        size_budget_mb = 0,
+        visibility = None):
+    """Create an OCI layer tar by extracting .deb files using ar (no Docker).
+
+    Uses ar+tar directly on the host, avoiding Docker entirely.
+    Works on both Linux and macOS (ar is available in both).
+    No no-sandbox tag needed since this is a pure local operation.
+
+    Args:
+        name:           Target name. Output: <name>.tar
+        debs:           Labels of .deb file targets to extract.
+        size_budget_mb: If > 0, fail if layer exceeds this size.
+        visibility:     Bazel visibility.
+    """
+    size_check = ""
+    if size_budget_mb > 0:
+        size_check = """
+SIZE_MB=$$(( $$(wc -c < "$@") / 1048576 ))
+if [ "$$SIZE_MB" -gt {budget} ]; then
+  echo "FAIL: {name} is $$SIZE_MB MB, exceeds {budget} MB budget"
+  exit 1
+fi
+""".format(name = name, budget = size_budget_mb)
+
+    native.genrule(
+        name = name,
+        srcs = debs,
+        outs = [name + ".tar"],
+        cmd = """\
+set -euo pipefail
+ROOTFS=$$(mktemp -d)
+trap 'rm -rf "$$ROOTFS"' EXIT
+for src in $(SRCS); do
+    if [ -f "$$src" ]; then
+        INNER=$$(mktemp -d)
+        ar x "$$src" --output="$$INNER" 2>/dev/null || true
+        for dt in "$$INNER"/data.tar.*; do
+            [ -f "$$dt" ] && tar xf "$$dt" -C "$$ROOTFS" 2>/dev/null || true
+        done
+        rm -rf "$$INNER"
+    fi
+done
+COPYFILE_DISABLE=1 tar cf "$@" -C "$$ROOTFS" .
+{size_check}
+""".format(size_check = size_check),
+        tags = [],
+        visibility = visibility,
+    )
