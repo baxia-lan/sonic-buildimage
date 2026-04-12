@@ -88,13 +88,24 @@ jobs:
           echo "BAZEL_CACHE_FLAGS=--config=github" >> $GITHUB_ENV
           echo "Remote cache enabled (GCS: sonic-bazel-cache)"
 
-      - name: Free disk space
+      - name: Free disk space and install kernel modules
         run: |
           echo "Before: $(df -h / | tail -1 | awk '{print $4}') free"
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
           sudo rm -rf /usr/share/swift /usr/local/.ghcup /opt/hostedtoolcache
           sudo docker image prune -af 2>/dev/null || true
           echo "After: $(df -h / | tail -1 | awk '{print $4}') free"
+
+          # Install extra kernel modules if team module missing.
+          # Azure kernels may not include team.ko by default.
+          # pytest conftest.py requires: modprobe team
+          if ! modprobe -n team 2>/dev/null; then
+            echo "team module not found, installing linux-modules-extra..."
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq linux-modules-extra-$(uname -r) 2>/dev/null || true
+          fi
+          echo "Kernel: $(uname -r)"
+          modprobe -n team 2>/dev/null && echo "team module: available" || echo "team module: NOT available"
 
       # NOTE: Kernel build removed from critical path.
       # VS image does NOT need kernel. Kernel is built on-demand by
