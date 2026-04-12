@@ -11,17 +11,33 @@ load("//rules/bazel/oci:sonic_docker.bzl", "slim_apt_layer")
 package(default_visibility = ["//visibility:public"])
 
 # ── Supervisord config ────────────────────────────────────────────────────────
-pkg_tar(
+# Supervisord config — genrule to place files at correct paths
+# (pkg_tar remap_paths fails in Bazel 8 with cross-package labels)
+genrule(
     name = "supervisord_skel_layer",
     srcs = [
         "//files/supervisord:base.conf",
         "//files/supervisord:supervisord_env.conf",
     ],
-    remap_paths = {
-        "files/supervisord/base.conf": "/etc/supervisor/supervisord.conf",
-        "files/supervisord/supervisord_env.conf": "/etc/supervisor/conf.d/supervisord_env.conf",
-    },
-    mode = "0644",
+    outs = ["supervisord_skel_layer.tar"],
+    cmd = """\
+set -euo pipefail
+STAGING=$$(mktemp -d)
+trap 'rm -rf "$$STAGING"' EXIT
+mkdir -p "$$STAGING/etc/supervisor/conf.d"
+for src in $(SRCS); do
+  case "$$src" in
+    */base.conf) cp "$$src" "$$STAGING/etc/supervisor/supervisord.conf" ;;
+    */supervisord_env.conf) cp "$$src" "$$STAGING/etc/supervisor/conf.d/supervisord_env.conf" ;;
+  esac
+done
+# Also create required directories
+mkdir -p "$$STAGING/var/log/supervisor"
+mkdir -p "$$STAGING/var/run"
+TAR=tar; for t in /opt/homebrew/bin/gtar /usr/local/bin/gtar gtar; do command -v "$$t" >/dev/null 2>&1 && TAR="$$t" && break; done
+SORT_FLAG=""; $$TAR --sort=name --help >/dev/null 2>&1 && SORT_FLAG="--sort=name"
+COPYFILE_DISABLE=1 $$TAR $$SORT_FLAG --mtime=@0 --owner=0 --group=0 -cf "$@" -C "$$STAGING" .
+""",
 )
 
 pkg_tar(
