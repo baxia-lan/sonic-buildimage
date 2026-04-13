@@ -225,8 +225,20 @@ _runtime_deps_repo(
     },
 )
 
-# ── phy-credo firmware (SONIC_ONLINE_DEBS equivalent) ────────────────────────
+# ── libpython3.11 shared library (SWIG bindings) ────────────────────────────
+# http_file approach replaces the broken runtime_deps_repo layer.
+# The deb is extracted hermetically via deb_extract_layer_hermetic in
+# dockers/sonic-common-layer/BUILD.bazel.
 _http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
+
+_http_file(
+    name = "libpython3_11_deb",
+    url = _SNAPSHOT + "/p/python3.11/libpython3.11_3.11.2-6+deb12u6_amd64.deb",
+    sha256 = "6a824827e991ff23555954a3496a4a49be660dcdd0e7dbb1dc80171782fbd463",
+    downloaded_file_path = "libpython3.11.deb",
+)
+
+# ── phy-credo firmware (SONIC_ONLINE_DEBS equivalent) ────────────────────────
 
 _http_file(
     name = "phy_credo",

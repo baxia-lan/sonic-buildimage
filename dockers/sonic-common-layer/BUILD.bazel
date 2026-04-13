@@ -5,10 +5,19 @@ No Docker, no apt-get at build time.
 """
 
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+load("//rules/bazel/oci:docker_layer.bzl", "deb_extract_layer_hermetic")
 load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
 load("//rules/bazel/oci:sonic_docker.bzl", "slim_apt_layer")
 
 package(default_visibility = ["//visibility:public"])
+
+# ── libpython3.11 shared library (for SWIG bindings) ─────────────────────────
+# Extracted hermetically from the .deb downloaded at fetch time (no Docker).
+# Replaces the broken @python_runtime_deps//:layer approach.
+deb_extract_layer_hermetic(
+    name = "libpython3_11_layer",
+    debs = ["@libpython3_11_deb//file"],
+)
 
 # ── Supervisord config ────────────────────────────────────────────────────────
 # Supervisord config — genrule to place files at correct paths
@@ -82,6 +91,11 @@ slim_apt_layer(
         "@bookworm_libpython3.11-stdlib_3.11.2-6-p-deb12u6_amd64//:data",
         "@bookworm_python3-minimal_3.11.2-1-p-b1_amd64//:data",
         "@bookworm_libexpat1_2.5.0-1-p-deb12u2_amd64//:data",
+        # iproute2 runtime deps — libbpf is required for `ip` command.
+        # Without it: "error while loading shared libraries: libbpf.so.1"
+        "@bookworm_libbpf1_1-1.1.2-0-p-deb12u1_amd64//:data",
+        "@bookworm_libelf1_0.188-2.1_amd64//:data",
+        "@bookworm_libmnl0_1.0.4-3_amd64//:data",
     ],
 )
 
@@ -94,7 +108,7 @@ sonic_oci_image(
     base = "@debian_bookworm_slim",
     tars = [
         ":common_apt_slim_layer",
-        "@python_runtime_deps//:layer",
+        ":libpython3_11_layer",
         ":supervisord_skel_layer",
         ":rsyslog_layer",
     ],
