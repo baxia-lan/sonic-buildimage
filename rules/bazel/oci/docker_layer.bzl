@@ -224,7 +224,10 @@ trap 'rm -rf "$$ROOTFS"' EXIT
 for src in $(SRCS); do
     if [ -f "$$src" ]; then
         INNER=$$(mktemp -d)
-        ar x "$$src" --output="$$INNER" 2>/dev/null || true
+        # ar x --output is GNU binutils only; macOS BSD ar lacks it.
+        # Resolve to absolute path before cd so relative paths still work.
+        ABS_SRC=$$(cd "$$(dirname "$$src")" && pwd)/$$(basename "$$src")
+        (cd "$$INNER" && ar x "$$ABS_SRC") 2>/dev/null || true
         for dt in "$$INNER"/data.tar.*; do
             [ -f "$$dt" ] && tar xf "$$dt" -C "$$ROOTFS" 2>/dev/null || true
         done
