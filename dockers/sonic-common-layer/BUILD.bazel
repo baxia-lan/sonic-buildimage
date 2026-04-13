@@ -81,6 +81,10 @@ slim_apt_layer(
         "@bookworm_jq_1.6-2.1-p-deb12u1_amd64//:data",
         "@bookworm_iputils-ping_3-20221126-1-p-deb12u1_amd64//:data",
         "@bookworm_libzmq5_4.3.4-6_amd64//:data",
+        # libzmq5 transitive runtime deps (apt resolves these automatically)
+        "@bookworm_libsodium23_1.0.18-1-p-deb12u1_amd64//:data",
+        "@bookworm_libpgm-5.3-0_5.3.128_dfsg-2_amd64//:data",
+        "@bookworm_libnorm1_1.5.9-p-dfsg-2_amd64//:data",
         "@bookworm_libjansson4_2.14-2_amd64//:data",
         "@bookworm_libdbus-1-3_1.14.10-1_deb12u1_amd64//:data",
         "@bookworm_libssl3_3.0.18-1_deb12u2_amd64//:data",
@@ -91,11 +95,13 @@ slim_apt_layer(
         "@bookworm_libpython3.11-stdlib_3.11.2-6-p-deb12u6_amd64//:data",
         "@bookworm_python3-minimal_3.11.2-1-p-b1_amd64//:data",
         "@bookworm_libexpat1_2.5.0-1-p-deb12u2_amd64//:data",
-        # iproute2 runtime deps — libbpf is required for `ip` command.
-        # Without it: "error while loading shared libraries: libbpf.so.1"
+        # iproute2 runtime deps — these shared libraries are required by `ip`.
+        # Without them: "error while loading shared libraries: lib*.so.*"
         "@bookworm_libbpf1_1-1.1.2-0-p-deb12u1_amd64//:data",
         "@bookworm_libelf1_0.188-2.1_amd64//:data",
         "@bookworm_libmnl0_1.0.4-3_amd64//:data",
+        "@bookworm_libbsd0_0.11.7-2_amd64//:data",
+        "@bookworm_libmd0_1.0.4-2_amd64//:data",
     ],
 )
 

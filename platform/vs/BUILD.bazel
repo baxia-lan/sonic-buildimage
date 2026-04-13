@@ -29,6 +29,7 @@ slim_apt_layer(
         "@bookworm_iproute2_6.1.0-3_amd64//:data",
         "@bookworm_bridge-utils_1.7.1-1_amd64//:data",
         "@bookworm_iptables_1.8.9-2_amd64//:data",
+        "@bookworm_libxtables12_1.8.9-2_amd64//:data",  # iptables transitive dep
         "@bookworm_iputils-ping_3-20221126-1-p-deb12u1_amd64//:data",
         "@bookworm_procps_2-4.0.2-3_amd64//:data",
         "@bookworm_tcpdump_4.99.3-1_amd64//:data",
