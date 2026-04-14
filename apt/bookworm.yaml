@@ -76,6 +76,9 @@ packages:
   - adduser
   - passwd
 
+  # libyang v1 runtime dependency (built from source, needs libpcre3 at runtime)
+  - libpcre3
+
   # FRR runtime dependencies (from standard Debian repos)
   # FRR itself comes from @frr repo (deb.frrouting.org, pinned by sha256).
   # These are the shared libraries FRR links against at runtime.

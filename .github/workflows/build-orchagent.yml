@@ -83,7 +83,7 @@ jobs:
           echo "=== Content check ==="
           docker run --rm --entrypoint /bin/bash docker-sonic-vs:latest -c '
             python3 -c "from swsscommon import swsscommon; print(\"swsscommon: OK\")" 2>&1 || echo "swsscommon: FAILED"
-            echo "sonic-cfggen: $(sonic-cfggen --help 2>&1 | head -1 || echo BROKEN)"
+            echo "sonic-cfggen: $(sonic-cfggen --help 2>&1 | head -20 || echo BROKEN)"
             echo "ip: $(ip link show lo 2>&1 | head -1)"
           '
 

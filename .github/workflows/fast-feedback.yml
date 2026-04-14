@@ -1,0 +1,148 @@
+name: Fast Feedback (content check)
+
+# Runs on every push to claude branch.
+# Does NOT build anything — verifies the LAST SUCCESSFUL build's image from GCS.
+
+on:
+  push:
+    branches: [claude]
+  workflow_dispatch:
+
+concurrency:
+  group: fast-feedback-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  content-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download cached VS image from GCS
+        id: download
+        run: |
+          echo "Downloading docker-sonic-vs tarball from GCS..."
+          if curl -fsSL -o /tmp/tarball.sh \
+            "https://storage.googleapis.com/sonic-bazel-cache/vs-images/latest/docker_sonic_vs_tarball.sh" \
+            --max-time 30; then
+            echo "downloaded=true" >> "$GITHUB_OUTPUT"
+            echo "Download succeeded ($(stat -c%s /tmp/tarball.sh) bytes)"
+          else
+            echo "downloaded=false" >> "$GITHUB_OUTPUT"
+            echo "Download failed — no cached image available yet"
+          fi
+
+      - name: Set pending status (no image available)
+        if: steps.download.outputs.downloaded == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: 'pending',
+              context: 'ci/fast-feedback',
+              description: 'Waiting for slow build to produce VS image'
+            });
+            core.info('No cached image — skipping checks, status set to pending');
+
+      - name: Load image
+        if: steps.download.outputs.downloaded == 'true'
+        run: |
+          bash /tmp/tarball.sh
+          docker tag sonic/docker_sonic_vs:latest docker-sonic-vs:latest
+          echo "Image loaded and tagged"
+          docker images docker-sonic-vs:latest
+
+      - name: Content checks
+        if: steps.download.outputs.downloaded == 'true'
+        id: content
+        run: |
+          echo "=== Running content checks ==="
+          RESULT=$(docker run --rm --entrypoint /bin/bash docker-sonic-vs:latest -c '
+            FAIL=0
+
+            echo "--- swsscommon import ---"
+            python3 -c "from swsscommon import swsscommon; print(\"swsscommon: OK\")" 2>&1 || { echo "swsscommon: FAILED"; FAIL=1; }
+
+            echo ""
+            echo "--- sonic-cfggen ---"
+            sonic-cfggen --help 2>&1 | head -20 || { echo "sonic-cfggen: FAILED"; FAIL=1; }
+
+            echo ""
+            echo "--- binary checks ---"
+            for bin in syncd supervisorctl orchestragent redis-server; do
+              LOC=$(which $bin 2>/dev/null || echo "NOT FOUND")
+              echo "$bin: $LOC"
+              [ "$LOC" = "NOT FOUND" ] && FAIL=1
+            done
+
+            echo ""
+            echo "--- network (loopback) ---"
+            ip link show lo 2>&1 || echo "ip link: FAILED"
+
+            echo ""
+            echo "--- summary ---"
+            if [ $FAIL -eq 0 ]; then
+              echo "ALL CHECKS PASSED"
+            else
+              echo "SOME CHECKS FAILED"
+            fi
+            exit $FAIL
+          ') || true
+          echo "$RESULT"
+          if echo "$RESULT" | grep -q "ALL CHECKS PASSED"; then
+            echo "passed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "passed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Quick boot test
+        if: steps.download.outputs.downloaded == 'true'
+        id: boot
+        run: |
+          echo "=== Quick boot test ==="
+          CID=$(docker run -d --privileged docker-sonic-vs:latest)
+          sleep 10
+          CSTATE=$(docker inspect -f '{{.State.Status}}' "$CID" 2>/dev/null || echo "unknown")
+          echo "Container state after 10s: $CSTATE"
+          if [ "$CSTATE" = "running" ]; then
+            echo "boot=true" >> "$GITHUB_OUTPUT"
+            docker exec "$CID" supervisorctl status 2>&1 | head -20 || true
+          else
+            echo "boot=false" >> "$GITHUB_OUTPUT"
+            echo "Container not running — dumping logs:"
+            docker logs "$CID" 2>&1 | tail -30
+          fi
+          docker stop "$CID" 2>/dev/null || true
+          docker rm "$CID" 2>/dev/null || true
+
+      - name: Report commit status
+        if: steps.download.outputs.downloaded == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const contentOk = '${{ steps.content.outputs.passed }}' === 'true';
+            const bootOk = '${{ steps.boot.outputs.boot }}' === 'true';
+            const allOk = contentOk && bootOk;
+            const state = allOk ? 'success' : 'failure';
+            const parts = [];
+            if (!contentOk) parts.push('content');
+            if (!bootOk) parts.push('boot');
+            const desc = allOk
+              ? 'All content checks and boot test passed'
+              : `Failed: ${parts.join(', ')}`;
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state,
+              context: 'ci/fast-feedback',
+              description: desc
+            });
+            if (!allOk) {
+              core.setFailed(desc);
+            }

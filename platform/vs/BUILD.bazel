@@ -62,6 +62,8 @@ slim_apt_layer(
         "@bookworm_libyang2_2.1.30-2_amd64//:data",
         "@bookworm_libprotobuf32_3.21.12-3_amd64//:data",
         "@bookworm_libssl3_3.0.18-1_deb12u2_amd64//:data",
+        # libpcre3: runtime dependency of libyang v1.0.73 (PCRE regex support)
+        "@bookworm_libpcre3_2-8.39-15_amd64//:data",
         # System / transitive runtime deps
         "@bookworm_libsystemd0_252.39-1_deb12u1_amd64//:data",
         "@bookworm_libcap-ng0_0.8.3-1-p-b3_amd64//:data",
@@ -83,12 +85,17 @@ deb_extract_layer(
         "//build/deb/sonic-swss-common:swss_common",
         "//build/deb/sonic-swss-common:python3_swsscommon",
         "//build/deb/sonic-swss-common:sonic_db_cli",
+        # All sairedis aliases resolve to :sairedis_debs genrule which produces
+        # 8 debs including syncd-vs. Any one alias pulls all outputs into $(SRCS).
         "//src/sonic-sairedis:sairedis",
         "//src/sonic-sairedis:saivs",
         "//src/sonic-sairedis:saimetadata",
         "//src/sonic-swss:swss_deb",
         "//src/sonic-dash-api:sonic_dash_api",
         "//src/sonic-stp:stp",
+        # libyang v1.0.73: provides python3-yang (import yang) + libyang.so + libyang-cpp.so
+        # Required by sonic-cfggen → sonic_yang_cfg_generator → sonic_yang → import yang as ly
+        "//src/libyang:libyang_debs",
     ],
     size_budget_mb = 250,
 )

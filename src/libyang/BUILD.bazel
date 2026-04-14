@@ -1,29 +1,123 @@
-"""libyang -- migrated from rules/libyang.mk."""
+"""libyang -- migrated from rules/libyang.mk.
 
-load("//rules/bazel/deb:deb.bzl", "deb_package_set")
+Builds libyang v1.0.73 from CESNET/libyang (tag v1.0-r4) with SONiC
+patches applied, producing three .deb packages via dpkg-buildpackage
+inside a Docker container.
+"""
 
 package(default_visibility = ["//visibility:public"])
 
-deb_package_set(
+# Docker image and apt snapshot matching rules/bazel/deb/deb.bzl.
+_BUILD_IMAGE = "debian:bookworm-slim@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0c2280647e1310bc1642182655d"
+_APT_SNAPSHOT = "20260401T000000Z"
+_APT_SNAPSHOT_URL = "https://snapshot.debian.org/archive/debian/" + _APT_SNAPSHOT
+
+# Build dependencies for libyang.
+_BUILD_DEPS = " ".join([
+    "cmake",
+    "debhelper",
+    "dpkg-dev",
+    "fakeroot",
+    "git",
+    "libpcre3-dev",
+    "python3-dev",
+    "swig",
+    "build-essential",
+    "pkg-config",
+    "doxygen",
+    "graphviz",
+])
+
+# Patch files in application order (from patch/series).
+_PATCHES = [
+    "patch/libyang.patch",
+    "patch/libyang_mgmt_framework.patch",
+    "patch/swig.patch",
+    "patch/large_file_support_arm32.patch",
+    "patch/debian-packaging-files.patch",
+    "patch/libyang-leaf-must.patch",
+    "patch/libyang-with-python-3.12.patch",
+    "patch/libyang-increase-lyht-min-size.patch",
+]
+
+genrule(
     name = "libyang_debs",
-    srcs = glob(
-        ["**/*"],
-        exclude = [
-            ".git/**",
-            "BUILD.bazel",
-        ],
-        allow_empty = True,
-    ),
-    build_deps = [
-        "//src/libpcre3:libpcre3",
+    srcs = _PATCHES + ["patch/series"],
+    outs = [
+        "libyang_1.0.73_amd64.deb",
+        "libyang-cpp_1.0.73_amd64.deb",
+        "python3-yang_1.0.73_amd64.deb",
     ],
-    debian_dir = "debian",
-    declared_outputs = [
-        "libyang_1.0.73_$(ARCH).deb",
-        "libyang-dev_1.0.73_$(ARCH).deb",
-        "libyang-cpp_1.0.73_$(ARCH).deb",
+    cmd = "\n".join([
+        "# Resolve absolute paths before Docker invocation",
+        "PATCH_DIR=$$(cd $$(dirname $(location patch/series)) && pwd)",
+        "STAGING=$$(mktemp -d)",
+        "docker run --rm --platform linux/amd64 \\",
+        "  -v \"$$PATCH_DIR:/patches:ro\" \\",
+        "  -v \"$$STAGING:/output\" \\",
+        "  -e DEBIAN_FRONTEND=noninteractive \\",
+        "  " + _BUILD_IMAGE + " \\",
+        "  bash -o pipefail -c '",
+        "    set -euo pipefail",
+        "    export SOURCE_DATE_EPOCH=0",
+        #
+        # Configure apt to use snapshot mirror for reproducibility.
+        #
+        "    echo \"deb " + _APT_SNAPSHOT_URL + " bookworm main\" > /etc/apt/sources.list",
+        "    echo \"deb https://snapshot.debian.org/archive/debian-security/" + _APT_SNAPSHOT + " bookworm-security main\" >> /etc/apt/sources.list",
+        "    apt-get update -qq",
+        "    apt-get install -y -qq --no-install-recommends " + _BUILD_DEPS,
+        #
+        # Clone libyang source at the exact tag SONiC uses.
+        #
+        "    git clone --branch v1.0-r4 --depth 1 https://github.com/CESNET/libyang.git /tmp/libyang",
+        "    cd /tmp/libyang",
+        #
+        # Apply SONiC patches in series order.
+        # The series file lists patches in order; some are git-format-patch
+        # output and others are plain git-diff. git apply handles both.
+        #
+        "    git config user.email build@sonic",
+        "    git config user.name sonic",
+        "    while IFS= read -r p; do",
+        "      p=$$(echo \"$$p\" | sed \"s/#.*//\" | xargs)",
+        "      [ -z \"$$p\" ] && continue",
+        "      echo \"Applying: $$p\"",
+        "      git apply /patches/\"$$p\"",
+        "      git add -A .",
+        "      git commit -qm \"$$p\"",
+        "    done < /patches/series",
+        #
+        # Build .deb packages.
+        #
+        "    export DEB_BUILD_OPTIONS=nocheck",
+        "    dpkg-buildpackage -rfakeroot -b -us -uc -d -j$$(nproc)",
+        #
+        # Copy outputs.
+        #
+        "    echo \"=== debs produced ===\"",
+        "    ls -lh /tmp/*.deb 2>/dev/null || echo \"NO DEBS\"",
+        "    cp /tmp/libyang_*.deb /output/",
+        "    cp /tmp/libyang-cpp_*.deb /output/",
+        "    cp /tmp/python3-yang_*.deb /output/",
+        "  '",
+        # Copy each declared output from staging to its Bazel output path.
+        "for out in $(OUTS); do",
+        "  base=$$(basename \"$$out\")",
+        "  if [ -f \"$$STAGING/$$base\" ]; then",
+        "    cp \"$$STAGING/$$base\" \"$$out\"",
+        "  else",
+        "    echo \"FAIL: $$base not in staging\"",
+        "    ls \"$$STAGING\"/*.deb 2>/dev/null || true",
+        "    exit 1",
+        "  fi",
+        "done",
+        "rm -rf \"$$STAGING\"",
+    ]),
+    tags = [
+        "requires-docker",
+        "no-sandbox",
     ],
-    version = "1.0.73",
     visibility = ["//visibility:public"],
 )
 

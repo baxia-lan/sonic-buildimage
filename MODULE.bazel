@@ -372,6 +372,7 @@ use_repo(
     "bookworm_libpcre2-8-0_10.42-1_amd64",
     "bookworm_libpcre2-dev_10.42-1_amd64",
     "bookworm_libpcre2-posix3_10.42-1_amd64",
+    "bookworm_libpcre3_2-8.39-15_amd64",
     "bookworm_libperl5.36_5.36.0-7-p-deb12u3_amd64",
     "bookworm_libpgm-5.3-0_5.3.128_dfsg-2_amd64",
     "bookworm_libpgm-dev_5.3.128_dfsg-2_amd64",
