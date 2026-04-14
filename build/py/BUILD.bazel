@@ -155,6 +155,7 @@ genrule(
         "@sonic_pip//tabulate",
         "@sonic_pip//jsonpatch",
         "@sonic_pip//jsonpointer",
+        "@sonic_pip//xmltodict",
         "@sonic_pip//redis_dump_load",
         "@sonic_pip//packaging",
         "@sonic_pip//jinja2",
