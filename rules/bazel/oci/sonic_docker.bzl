@@ -82,9 +82,17 @@ cleanup() { rm -rf "$$TMPDIR"; }
 trap cleanup EXIT
 
 # 1. Extract all apt package tarballs into a staging directory.
+EXTRACT_COUNT=0
+EXTRACT_FAIL=0
 for src in $(SRCS); do
-    tar xf "$$src" -C "$$TMPDIR" 2>/dev/null || true
+    if tar xf "$$src" -C "$$TMPDIR" 2>/dev/null; then
+        EXTRACT_COUNT=$$((EXTRACT_COUNT + 1))
+    else
+        EXTRACT_FAIL=$$((EXTRACT_FAIL + 1))
+        echo "WARNING: failed to extract $$src" >&2
+    fi
 done
+echo "slim_apt_layer: extracted $$EXTRACT_COUNT tarballs, $$EXTRACT_FAIL failed" >&2
 
 # 2. Strip ELF binaries (--strip=always equivalent for pre-built packages).
 #    Gracefully skipped on macOS where strip(1) handles Mach-O, not ELF.
@@ -125,6 +133,14 @@ for d in bin sbin lib; do
         cp -a "$$TMPDIR/$$d/." "$$TMPDIR/usr/$$d/" 2>/dev/null || true
         rm -rf "$$TMPDIR/$$d"
     fi
+done
+
+# Validate: count files and check for key shared libraries
+FILE_COUNT=$$(find "$$TMPDIR" -type f | wc -l)
+echo "slim_apt_layer: $$FILE_COUNT files after processing" >&2
+for lib in libpython3.11 libbpf libbsd libzmq; do
+    found=$$(find "$$TMPDIR" -name "$$lib*" -type f 2>/dev/null | head -1)
+    [ -n "$$found" ] && echo "  $$lib: $$found" >&2 || echo "  $$lib: NOT FOUND" >&2
 done
 
 # 8. Repack filtered contents into a single output tarball.
