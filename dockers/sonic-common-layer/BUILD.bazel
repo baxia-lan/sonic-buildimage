@@ -49,6 +49,8 @@ set -euo pipefail
 STAGING=$$(mktemp -d)
 trap 'rm -rf "$$STAGING"' EXIT
 mkdir -p "$$STAGING/etc"
+mkdir -p "$$STAGING/var/lib/rsyslog"
+mkdir -p "$$STAGING/var/log"
 cp $(location //files/rsyslog:rsyslog.conf) "$$STAGING/etc/rsyslog.conf"
 TAR=tar; for t in /opt/homebrew/bin/gtar /usr/local/bin/gtar gtar; do command -v "$$t" >/dev/null 2>&1 && TAR="$$t" && break; done
 SORT_FLAG=""; $$TAR --sort=name --help >/dev/null 2>&1 && SORT_FLAG="--sort=name"
@@ -68,6 +70,12 @@ slim_apt_layer(
         "@bookworm_iproute2_6.1.0-3_amd64//:data",
         "@bookworm_redis-tools_5-7.0.15-1_deb12u6_amd64//:data",
         "@bookworm_rsyslog_8.2302.0-1-p-deb12u1_amd64//:data",
+        # rsyslog transitive runtime deps — without these, rsyslogd exits
+        # immediately with "error loading module" and supervisord marks it FATAL,
+        # causing start.sh (set -e) to abort before any services start.
+        "@bookworm_libfastjson4_1.2304.0-1_amd64//:data",
+        "@bookworm_liblognorm5_2.0.6-4_amd64//:data",
+        "@bookworm_libestr0_0.1.11-1_amd64//:data",
         "@bookworm_procps_2-4.0.2-3_amd64//:data",
         "@bookworm_jq_1.6-2.1-p-deb12u1_amd64//:data",
         "@bookworm_iputils-ping_3-20221126-1-p-deb12u1_amd64//:data",

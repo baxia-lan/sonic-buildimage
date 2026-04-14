@@ -107,7 +107,18 @@ jobs:
             [ $((i % 6)) -eq 0 ] && echo "  $((i*5+5))s: $SVCCOUNT RUNNING..."
             sleep 5
           done
+          echo "=== Service status ==="
           docker exec $CID supervisorctl status 2>&1 || true
+          if [ "$BOOTED" != true ]; then
+            echo "=== Container logs (last 100 lines) ==="
+            docker logs $CID 2>&1 | tail -100 || true
+            echo "=== start.sh exit details ==="
+            docker exec $CID cat /var/log/syslog 2>/dev/null | tail -50 || true
+            echo "=== rsyslogd library check ==="
+            docker exec $CID ldd /usr/sbin/rsyslogd 2>&1 | grep -i 'not found' || echo "All rsyslog libs found"
+            echo "=== redis-server library check ==="
+            docker exec $CID ldd /usr/bin/redis-server 2>&1 | grep -i 'not found' || echo "All redis libs found"
+          fi
           docker stop $CID 2>/dev/null; docker rm $CID 2>/dev/null
           [ "$BOOTED" = true ] || { echo "FAIL: <6 services in 185s"; exit 1; }
 
