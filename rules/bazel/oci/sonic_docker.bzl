@@ -135,13 +135,10 @@ for d in bin sbin lib; do
     fi
 done
 
-# Validate: count files and check for key shared libraries
+# Validate: ensure extraction produced content
 FILE_COUNT=$$(find "$$TMPDIR" -type f | wc -l)
 echo "slim_apt_layer: $$FILE_COUNT files after processing" >&2
-for lib in libpython3.11 libbpf libbsd libzmq; do
-    found=$$(find "$$TMPDIR" -name "$$lib*" -type f 2>/dev/null | head -1)
-    [ -n "$$found" ] && echo "  $$lib: $$found" >&2 || echo "  $$lib: NOT FOUND" >&2
-done
+[ "$$FILE_COUNT" -gt 0 ] || { echo "ERROR: slim_apt_layer produced no files" >&2; exit 1; }
 
 # 8. Repack filtered contents into a single output tarball.
 #    Use COPYFILE_DISABLE=1 to prevent macOS BSD tar from embedding

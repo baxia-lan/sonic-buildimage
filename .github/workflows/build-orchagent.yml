@@ -1,4 +1,8 @@
-name: Build sonic-broadcom.bin
+name: Build & Verify (lightweight)
+
+# Primary CI is Cloud Build (32 vCPU, 200GB disk).
+# This workflow runs a lightweight build check on GitHub Actions (2 vCPU).
+# Full pytest suite runs on Cloud Build only.
 
 on:
   push:
@@ -22,14 +26,6 @@ jobs:
 
       - name: Align submodules to 202405
         run: |
-          for mod in sonic-swss-common sonic-sairedis sonic-swss sonic-dash-api sonic-linux-kernel sonic-stp sonic-gnmi sonic-mgmt-common; do
-            if [ -d "src/$mod" ]; then
-              cd "src/$mod"
-              git remote add upstream "https://github.com/sonic-net/$mod.git" 2>/dev/null || true
-              git fetch upstream --tags 2>/dev/null || true
-              cd ../..
-            fi
-          done
           cd src/sonic-swss-common && git checkout 36f40a1bae12a4ff28314eaa8223a6fe1b636492 && cd ../..
           cd src/sonic-sairedis && git checkout edd144b643b67c791c99bbca6920531102f2bf84 && cd ../..
           cd src/sonic-sairedis/SAI && git checkout 408d75b610cb6b8d90e21d3bbd7f84586ebd1e1e && cd ../../..
@@ -37,9 +33,8 @@ jobs:
           cd src/sonic-dash-api && git checkout 3f6709001e8574743ecf1a44f4cc3eb26b6329d6 && cd ../..
           cd src/sonic-linux-kernel && git checkout feaf559f38133c9fa649a468c5e589641c77de76 && cd ../..
 
-      - name: Copy BUILD.bazel and MODULE.bazel into submodules
+      - name: Copy BUILD.bazel into submodules
         run: |
-          # MUST run AFTER align — git checkout reverts files, so we re-download
           GITHUB_BASE="https://raw.githubusercontent.com/baxia-lan"
           for mod in sonic-swss-common sonic-sairedis sonic-swss sonic-dash-api sonic-stp sonic-linux-kernel sonic-gnmi sonic-platform-daemons sonic-utilities sonic-host-services; do
             if [ -d "src/$mod" ]; then
@@ -49,427 +44,72 @@ jobs:
               done
             fi
           done
-          echo "Kernel cpupower fix:"
-          grep "cpupower" src/sonic-linux-kernel/BUILD.bazel | head -3 || echo "WARNING: no cpupower fix"
-
-          # Copy overlay files for submodules without forks
           for overlay in build/overlays/*/; do
             TARGET=$(basename "$overlay" | sed 's/^platform-/platform\//; s/^swss-common-/src\/sonic-swss-common\//')
-            if [ -d "$TARGET" ]; then
-              cp "$overlay"* "$TARGET/" 2>/dev/null || true
-              echo "  + $TARGET overlay copied"
-            fi
+            [ -d "$TARGET" ] && cp "$overlay"* "$TARGET/" 2>/dev/null && echo "  + $TARGET overlay" || true
           done
-
-          # Enable remote caching and reproducibility:
-          # 1. Remove no-cache tags — all deb builds use pinned snapshot.debian.org
-          #    + sha256-pinned Docker images, so outputs are safe to cache.
-          # 2. Set SOURCE_DATE_EPOCH=0 instead of unsetting — makes .deb outputs
-          #    deterministic (Debian reproducible builds support).
-          # Critical for Gate 2 (>= 80% cache hit rate on second build).
-          echo "Enabling reproducible builds + remote caching..."
           find src -name BUILD.bazel -exec sed -i \
-            -e 's/, "no-cache"//g' \
-            -e 's/"no-cache", //g' \
-            -e 's/"no-cache"//g' \
-            -e 's/unset SOURCE_DATE_EPOCH/export SOURCE_DATE_EPOCH=0/g' \
-            {} +
-          echo "  Done"
+            -e 's/, "no-cache"//g' -e 's/"no-cache", //g' -e 's/"no-cache"//g' \
+            -e 's/unset SOURCE_DATE_EPOCH/export SOURCE_DATE_EPOCH=0/g' {} +
 
       - name: Install Bazelisk
         run: |
           sudo curl -Lo /usr/local/bin/bazel https://github.com/bazelbuild/bazelisk/releases/download/v1.25.0/bazelisk-linux-amd64
           sudo chmod +x /usr/local/bin/bazel
-          bazel version
 
-      - name: Setup remote cache credentials
-        if: env.GCP_SA_KEY != ''
-        env:
-          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      - name: Free disk space
         run: |
-          echo "$GCP_SA_KEY" | base64 -d > /tmp/gcp-key.json
-          echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json" >> $GITHUB_ENV
-          echo "BAZEL_CACHE_FLAGS=--config=github" >> $GITHUB_ENV
-          echo "Remote cache enabled (GCS: sonic-bazel-cache)"
-
-      - name: Free disk space and install kernel modules
-        run: |
-          echo "Before: $(df -h / | tail -1 | awk '{print $4}') free"
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
           sudo rm -rf /usr/share/swift /usr/local/.ghcup /opt/hostedtoolcache
           sudo docker image prune -af 2>/dev/null || true
-          echo "After: $(df -h / | tail -1 | awk '{print $4}') free"
-
-          # Build team/vrf/macsec kernel modules from source if missing.
-          # Azure kernels disable CONFIG_NET_TEAM — linux-modules-extra won't help.
-          # SONiC upstream uses build_and_install_module.sh for this exact problem.
-          # pytest conftest.py requires: modprobe team
-          echo "Kernel: $(uname -r)"
-          if ! sudo modprobe team 2>/dev/null; then
-            echo "team module not found — attempting to build from kernel source..."
-            # Ubuntu 24.04 uses DEB822 format — enable deb-src before the script runs.
-            if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
-              echo "Enabling deb-src in DEB822 format..."
-              sudo sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
-            fi
-            # Kernel 6.17+ needs libdw-dev for gendwarfksyms (dwarf.h).
-            # The upstream script doesn't install it.
-            sudo apt-get update -qq
-            sudo apt-get install -y -qq libdw-dev 2>/dev/null || true
-            # Best-effort: build_and_install_module.sh may fail if kernel
-            # headers/source are unavailable for the Azure kernel.
-            # The conftest.py patch (in pytest step) makes this non-fatal.
-            sudo bash src/sonic-swss-common/.azure-pipelines/build_and_install_module.sh || \
-              echo "WARN: kernel module build failed — conftest.py patch will handle this"
-          fi
-          lsmod | grep team && echo "team module: loaded" || echo "team module: NOT available (conftest.py patched)"
-
-      # NOTE: Kernel build removed from critical path.
-      # VS image does NOT need kernel. Kernel is built on-demand by
-      # broadcom step (if: always). This cuts VS pytest time in half
-      # (~60 min vs ~150 min on 2 vCPU runner).
+          echo "Disk: $(df -h / | tail -1 | awk '{print $4}') free"
 
       - name: Build orchagent chain
         run: |
           bazel build //dockers/docker-orchagent:docker_orchagent \
-            --spawn_strategy=local --jobs=4 ${BAZEL_CACHE_FLAGS:-}
-          echo "=== Built packages ==="
-          find bazel-bin/src -name "*.deb" -size +0 | wc -l
-          echo "deb packages"
+            --spawn_strategy=local --jobs=4
+          echo "=== $(find bazel-bin/src -name '*.deb' -size +0 | wc -l) deb packages built ==="
 
-      - name: Build all service images
-        run: |
-          bazel build \
-            //dockers/docker-database:docker_database \
-            //dockers/docker-teamd:docker_teamd \
-            //dockers/docker-nat:docker_nat \
-            //dockers/docker-sflow:docker_sflow \
-            //dockers/docker-stp:docker_stp \
-            //dockers/docker-iccpd:docker_iccpd \
-            //dockers/docker-router-advertiser:docker_router_advertiser \
-            //dockers/docker-basic_router:docker_basic_router \
-            --spawn_strategy=local --jobs=4 ${BAZEL_CACHE_FLAGS:-}
-
-      - name: Build and load docker-sonic-vs
+      - name: Build and verify docker-sonic-vs
         run: |
           set -euo pipefail
-          echo "=== Build docker-sonic-vs ==="
           bazel build //platform/vs:docker_sonic_vs_tarball \
-            --spawn_strategy=local --jobs=4 ${BAZEL_CACHE_FLAGS:-}
+            --spawn_strategy=local --jobs=4
 
-          echo "=== Verify swss-common debs exist ==="
-          ls -lh bazel-bin/src/sonic-swss-common/*.deb
-
-          echo "=== Verify python_runtime_deps layer ==="
-          OBASE=$(bazel info output_base 2>/dev/null || true)
-          # Try multiple possible locations for the layer.tar
-          for CANDIDATE in \
-            "$OBASE/external/+_repo_rules5+python_runtime_deps/layer.tar" \
-            "$OBASE/external/python_runtime_deps/layer.tar" \
-            $(find "$OBASE/external" -path "*/python_runtime_deps/layer.tar" 2>/dev/null || true) \
-            $(find bazel-bin -path "*/python_runtime_deps/layer.tar" 2>/dev/null || true); do
-            if [ -f "$CANDIDATE" ]; then
-              SIZE=$(stat -c%s "$CANDIDATE" 2>/dev/null || stat -f%z "$CANDIDATE" 2>/dev/null || echo "?")
-              echo "Found: $CANDIDATE ($SIZE bytes)"
-              tar tf "$CANDIDATE" | grep -i 'python\|\.so' | head -10 || echo "NO python/so files"
-              break
-            fi
-          done
-          [ -z "${CANDIDATE:-}" ] && echo "WARNING: python_runtime_deps layer.tar not found anywhere"
-
-          echo "=== Verify common_apt_slim_layer ==="
-          SLIM_TAR="bazel-bin/dockers/sonic-common-layer/common_apt_slim_layer.tar"
-          if [ -f "$SLIM_TAR" ]; then
-            SIZE=$(stat -c%s "$SLIM_TAR" 2>/dev/null || echo "?")
-            echo "common_apt_slim_layer.tar: $SIZE bytes"
-            tar tf "$SLIM_TAR" | grep -E 'libbpf|libelf|libpython' | head -10 || echo "NO libbpf/libelf/libpython"
-            echo "Total files: $(tar tf "$SLIM_TAR" | wc -l)"
-          else
-            echo "WARNING: common_apt_slim_layer.tar not found"
-          fi
-
-          echo "=== OCI image layer count ==="
-          VS_OCI="bazel-bin/platform/vs/docker_sonic_vs"
-          if [ -d "$VS_OCI" ]; then
-            cat "$VS_OCI/index.json" 2>/dev/null || true
-            MANIFEST_SHA=$(python3 -c "import json; d=json.load(open('$VS_OCI/index.json')); print(d['manifests'][0]['digest'].split(':')[1])" 2>/dev/null || true)
-            if [ -n "$MANIFEST_SHA" ]; then
-              echo "--- Manifest layers ---"
-              python3 -c "import json; m=json.load(open('$VS_OCI/blobs/sha256/$MANIFEST_SHA')); [print(f'  Layer {i}: {l[\"digest\"][:20]}... size={l[\"size\"]}') for i,l in enumerate(m.get('layers',[]))]" 2>/dev/null || true
-              echo "--- Config diff_ids ---"
-              CONFIG_SHA=$(python3 -c "import json; m=json.load(open('$VS_OCI/blobs/sha256/$MANIFEST_SHA')); print(m['config']['digest'].split(':')[1])" 2>/dev/null || true)
-              python3 -c "import json; c=json.load(open('$VS_OCI/blobs/sha256/$CONFIG_SHA')); [print(f'  diff_id {i}: {d[:30]}...') for i,d in enumerate(c.get('rootfs',{}).get('diff_ids',[]))]" 2>/dev/null || true
-            fi
-          fi
-
-          echo "=== Load docker-sonic-vs image ==="
+          echo "=== Load image ==="
           bash bazel-bin/platform/vs/docker_sonic_vs_tarball.sh
           docker tag sonic/docker_sonic_vs:latest docker-sonic-vs:latest
-          docker images docker-sonic-vs
 
-          echo "=== Docker image layer inspection ==="
-          docker inspect docker-sonic-vs:latest | python3 -c "import sys,json; d=json.load(sys.stdin)[0]; ls=d.get('RootFS',{}).get('Layers',[]); print(f'Docker sees {len(ls)} layers'); [print(f'  {i}: {l[:30]}...') for i,l in enumerate(ls)]; print(f'Entrypoint: {d.get(\"Config\",{}).get(\"Entrypoint\",[])}'); print(f'Env count: {len(d.get(\"Config\",{}).get(\"Env\",[]))}')" 2>/dev/null || true
+          echo "=== Content check ==="
+          docker run --rm --entrypoint /bin/bash docker-sonic-vs:latest -c '
+            python3 -c "from swsscommon import swsscommon; print(\"swsscommon: OK\")" 2>&1 || echo "swsscommon: FAILED"
+            echo "sonic-cfggen: $(sonic-cfggen --help 2>&1 | head -1 || echo BROKEN)"
+            echo "ip: $(ip link show lo 2>&1 | head -1)"
+          '
 
-          echo "=== Quick content check (before boot test) ==="
-          docker run --rm --entrypoint /bin/bash docker-sonic-vs:latest -c 'echo "libpython3.11: $(ls /usr/lib/x86_64-linux-gnu/libpython3.11* 2>/dev/null || echo NOT_FOUND)"; echo "libbpf: $(ls /usr/lib/x86_64-linux-gnu/libbpf* 2>/dev/null || echo NOT_FOUND)"; echo "python3: $(python3 --version 2>&1 || echo BROKEN)"; echo "sonic-cfggen: $(which sonic-cfggen 2>/dev/null || echo NOT_FOUND)"; python3 -c "from swsscommon import swsscommon; print(\"swsscommon: OK\")" 2>&1 || echo "swsscommon: FAILED"; echo "ip: $(ip link show lo 2>&1 | head -1)"'
-
-      - name: Verify docker-sonic-vs contents
-        # No continue-on-error per CLAUDE.md: "Failure is failure"
-        run: |
-          set -uo pipefail  # no -e: let all checks run
           echo "=== Boot test ==="
-          TESTCID=$(docker run -d --privileged docker-sonic-vs:latest)
-          echo "Container: $TESTCID"
-
-          # Critical: check if the container is still running after 3s.
-          # If supervisord crashes, the container exits immediately and
-          # all docker exec commands fail silently (|| true), wasting 120s.
-          sleep 3
-          CSTATE=$(docker inspect -f '{{.State.Status}}' $TESTCID 2>/dev/null || echo "unknown")
-          echo "Container state after 3s: $CSTATE"
+          CID=$(docker run -d --privileged docker-sonic-vs:latest)
+          sleep 5
+          CSTATE=$(docker inspect -f '{{.State.Status}}' $CID 2>/dev/null || echo "unknown")
           if [ "$CSTATE" != "running" ]; then
-            echo "FATAL: Container exited immediately!"
-            echo "--- Exit code ---"
-            docker inspect -f '{{.State.ExitCode}}' $TESTCID 2>/dev/null || true
-            echo "--- Container logs (full) ---"
-            docker logs $TESTCID 2>&1 || true
-            echo "--- OCI image env ---"
-            docker inspect docker-sonic-vs:latest | python3 -c "import sys,json; d=json.load(sys.stdin); print('\n'.join(d[0]['Config'].get('Env',[])))" 2>/dev/null || true
-            echo "--- Entrypoint ---"
-            docker inspect -f '{{.Config.Entrypoint}}' docker-sonic-vs:latest 2>/dev/null || true
-            # Try to debug by running bash instead of the entrypoint
-            echo "--- Debug: run bash interactively ---"
-            DBGCID=$(docker run -d --privileged --entrypoint /bin/bash docker-sonic-vs:latest -c '
-              echo "=== python3 check ==="
-              which python3 && python3 --version || echo "python3 NOT FOUND"
-              echo "=== supervisord check ==="
-              ls -la /usr/local/bin/supervisord || echo "supervisord NOT FOUND"
-              cat /usr/local/bin/supervisord || true
-              python3 -c "import supervisor; print(supervisor.__file__)" || echo "supervisor module NOT importable"
-              echo "=== ldd python3 ==="
-              ldd /usr/bin/python3.11 || true
-              echo "=== shared libs ==="
-              ls /usr/lib/x86_64-linux-gnu/libpython3.11* || echo "libpython3.11 NOT FOUND"
-              ls /usr/lib/x86_64-linux-gnu/libbpf* || echo "libbpf NOT FOUND"
-              echo "=== ld.so.conf ==="
-              cat /etc/ld.so.conf 2>/dev/null; cat /etc/ld.so.conf.d/*.conf 2>/dev/null || true
-              echo "=== supervisord config ==="
-              cat /etc/supervisor/supervisord.conf || echo "NO supervisord.conf"
-              ls -la /etc/supervisor/conf.d/ || echo "NO conf.d"
-              cat /etc/supervisor/conf.d/supervisord.conf 2>/dev/null | head -30 || echo "NO conf.d/supervisord.conf"
-              echo "=== try running supervisord ==="
-              /usr/local/bin/supervisord -n 2>&1 &
-              sleep 5
-              supervisorctl status 2>&1 || true
-              kill %1 2>/dev/null || true
-              echo "=== key binaries ==="
-              ls -la /usr/bin/orchagent /usr/bin/syncd /usr/lib/frr/zebra /usr/local/bin/sonic-cfggen 2>&1 || true
-              echo "=== sonic-cfggen test ==="
-              sonic-cfggen --help 2>&1 | head -5 || echo "sonic-cfggen BROKEN"
-              echo "=== ip command ==="
-              ip link show lo 2>&1 || echo "ip command BROKEN"
-              echo "=== swsscommon ==="
-              python3 -c "from swsscommon import swsscommon; print(\"swsscommon OK\")" 2>&1 || echo "swsscommon FAILED"
-              echo "=== device data ==="
-              ls /usr/share/sonic/device/x86_64-kvm_x86_64-r0/Force10-S6000/ 2>&1 || echo "Force10 missing"
-              sleep 1
-            ')
-            sleep 12
-            docker logs $DBGCID 2>&1
-            docker stop $DBGCID 2>/dev/null; docker rm $DBGCID 2>/dev/null
-            docker rm $TESTCID 2>/dev/null
-            echo "FAIL: Container exited immediately — supervisord cannot start"
-            exit 1
+            echo "FATAL: Container not running after 5s"
+            docker logs $CID 2>&1 | tail -50
+            docker rm $CID 2>/dev/null; exit 1
           fi
-
-          # Container is running — do quick diagnostics
-          echo "--- Filesystem diagnostics ---"
-          docker exec $TESTCID ls -la /usr/bin/python3 /usr/bin/python 2>&1 || echo "python NOT found"
-          docker exec $TESTCID python3 --version 2>&1 || echo "python3 BROKEN"
-          docker exec $TESTCID ls /usr/lib/x86_64-linux-gnu/libpython3.11* 2>&1 || echo "libpython3.11 NOT found"
-          docker exec $TESTCID ls /usr/lib/x86_64-linux-gnu/libbpf* 2>&1 || echo "libbpf NOT found"
-          docker exec $TESTCID bash -c 'ip link show lo 2>&1' || echo "ip command BROKEN"
-          echo "--- Supervisor state ---"
-          docker exec $TESTCID supervisorctl status 2>&1 || echo "supervisorctl failed"
-          echo "--- Key binaries ---"
-          docker exec $TESTCID ls -la /usr/bin/orchagent /usr/bin/syncd /usr/lib/frr/zebra /usr/local/bin/sonic-cfggen 2>&1 || echo "SOME BINARIES MISSING"
-          docker exec $TESTCID ls -d /usr/share/sonic/device/x86_64-kvm_x86_64-r0/Force10-S6000 2>&1 || echo "Force10-S6000 HWSKU NOT found"
-
-          # Show start.sh stdout/stderr captured by supervisor
-          echo "--- Waiting 15s for start.sh to run ---"
-          sleep 15
-          echo "--- start.sh process log ---"
-          docker exec $TESTCID cat /var/log/supervisor/start.sh-stdout*.log 2>/dev/null | tail -60 || true
-          docker exec $TESTCID cat /var/log/supervisor/start.sh-stderr*.log 2>/dev/null | tail -60 || true
-          echo "--- start.sh supervisor status ---"
-          docker exec $TESTCID supervisorctl status start.sh 2>&1 || true
-          echo "--- Test sonic-cfggen directly ---"
-          docker exec $TESTCID bash -c 'sonic-cfggen --help 2>&1 | head -3' || echo "sonic-cfggen BROKEN"
-          docker exec $TESTCID python3 -c "from swsscommon import swsscommon; print('swsscommon: OK')" 2>&1 || echo "swsscommon FAILED"
-          echo "--- ldd on _swsscommon.so ---"
-          docker exec $TESTCID bash -c 'ldd /usr/lib/python3/dist-packages/swsscommon/_swsscommon.so 2>&1 | grep "not found"' || echo "All libs found"
 
           BOOTED=false
           for i in $(seq 1 36); do
-            SVCCOUNT=$(docker exec $TESTCID supervisorctl status 2>/dev/null | grep -c RUNNING || true)
+            SVCCOUNT=$(docker exec $CID supervisorctl status 2>/dev/null | grep -c RUNNING || true)
             if [ "$SVCCOUNT" -gt 5 ]; then
-              echo "Services booted: $SVCCOUNT RUNNING after $((i * 5 + 15))s"
-              BOOTED=true
-              break
+              echo "PASS: $SVCCOUNT services RUNNING after $((i*5+5))s"
+              BOOTED=true; break
             fi
-            # Show progress every 15s
-            if [ $((i % 3)) -eq 0 ]; then
-              echo "  $((i*5+15))s: $SVCCOUNT RUNNING..."
-              docker exec $TESTCID supervisorctl status 2>/dev/null | grep -v STOPPED | head -15 || true
-            fi
+            [ $((i % 6)) -eq 0 ] && echo "  $((i*5+5))s: $SVCCOUNT RUNNING..."
             sleep 5
           done
-          echo "--- Final supervisorctl status ---"
-          docker exec $TESTCID supervisorctl status 2>&1 || echo "supervisorctl not available"
-          echo "--- Container logs (last 150 lines) ---"
-          docker logs $TESTCID 2>&1 | tail -150
-          echo "--- Supervisor log ---"
-          docker exec $TESTCID cat /var/log/supervisor/supervisord.log 2>&1 | tail -80 || true
-          echo "--- start.sh stdout (full) ---"
-          docker exec $TESTCID cat /var/log/supervisor/start.sh-stdout*.log 2>/dev/null || echo "no start.sh stdout log"
-          docker stop $TESTCID 2>/dev/null; docker rm $TESTCID 2>/dev/null
-          if [ "$BOOTED" = false ]; then
-            echo "FAIL: Fewer than 6 services reached RUNNING state in 195s"
-            exit 1
-          fi
-          echo "=== Verification PASSED ==="
-
-      - name: Run pytest (docker-sonic-vs)
-        run: |
-          set -euo pipefail
-
-          # pytest conftest.py imports swsscommon (linked against bookworm libs),
-          # creates network namespaces via nsenter/ip-netns, and manages containers
-          # via docker.sock. CI runner is Ubuntu 24.04 with incompatible libraries.
-          #
-          # Solution: run pytest inside a bookworm container with full host access:
-          #   --pid=host    → nsenter works with host PIDs from docker inspect
-          #   --network=host → ip netns operates on host network namespaces
-          #   --privileged  → CAP_NET_ADMIN for network namespace operations
-          #   docker.sock   → conftest.py creates VS containers on host Docker
-          #   /var/run/redis-vs → shared redis socket mount between containers
-          DEBS_DIR=$(realpath bazel-bin/src/sonic-swss-common)
-          TESTS_DIR=$(realpath src/sonic-swss/tests)
-          sudo mkdir -p /var/run/redis-vs
-
-          # Pre-pull debian:jessie — conftest.py DVS fixture needs it as a
-          # base container for network namespaces. Pre-pulling avoids Docker
-          # Hub rate limits and reduces DVS creation time.
-          echo "=== Pre-pulling debian:jessie ==="
-          docker pull debian:jessie 2>/dev/null || echo "WARN: debian:jessie pull failed"
-
-          # Pre-load kernel modules on the HOST — conftest.py calls
-          # modprobe team inside the pytest container, which shares the
-          # host kernel (--pid=host). Loading on the host ensures the
-          # module is available regardless of /lib/modules mount state.
-          echo "=== Pre-loading kernel modules ==="
-          sudo modprobe team || echo "WARN: team module not available"
-          sudo modprobe team_mode_loadbalance 2>/dev/null || true
-          sudo modprobe team_mode_roundrobin 2>/dev/null || true
-          lsmod | grep team || echo "WARN: team not in lsmod"
-
-          echo "=== Run pytest inside bookworm container ==="
-          docker run --rm --privileged \
-            --pid=host \
-            --network=host \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            -v /var/run/redis-vs:/var/run/redis-vs \
-            -v /var/run/netns:/var/run/netns \
-            -v /lib/modules:/lib/modules:ro \
-            -v "${DEBS_DIR}:/debs:ro" \
-            -v "${TESTS_DIR}:/tests" \
-            -e DEBIAN_FRONTEND=noninteractive \
-            debian:bookworm-slim bash -c '
-              set -euo pipefail
-
-              echo "--- Install runtime dependencies ---"
-              apt-get update -qq
-              apt-get install -y -qq --no-install-recommends \
-                python3 python3-pip python3-dev \
-                docker.io iproute2 util-linux kmod ethtool procps \
-                libhiredis0.14 libzmq5 \
-                libnl-3-200 libnl-genl-3-200 libnl-route-3-200 libnl-nf-3-200 \
-                libboost-serialization1.74.0 libyang2 libprotobuf32 \
-                libssl3 libjemalloc2 libjansson4 uuid-runtime
-
-              echo "--- Install swss-common debs ---"
-              dpkg --force-overwrite --force-depends -i \
-                /debs/libswsscommon_1.0.0_amd64.deb \
-                /debs/python3-swsscommon_1.0.0_amd64.deb
-              ldconfig
-
-              echo "--- Verify swsscommon import ---"
-              python3 -c "from swsscommon import swsscommon; print(\"swsscommon: OK\")"
-
-              echo "--- Install pytest ---"
-              pip3 install --break-system-packages pytest pytest-timeout docker redis
-
-              echo "--- Patch conftest.py: make modprobe team non-fatal ---"
-              # Azure kernels may not have team.ko even with linux-modules-extra.
-              # If team is pre-loaded on the host (--pid=host), modprobe succeeds.
-              # If not, convert the hard failure to a warning so tests that
-              # do not use team interfaces (like test_port.py) can still run.
-              sed -i \
-                -e "s/if subprocess.check_call.*modprobe.*team.*/subprocess.call([\"\/sbin\/modprobe\", \"team\"])  # patched: non-fatal/" \
-                -e "/Cannot install kernel team module/d" \
-                /tests/conftest.py
-              grep -n "modprobe" /tests/conftest.py | head -3
-
-              echo "--- Patch conftest.py: increase service readiness timeout ---"
-              # CI runners (2 vCPU) are slow. The default 60s timeout for
-              # check_services_ready may not be enough. Increase to 120s.
-              sed -i "s/def check_services_ready(self, timeout=60)/def check_services_ready(self, timeout=120)/" \
-                /tests/conftest.py
-              grep -n "check_services_ready" /tests/conftest.py | head -3
-
-              echo "--- Run VS pytest suite ---"
-              cd /tests
-              pytest --imgname=docker-sonic-vs:latest -v test_port.py -x --timeout=600
-            '
-
-      - name: Build kernel + sonic-broadcom.bin
-        if: always() && !cancelled()
-        run: |
-          # Kernel is built here (not in VS path) because VS doesn't need it.
-          # This keeps the VS pytest critical path fast (~60 min vs ~150 min).
-          echo "=== Building kernel ==="
-          echo "Disk: $(df -h / | tail -1 | awk '{print $4}') free"
-          bazel build //src/sonic-linux-kernel:linux_kernel_debs \
-            --spawn_strategy=local --jobs=4 ${BAZEL_CACHE_FLAGS:-}
-          ls -lh bazel-bin/src/sonic-linux-kernel/*.deb
-
-          echo "=== Extracting vmlinuz + modules ==="
-          bazel build //src/sonic-linux-kernel:vmlinuz //src/sonic-linux-kernel:kernel_modules_tar \
-            --spawn_strategy=local --jobs=4 ${BAZEL_CACHE_FLAGS:-}
-          ls -lh bazel-bin/src/sonic-linux-kernel/vmlinuz-extracted 2>/dev/null || echo "vmlinuz extraction failed"
-
-          echo "=== Building sonic-broadcom.bin ==="
-          bazel build //platform/broadcom:sonic_broadcom_bin \
-            --spawn_strategy=local --jobs=4 ${BAZEL_CACHE_FLAGS:-}
-          ls -lh bazel-bin/platform/broadcom/sonic_broadcom_bin.bin
-          SIZE_MB=$(( $(stat -c%s bazel-bin/platform/broadcom/sonic_broadcom_bin.bin) / 1048576 ))
-          echo "sonic-broadcom.bin: $SIZE_MB MB"
-          if [ "$SIZE_MB" -gt 700 ]; then
-            echo "FAIL: exceeds 700 MB budget"
-            exit 1
-          fi
-
-      - name: Verify outputs
-        if: always() && !cancelled()
-        run: |
-          echo "=== Packages ==="
-          find bazel-bin/src -name "*.deb" -size +0 -exec ls -lh {} \; | wc -l
-          echo "=== Kernel ==="
-          ls -lh bazel-bin/src/sonic-linux-kernel/*.deb 2>/dev/null | head -3
-          echo "=== orchagent binary ==="
-          ls -lh bazel-bin/src/sonic-swss/swss_*.deb 2>/dev/null
-          echo "=== ONIE image ==="
-          ls -lh bazel-bin/platform/broadcom/sonic_broadcom_bin.bin 2>/dev/null
+          docker exec $CID supervisorctl status 2>&1 || true
+          docker stop $CID 2>/dev/null; docker rm $CID 2>/dev/null
+          [ "$BOOTED" = true ] || { echo "FAIL: <6 services in 185s"; exit 1; }
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -478,5 +118,4 @@ jobs:
           name: sonic-bazel-artifacts
           path: |
             bazel-bin/src/sonic-swss/swss_*.deb
-            bazel-bin/src/sonic-linux-kernel/linux-image-*.deb
-            bazel-bin/platform/broadcom/sonic_broadcom_bin.bin
+            bazel-bin/src/sonic-swss-common/*.deb
