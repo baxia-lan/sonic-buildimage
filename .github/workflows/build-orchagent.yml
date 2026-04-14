@@ -160,19 +160,84 @@ jobs:
           echo "=== Verify swss-common debs exist ==="
           ls -lh bazel-bin/src/sonic-swss-common/*.deb
 
-          echo "=== Verify libpython3.11 layer ==="
-          PYTAR=$(find bazel-bin/external -path "*/python_runtime_deps/layer.tar" 2>/dev/null || true)
-          if [ -n "$PYTAR" ]; then
-            echo "Found: $PYTAR ($(stat -c%s "$PYTAR" 2>/dev/null || stat -f%z "$PYTAR") bytes)"
-            tar tf "$PYTAR" | grep -i python | head -10 || echo "NO python files in layer"
+          echo "=== Verify python_runtime_deps layer ==="
+          OBASE=$(bazel info output_base 2>/dev/null || true)
+          # Try multiple possible locations for the layer.tar
+          for CANDIDATE in \
+            "$OBASE/external/+_repo_rules5+python_runtime_deps/layer.tar" \
+            "$OBASE/external/python_runtime_deps/layer.tar" \
+            $(find "$OBASE/external" -path "*/python_runtime_deps/layer.tar" 2>/dev/null || true) \
+            $(find bazel-bin -path "*/python_runtime_deps/layer.tar" 2>/dev/null || true); do
+            if [ -f "$CANDIDATE" ]; then
+              SIZE=$(stat -c%s "$CANDIDATE" 2>/dev/null || stat -f%z "$CANDIDATE" 2>/dev/null || echo "?")
+              echo "Found: $CANDIDATE ($SIZE bytes)"
+              tar tf "$CANDIDATE" | grep -i 'python\|\.so' | head -10 || echo "NO python/so files"
+              break
+            fi
+          done
+          [ -z "${CANDIDATE:-}" ] && echo "WARNING: python_runtime_deps layer.tar not found anywhere"
+
+          echo "=== Verify common_apt_slim_layer ==="
+          SLIM_TAR="bazel-bin/dockers/sonic-common-layer/common_apt_slim_layer.tar"
+          if [ -f "$SLIM_TAR" ]; then
+            SIZE=$(stat -c%s "$SLIM_TAR" 2>/dev/null || echo "?")
+            echo "common_apt_slim_layer.tar: $SIZE bytes"
+            tar tf "$SLIM_TAR" | grep -E 'libbpf|libelf|libpython' | head -10 || echo "NO libbpf/libelf/libpython"
+            echo "Total files: $(tar tf "$SLIM_TAR" | wc -l)"
           else
-            echo "WARNING: python_runtime_deps layer.tar not found in bazel-bin"
+            echo "WARNING: common_apt_slim_layer.tar not found"
+          fi
+
+          echo "=== OCI image layer count ==="
+          VS_OCI="bazel-bin/platform/vs/docker_sonic_vs"
+          if [ -d "$VS_OCI" ]; then
+            cat "$VS_OCI/index.json" 2>/dev/null || true
+            # Find and show manifest
+            MANIFEST_SHA=$(python3 -c "import json; d=json.load(open('$VS_OCI/index.json')); print(d['manifests'][0]['digest'].split(':')[1])" 2>/dev/null || true)
+            if [ -n "$MANIFEST_SHA" ]; then
+              echo "--- Manifest layers ---"
+              python3 -c "
+import json
+m = json.load(open('$VS_OCI/blobs/sha256/$MANIFEST_SHA'))
+for i, l in enumerate(m.get('layers', [])):
+    print(f'  Layer {i}: {l[\"digest\"][:20]}... size={l[\"size\"]} media={l[\"mediaType\"]}')" 2>/dev/null || true
+              echo "--- Config diff_ids ---"
+              CONFIG_SHA=$(python3 -c "import json; m=json.load(open('$VS_OCI/blobs/sha256/$MANIFEST_SHA')); print(m['config']['digest'].split(':')[1])" 2>/dev/null || true)
+              python3 -c "
+import json
+c = json.load(open('$VS_OCI/blobs/sha256/$CONFIG_SHA'))
+for i, d in enumerate(c.get('rootfs',{}).get('diff_ids',[])):
+    print(f'  diff_id {i}: {d[:30]}...')" 2>/dev/null || true
+            fi
           fi
 
           echo "=== Load docker-sonic-vs image ==="
           bash bazel-bin/platform/vs/docker_sonic_vs_tarball.sh
           docker tag sonic/docker_sonic_vs:latest docker-sonic-vs:latest
           docker images docker-sonic-vs
+
+          echo "=== Docker image layer inspection ==="
+          docker inspect docker-sonic-vs:latest | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+c = data[0]
+layers = c.get('RootFS',{}).get('Layers',[])
+print(f'Docker sees {len(layers)} layers:')
+for i, l in enumerate(layers):
+    print(f'  {i}: {l[:30]}...')
+print(f'Env: {c.get(\"Config\",{}).get(\"Env\",[])}')
+print(f'Entrypoint: {c.get(\"Config\",{}).get(\"Entrypoint\",[])}')
+" 2>/dev/null || true
+
+          echo "=== Quick content check (before boot test) ==="
+          docker run --rm --entrypoint /bin/bash docker-sonic-vs:latest -c '
+            echo "libpython3.11: $(ls /usr/lib/x86_64-linux-gnu/libpython3.11* 2>/dev/null || echo NOT_FOUND)"
+            echo "libbpf: $(ls /usr/lib/x86_64-linux-gnu/libbpf* 2>/dev/null || echo NOT_FOUND)"
+            echo "python3: $(which python3 2>/dev/null && python3 --version 2>&1 || echo NOT_FOUND)"
+            echo "sonic-cfggen: $(which sonic-cfggen 2>/dev/null || echo NOT_FOUND)"
+            echo "swsscommon: $(python3 -c "from swsscommon import swsscommon; print(\"OK\")" 2>&1)"
+            echo "ip: $(ip link show lo 2>&1 | head -1 || echo BROKEN)"
+          '
 
       - name: Verify docker-sonic-vs contents
         # No continue-on-error per CLAUDE.md: "Failure is failure"

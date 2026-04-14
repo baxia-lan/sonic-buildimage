@@ -19,7 +19,11 @@
 
 substitutions:
   _CACHE_BUCKET: "sonic-bazel-cache"
-  _GITHUB_TOKEN: ""  # Set via Cloud Build trigger substitution (optional)
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/yilanji-sandbox-163694/secrets/github-token/versions/latest
+      env: 'GITHUB_TOKEN'
 
 options:
   machineType: "N1_HIGHCPU_32"
@@ -151,13 +155,13 @@ steps:
     args:
       - "-c"
       - |
-        if [ -z "${_GITHUB_TOKEN}" ]; then
-          echo ">>> [github-status] _GITHUB_TOKEN not set, skipping"
+        if [ -z "$$GITHUB_TOKEN" ]; then
+          echo ">>> [github-status] GITHUB_TOKEN not available from Secret Manager, skipping"
           echo ">>> View logs: https://console.cloud.google.com/cloud-build/builds;region=global?project=yilanji-sandbox-163694"
           exit 0
         fi
         curl -fsSL -X POST \
-          -H "Authorization: token ${_GITHUB_TOKEN}" \
+          -H "Authorization: token $$GITHUB_TOKEN" \
           -H "Accept: application/vnd.github.v3+json" \
           "https://api.github.com/repos/baxia-lan/sonic-buildimage/statuses/$COMMIT_SHA" \
           -d "{
@@ -168,6 +172,7 @@ steps:
           }" && echo ">>> [github-status] Pending status set" \
           || echo ">>> [github-status] WARN: Could not set status (non-fatal)"
     waitFor: ["-"]
+    secretEnv: ['GITHUB_TOKEN']
     timeout: "60s"
 
   # ── Step 6: Build kernel ─────────────────────────────────────────────────────
@@ -593,8 +598,8 @@ steps:
     args:
       - "-c"
       - |
-        if [ -z "${_GITHUB_TOKEN}" ]; then
-          echo ">>> [github-status] _GITHUB_TOKEN not set, skipping"
+        if [ -z "$$GITHUB_TOKEN" ]; then
+          echo ">>> [github-status] GITHUB_TOKEN not available from Secret Manager, skipping"
           echo ""
           echo "=== HOW TO VIEW RESULTS ==="
           echo "Console: https://console.cloud.google.com/cloud-build/builds/$BUILD_ID?project=yilanji-sandbox-163694"
@@ -603,7 +608,7 @@ steps:
           exit 0
         fi
         curl -fsSL -X POST \
-          -H "Authorization: token ${_GITHUB_TOKEN}" \
+          -H "Authorization: token $$GITHUB_TOKEN" \
           -H "Accept: application/vnd.github.v3+json" \
           "https://api.github.com/repos/baxia-lan/sonic-buildimage/statuses/$COMMIT_SHA" \
           -d "{
@@ -614,6 +619,7 @@ steps:
           }" && echo ">>> [github-status] Success status set on $COMMIT_SHA" \
           || echo ">>> [github-status] WARN: Could not set final status"
     waitFor: ["upload-summary"]
+    secretEnv: ['GITHUB_TOKEN']
     timeout: "60s"
 
 # ── Artifact storage ─────────────────────────────────────────────────────────

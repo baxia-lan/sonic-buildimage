@@ -29,12 +29,20 @@ def _runtime_deps_repo_impl(rctx):
         rctx.download(url, output = deb_path, sha256 = sha256 if sha256 else "")
 
         # Extract .deb: ar x → data.tar.* → extract to rootfs
-        rctx.execute(["ar", "x", deb_path])
+        ar_result = rctx.execute(["ar", "x", deb_path])
+        if ar_result.return_code != 0:
+            fail("ar x failed for %s: %s" % (pkg_name, ar_result.stderr))
+        found_data = False
         for ext in ["data.tar.xz", "data.tar.zst", "data.tar.gz"]:
             if rctx.path(ext).exists:
-                rctx.execute(["tar", "xf", ext, "-C", rootfs_dir])
+                tar_result = rctx.execute(["tar", "xf", ext, "-C", rootfs_dir])
+                if tar_result.return_code != 0:
+                    fail("tar xf %s failed for %s: %s" % (ext, pkg_name, tar_result.stderr))
                 rctx.execute(["rm", "-f", ext])
+                found_data = True
                 break
+        if not found_data:
+            fail("No data.tar.* found after extracting %s — ar x may have failed silently" % pkg_name)
         rctx.execute(["rm", "-f", deb_path, "debian-binary",
                        "control.tar.xz", "control.tar.gz", "control.tar.zst"])
 
@@ -51,6 +59,12 @@ def _runtime_deps_repo_impl(rctx):
                 rctx.execute(["mkdir", "-p", dst])
                 rctx.execute(["sh", "-c", "cp -a " + src + "/. " + dst + "/"])
                 rctx.execute(["rm", "-rf", src])
+
+    # Validate rootfs has content
+    check = rctx.execute(["find", rootfs_dir, "-type", "f"])
+    file_count = len(check.stdout.strip().split("\n")) if check.stdout.strip() else 0
+    if file_count == 0:
+        fail("rootfs is empty after extracting %d packages — check ar/tar on this platform" % len(rctx.attr.packages))
 
     # Repack into a single tar for OCI layer use
     tar_bin = "tar"
