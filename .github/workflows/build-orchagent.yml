@@ -160,6 +160,15 @@ jobs:
           echo "=== Verify swss-common debs exist ==="
           ls -lh bazel-bin/src/sonic-swss-common/*.deb
 
+          echo "=== Verify libpython3.11 layer ==="
+          PYTAR=$(find bazel-bin/external -path "*/python_runtime_deps/layer.tar" 2>/dev/null || true)
+          if [ -n "$PYTAR" ]; then
+            echo "Found: $PYTAR ($(stat -c%s "$PYTAR" 2>/dev/null || stat -f%z "$PYTAR") bytes)"
+            tar tf "$PYTAR" | grep -i python | head -10 || echo "NO python files in layer"
+          else
+            echo "WARNING: python_runtime_deps layer.tar not found in bazel-bin"
+          fi
+
           echo "=== Load docker-sonic-vs image ==="
           bash bazel-bin/platform/vs/docker_sonic_vs_tarball.sh
           docker tag sonic/docker_sonic_vs:latest docker-sonic-vs:latest
