@@ -5,19 +5,10 @@ No Docker, no apt-get at build time.
 """
 
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
-load("//rules/bazel/oci:docker_layer.bzl", "deb_extract_layer_hermetic")
 load("//rules/bazel/oci:oci.bzl", "sonic_oci_image")
 load("//rules/bazel/oci:sonic_docker.bzl", "slim_apt_layer")
 
 package(default_visibility = ["//visibility:public"])
-
-# ── libpython3.11 shared library (for SWIG bindings) ─────────────────────────
-# Extracted hermetically from the .deb downloaded at fetch time (no Docker).
-# Replaces the broken @python_runtime_deps//:layer approach.
-deb_extract_layer_hermetic(
-    name = "libpython3_11_layer",
-    debs = ["@libpython3_11_deb//file"],
-)
 
 # ── Supervisord config ────────────────────────────────────────────────────────
 # Supervisord config — genrule to place files at correct paths
@@ -114,7 +105,10 @@ sonic_oci_image(
     base = "@debian_bookworm_slim",
     tars = [
         ":common_apt_slim_layer",
-        ":libpython3_11_layer",
+        # libpython3.11.so.1.0 — needed by SWIG bindings (_swsscommon.so).
+        # Uses runtime_deps_repo which extracts during fetch (proven reliable).
+        # deb_extract_layer_hermetic produces empty tars on CI due to ar issues.
+        "@python_runtime_deps//:layer",
         ":supervisord_skel_layer",
         ":rsyslog_layer",
     ],
