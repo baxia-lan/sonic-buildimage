@@ -36,6 +36,10 @@ slim_apt_layer(
         "@bookworm_arping_2.23-1_amd64//:data",
         "@bookworm_ndisc6_1.0.5-1-p-b2_amd64//:data",
         "@bookworm_conntrack_1-1.4.7-1-p-b2_amd64//:data",
+        # conntrack + iptables transitive runtime deps
+        "@bookworm_libnetfilter-conntrack3_1.0.9-3_amd64//:data",
+        "@bookworm_libnfnetlink0_1.0.2-2_amd64//:data",
+        "@bookworm_libnftnl11_1.2.4-2_amd64//:data",
         # Redis
         "@bookworm_redis-server_5-7.0.15-1_deb12u6_amd64//:data",
         "@bookworm_redis-tools_5-7.0.15-1_deb12u6_amd64//:data",
@@ -58,7 +62,12 @@ slim_apt_layer(
         "@bookworm_libyang2_2.1.30-2_amd64//:data",
         "@bookworm_libprotobuf32_3.21.12-3_amd64//:data",
         "@bookworm_libssl3_3.0.18-1_deb12u2_amd64//:data",
-        # System
+        # System / transitive runtime deps
+        "@bookworm_libsystemd0_252.39-1_deb12u1_amd64//:data",
+        "@bookworm_libcap-ng0_0.8.3-1-p-b3_amd64//:data",
+        "@bookworm_libpcap0.8_1.10.3-1_amd64//:data",
+        "@bookworm_libnet1_1.1.6-p-dfsg-3.2_amd64//:data",
+        "@bookworm_liblzf1_3.6-3_amd64//:data",
         "@bookworm_rsyslog_8.2302.0-1-p-deb12u1_amd64//:data",
         "@bookworm_python3_3.11.2-1-p-b1_amd64//:data",
         "@bookworm_libc6_2.36-9-p-deb12u13_amd64//:data",
