@@ -245,7 +245,42 @@ steps:
         echo "$$DEB_COUNT deb packages produced:"
         find bazel-bin/src -name "*.deb" -size +0 2>/dev/null | sort
         echo ">>> [build-orchagent] DONE"
-    waitFor: ["build-kernel"]
+    waitFor: ["copy-build-files", "install-bazelisk"]  # parallel with kernel (no dep)
+    timeout: "3600s"
+
+  # ── Step 7b: Build all service images (parallel with VS build) ──────────────
+  - id: "build-service-images"
+    name: "ubuntu:22.04"
+    entrypoint: "bash"
+    env:
+      - "PATH=/workspace/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      - "HOME=/workspace/.home"
+    args:
+      - "-euo"
+      - "pipefail"
+      - "-c"
+      - |
+        echo ">>> [build-service-images] Installing build dependencies..."
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -qq && apt-get install -y -qq \
+          curl git python3 build-essential fakeroot dpkg-dev >/dev/null 2>&1
+        echo ">>> [build-service-images] Building all service docker images..."
+        bazel --output_user_root=/workspace/.cache/bazel \
+          build \
+            //dockers/docker-database:docker_database \
+            //dockers/docker-teamd:docker_teamd \
+            //dockers/docker-nat:docker_nat \
+            //dockers/docker-sflow:docker_sflow \
+            //dockers/docker-stp:docker_stp \
+            //dockers/docker-iccpd:docker_iccpd \
+            //dockers/docker-router-advertiser:docker_router_advertiser \
+            //dockers/docker-basic_router:docker_basic_router \
+          --config=ci \
+          --spawn_strategy=local \
+          --strategy=CopyToDirectory=local \
+          2>&1
+        echo ">>> [build-service-images] DONE"
+    waitFor: ["build-orchagent"]
     timeout: "3600s"
 
   # ── Step 8: Build docker-sonic-vs ────────────────────────────────────────────
@@ -280,6 +315,58 @@ steps:
           echo ">>> [build-docker-sonic-vs] WARN: No tarball produced"
     waitFor: ["build-orchagent"]
     timeout: "3600s"
+
+  # ── Step 8a: Load and verify docker-sonic-vs ─────────────────────────────────
+  - id: "verify-docker-sonic-vs"
+    name: "gcr.io/cloud-builders/docker"
+    entrypoint: "bash"
+    args:
+      - "-euo"
+      - "pipefail"
+      - "-c"
+      - |
+        echo ">>> [verify-vs] Loading docker-sonic-vs image..."
+        bash bazel-bin/platform/vs/docker_sonic_vs_tarball.sh
+        docker tag sonic/docker_sonic_vs:latest docker-sonic-vs:latest
+        docker images docker-sonic-vs
+
+        echo ">>> [verify-vs] Quick content check..."
+        docker run --rm --entrypoint /bin/bash docker-sonic-vs:latest -c 'echo "python3: $$(python3 --version 2>&1)"; echo "sonic-cfggen: $$(which sonic-cfggen 2>/dev/null || echo NOT_FOUND)"; python3 -c "from swsscommon import swsscommon; print(\"swsscommon: OK\")" 2>&1 || echo "swsscommon: FAILED"; echo "ip: $$(ip link show lo 2>&1 | head -1)"'
+
+        echo ">>> [verify-vs] Boot test..."
+        CID=$$(docker run -d --privileged docker-sonic-vs:latest)
+        sleep 5
+        CSTATE=$$(docker inspect -f '{{.State.Status}}' $$CID 2>/dev/null || echo "unknown")
+        echo "Container state after 5s: $$CSTATE"
+        if [ "$$CSTATE" != "running" ]; then
+          echo "FATAL: Container not running"
+          docker logs $$CID 2>&1 | tail -30
+          docker rm $$CID 2>/dev/null || true
+          exit 1
+        fi
+
+        echo ">>> [verify-vs] Waiting 120s for services..."
+        BOOTED=false
+        for i in $$(seq 1 24); do
+          SVCCOUNT=$$(docker exec $$CID supervisorctl status 2>/dev/null | grep -c RUNNING || true)
+          echo "  $${i}x5s: $$SVCCOUNT services RUNNING"
+          if [ "$$SVCCOUNT" -gt 5 ]; then
+            echo ">>> [verify-vs] Services booted: $$SVCCOUNT RUNNING"
+            BOOTED=true
+            break
+          fi
+          sleep 5
+        done
+        docker exec $$CID supervisorctl status 2>&1 || true
+        docker stop $$CID 2>/dev/null; docker rm $$CID 2>/dev/null || true
+        if [ "$$BOOTED" = "true" ]; then
+          echo ">>> [verify-vs] PASS"
+        else
+          echo ">>> [verify-vs] FAIL: Fewer than 6 services reached RUNNING"
+          exit 1
+        fi
+    waitFor: ["build-docker-sonic-vs"]
+    timeout: "600s"
 
   # ── Step 8b: swss-common unit tests ──────────────────────────────────────────
   - id: "swss-common-unit-tests"
@@ -496,7 +583,7 @@ steps:
               -x --timeout=600
           '
         echo ">>> [pytest-vs] ALL TESTS PASSED"
-    waitFor: ["build-docker-sonic-vs"]
+    waitFor: ["verify-docker-sonic-vs"]
     timeout: "3600s"
 
   # ── Step 10: Build sonic-broadcom.bin ────────────────────────────────────────
@@ -588,7 +675,7 @@ steps:
         gsutil cp "$$SUMMARY" "gs://${_CACHE_BUCKET}/ci-results/$BUILD_ID/summary.txt" 2>/dev/null && \
           echo ">>> Uploaded: gs://${_CACHE_BUCKET}/ci-results/$BUILD_ID/summary.txt" || \
           echo ">>> WARN: GCS upload failed (check bucket permissions)"
-    waitFor: ["build-kernel", "build-orchagent", "build-docker-sonic-vs", "build-broadcom-bin"]
+    waitFor: ["build-kernel", "build-orchagent", "verify-docker-sonic-vs", "build-broadcom-bin"]
     timeout: "120s"
 
   # ── Step 12: GitHub final status ─────────────────────────────────────────────
