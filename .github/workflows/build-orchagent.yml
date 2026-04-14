@@ -256,30 +256,46 @@ jobs:
           docker exec $TESTCID ls -la /usr/bin/orchagent /usr/bin/syncd /usr/lib/frr/zebra /usr/local/bin/sonic-cfggen 2>&1 || echo "SOME BINARIES MISSING"
           docker exec $TESTCID ls -d /usr/share/sonic/device/x86_64-kvm_x86_64-r0/Force10-S6000 2>&1 || echo "Force10-S6000 HWSKU NOT found"
 
+          # Show start.sh stdout/stderr captured by supervisor
+          echo "--- Waiting 15s for start.sh to run ---"
+          sleep 15
+          echo "--- start.sh process log ---"
+          docker exec $TESTCID cat /var/log/supervisor/start.sh-stdout*.log 2>/dev/null | tail -60 || true
+          docker exec $TESTCID cat /var/log/supervisor/start.sh-stderr*.log 2>/dev/null | tail -60 || true
+          echo "--- start.sh supervisor status ---"
+          docker exec $TESTCID supervisorctl status start.sh 2>&1 || true
+          echo "--- Test sonic-cfggen directly ---"
+          docker exec $TESTCID bash -c 'sonic-cfggen --help 2>&1 | head -3' || echo "sonic-cfggen BROKEN"
+          docker exec $TESTCID python3 -c "from swsscommon import swsscommon; print('swsscommon: OK')" 2>&1 || echo "swsscommon FAILED"
+          echo "--- ldd on _swsscommon.so ---"
+          docker exec $TESTCID bash -c 'ldd /usr/lib/python3/dist-packages/swsscommon/_swsscommon.so 2>&1 | grep "not found"' || echo "All libs found"
+
           BOOTED=false
           for i in $(seq 1 36); do
             SVCCOUNT=$(docker exec $TESTCID supervisorctl status 2>/dev/null | grep -c RUNNING || true)
             if [ "$SVCCOUNT" -gt 5 ]; then
-              echo "Services booted: $SVCCOUNT RUNNING after $((i * 5))s"
+              echo "Services booted: $SVCCOUNT RUNNING after $((i * 5 + 15))s"
               BOOTED=true
               break
             fi
-            # Show progress every 30s
-            if [ $((i % 6)) -eq 0 ]; then
-              echo "  ${i}x5s: $SVCCOUNT services RUNNING..."
-              docker exec $TESTCID supervisorctl status 2>/dev/null | head -10 || true
+            # Show progress every 15s
+            if [ $((i % 3)) -eq 0 ]; then
+              echo "  $((i*5+15))s: $SVCCOUNT RUNNING..."
+              docker exec $TESTCID supervisorctl status 2>/dev/null | grep -v STOPPED | head -15 || true
             fi
             sleep 5
           done
           echo "--- Final supervisorctl status ---"
           docker exec $TESTCID supervisorctl status 2>&1 || echo "supervisorctl not available"
-          echo "--- Container logs (last 100 lines) ---"
-          docker logs $TESTCID 2>&1 | tail -100
+          echo "--- Container logs (last 150 lines) ---"
+          docker logs $TESTCID 2>&1 | tail -150
           echo "--- Supervisor log ---"
-          docker exec $TESTCID cat /var/log/supervisor/supervisord.log 2>&1 | tail -50 || true
+          docker exec $TESTCID cat /var/log/supervisor/supervisord.log 2>&1 | tail -80 || true
+          echo "--- start.sh stdout (full) ---"
+          docker exec $TESTCID cat /var/log/supervisor/start.sh-stdout*.log 2>/dev/null || echo "no start.sh stdout log"
           docker stop $TESTCID 2>/dev/null; docker rm $TESTCID 2>/dev/null
           if [ "$BOOTED" = false ]; then
-            echo "FAIL: Fewer than 6 services reached RUNNING state in 180s"
+            echo "FAIL: Fewer than 6 services reached RUNNING state in 195s"
             exit 1
           fi
           echo "=== Verification PASSED ==="
