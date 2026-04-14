@@ -114,9 +114,18 @@ coverage.xml
 test-results.xml
 htmlcov/
 
+# Bazel build artifacts
+/bazel-bin
+/bazel-out
+/bazel-testlogs
+/bazel-workspace
+/bazel-sonic-buildimage-claude
+MODULE.bazel.lock
+
 # Dev tools
 .vscode/
 .idea/
+.claude/
 
 # Debian mirror Sources
 sources.list.*
