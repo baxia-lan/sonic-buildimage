@@ -93,6 +93,15 @@ slim_apt_layer(
         "@bookworm_libmnl0_1.0.4-3_amd64//:data",
         "@bookworm_libbsd0_0.11.7-2_amd64//:data",
         "@bookworm_libmd0_1.0.4-2_amd64//:data",
+        # Kerberos/GSSAPI — transitive deps of libssl3 and libhiredis.
+        # Without these: _swsscommon.so import fails with
+        # "libgssapi_krb5.so.2 => not found"
+        "@bookworm_libgssapi-krb5-2_1.20.1-2-p-deb12u4_amd64//:data",
+        "@bookworm_libkrb5-3_1.20.1-2-p-deb12u4_amd64//:data",
+        "@bookworm_libk5crypto3_1.20.1-2-p-deb12u4_amd64//:data",
+        "@bookworm_libkrb5support0_1.20.1-2-p-deb12u4_amd64//:data",
+        "@bookworm_libkeyutils1_1.6.3-2_amd64//:data",
+        "@bookworm_libcom-err2_1.47.0-2-p-b2_amd64//:data",
     ],
 )
 
