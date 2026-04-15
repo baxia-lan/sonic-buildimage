@@ -247,6 +247,55 @@ _http_file(
     downloaded_file_path = "phy-credo_1.0_amd64.deb",
 )
 
+# ── Broadcom SAI libraries (pre-built, from packages.trafficmanager.net) ─────
+# These are proprietary binary packages used only for Gate 3 (sonic-broadcom.bin).
+# Three ASIC families: XGS (Tomahawk), DNX (Jericho2), Legacy-TH.
+# URLs and versions from platform/broadcom/sai-{xgs,dnx,legacy-th}.mk.
+_SAI_PREFIX = "https://packages.trafficmanager.net/public/sai/sai-broadcom"
+
+_http_file(
+    name = "libsaibcm_xgs",
+    url = _SAI_PREFIX + "/SAI_14.3.0_GA/14.3.0.0.0.0.3.0/xgs/libsaibcm_14.3.0.0.0.0.3.0_amd64.deb",
+    sha256 = "edf3d123e3e64c50ab94002297da232ffc72e3003da5ed52644baa8bb94ad6d2",
+    downloaded_file_path = "libsaibcm_14.3.0.0.0.0.3.0_amd64.deb",
+)
+
+_http_file(
+    name = "libsaibcm_xgs_dev",
+    url = _SAI_PREFIX + "/SAI_14.3.0_GA/14.3.0.0.0.0.3.0/xgs/libsaibcm-dev_14.3.0.0.0.0.3.0_amd64.deb",
+    sha256 = "f8e188aac6764cc16f642f03392c1d4dc89d0510c7e52ab2121d59a30c716b2e",
+    downloaded_file_path = "libsaibcm-dev_14.3.0.0.0.0.3.0_amd64.deb",
+)
+
+_http_file(
+    name = "libsaibcm_dnx",
+    url = _SAI_PREFIX + "/SAI_14.1.0_GA/14.1.0.1.0.0.13.1/dnx/libsaibcm_dnx_14.1.0.1.0.0.13.1_amd64.deb",
+    sha256 = "4775c37a08e7d0158d80821e055075f10fbb12ee7c88e0d11c8452c3c58e84d9",
+    downloaded_file_path = "libsaibcm_dnx_14.1.0.1.0.0.13.1_amd64.deb",
+)
+
+_http_file(
+    name = "libsaibcm_legacy_th",
+    url = _SAI_PREFIX + "/SAI_13.2.1_compat_OCP1.17.1/13.2.1.100/xgs/libsaibcm_13.2.1.100_amd64.deb",
+    sha256 = "f8685aed6dfc87d3e589ac2b0cbf6347701ec2fdaa0d74ca2005755ac3d0c32a",
+    downloaded_file_path = "libsaibcm_13.2.1.100_amd64.deb",
+)
+
+# Broadcom utility binaries
+_http_file(
+    name = "bcmcmd",
+    url = "https://packages.trafficmanager.net/public/20190307/bcmcmd",
+    sha256 = "cbbbd78fd0221a8c6eaca80bf51defdd4c9ab185aead725bd1ea10a0cb332bed",
+    downloaded_file_path = "bcmcmd",
+)
+
+_http_file(
+    name = "dsserve",
+    url = "https://packages.trafficmanager.net/public/20190307/dsserve",
+    sha256 = "34100d9c98ea00822a1e071cd49967e0a0cb4ed4b626305d9979ff81aaacd251",
+    downloaded_file_path = "dsserve",
+)
+
 # ── Debian packages (hermetic, resolved at fetch time) ───────────────────────
 # All runtime and build-time Debian packages resolved from pinned snapshots.
 # No apt-get runs during build actions.
