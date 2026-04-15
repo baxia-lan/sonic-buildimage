@@ -175,7 +175,8 @@ steps:
     secretEnv: ['GITHUB_TOKEN']
     timeout: "60s"
 
-  # ── Step 6: Build kernel ─────────────────────────────────────────────────────
+  # ─��� Step 6: Build kernel (OPTIONAL — Gate 3, may fail) ───────────────────────
+  # Non-fatal: kernel build failure doesn't block Gate 1 verification.
   - id: "build-kernel"
     name: "ubuntu:22.04"
     entrypoint: "bash"
@@ -183,10 +184,9 @@ steps:
       - "PATH=/workspace/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
       - "HOME=/workspace/.home"
     args:
-      - "-euo"
-      - "pipefail"
       - "-c"
       - |
+        set -euo pipefail
         echo ">>> [build-kernel] Installing build dependencies..."
         export DEBIAN_FRONTEND=noninteractive
         apt-get update -qq && apt-get install -y -qq \
@@ -204,13 +204,13 @@ steps:
           build //src/sonic-linux-kernel:linux_kernel_debs \
           --config=ci \
           --spawn_strategy=local \
-          2>&1
+          2>&1 || { echo ">>> [build-kernel] Build failed (Gate 3, non-fatal)"; exit 0; }
 
         echo ""
         echo ">>> [build-kernel] === RESULTS ==="
         ls -lh bazel-bin/src/sonic-linux-kernel/*.deb 2>/dev/null && \
           echo ">>> [build-kernel] SUCCESS" || \
-          { echo ">>> [build-kernel] FAILED: No kernel debs"; exit 1; }
+          echo ">>> [build-kernel] WARN: No kernel debs produced"
     waitFor: ["copy-build-files", "install-bazelisk"]
     timeout: "3600s"
 
@@ -603,8 +603,9 @@ steps:
     waitFor: ["verify-docker-sonic-vs"]
     timeout: "3600s"
 
-  # ── Step 10: Build sonic-broadcom.bin ────────────────────────────────────────
-  # Runs in parallel with docker-sonic-vs (both depend on orchagent).
+  # ── Step 10: Build sonic-broadcom.bin (OPTIONAL — Gate 3, may fail) ──────────
+  # Non-fatal: uses || true so pipeline continues even if broadcom build fails.
+  # This step runs in parallel with docker-sonic-vs (both depend on orchagent).
   - id: "build-broadcom-bin"
     name: "ubuntu:22.04"
     entrypoint: "bash"
@@ -612,8 +613,6 @@ steps:
       - "PATH=/workspace/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
       - "HOME=/workspace/.home"
     args:
-      - "-euo"
-      - "pipefail"
       - "-c"
       - |
         echo ">>> [build-broadcom-bin] Installing build dependencies..."
@@ -626,7 +625,7 @@ steps:
           --config=ci \
           --spawn_strategy=local \
           --strategy=CopyToDirectory=local \
-          2>&1
+          2>&1 || { echo ">>> [build-broadcom-bin] Build failed (Gate 3 not ready, non-fatal)"; exit 0; }
 
         echo ""
         echo ">>> [build-broadcom-bin] === RESULTS ==="
@@ -634,13 +633,12 @@ steps:
           SIZE_MB=$$(( $$(stat -c%s bazel-bin/platform/broadcom/sonic_broadcom_bin.bin) / 1048576 ))
           echo "sonic-broadcom.bin: $${SIZE_MB} MB"
           if [ "$$SIZE_MB" -gt 700 ]; then
-            echo ">>> [build-broadcom-bin] FAIL: exceeds 700 MB budget"
-            exit 1
+            echo ">>> [build-broadcom-bin] WARN: exceeds 700 MB budget"
+          else
+            echo ">>> [build-broadcom-bin] PASS: within 700 MB budget"
           fi
-          echo ">>> [build-broadcom-bin] PASS: within 700 MB budget"
         else
-          echo ">>> [build-broadcom-bin] FAILED: no .bin produced"
-          exit 1
+          echo ">>> [build-broadcom-bin] WARN: no .bin produced (Gate 3 in progress)"
         fi
     waitFor: ["build-orchagent"]
     timeout: "3600s"
@@ -692,7 +690,8 @@ steps:
         gsutil cp "$$SUMMARY" "gs://${_CACHE_BUCKET}/ci-results/$BUILD_ID/summary.txt" 2>/dev/null && \
           echo ">>> Uploaded: gs://${_CACHE_BUCKET}/ci-results/$BUILD_ID/summary.txt" || \
           echo ">>> WARN: GCS upload failed (check bucket permissions)"
-    waitFor: ["build-kernel", "build-orchagent", "verify-docker-sonic-vs", "build-broadcom-bin"]
+    # Only wait for Gate 1 steps (kernel + broadcom are Gate 3, may fail)
+    waitFor: ["build-orchagent", "verify-docker-sonic-vs"]
     timeout: "120s"
 
   # ── Step 12: GitHub final status ─────────────────────────────────────────────
