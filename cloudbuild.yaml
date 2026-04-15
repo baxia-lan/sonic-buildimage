@@ -331,7 +331,11 @@ steps:
         docker images docker-sonic-vs
 
         echo ">>> [verify-vs] Quick content check..."
-        docker run --rm --entrypoint /bin/bash docker-sonic-vs:latest -c 'echo "python3: $$(python3 --version 2>&1)"; echo "sonic-cfggen: $$(which sonic-cfggen 2>/dev/null || echo NOT_FOUND)"; python3 -c "from swsscommon import swsscommon; print(\"swsscommon: OK\")" 2>&1 || echo "swsscommon: FAILED"; echo "ip: $$(ip link show lo 2>&1 | head -1)"'
+        docker run --rm --entrypoint /bin/bash docker-sonic-vs:latest -c '
+          python3 -c "from swsscommon import swsscommon; print(\"swsscommon: OK\")" 2>&1 || echo "swsscommon: FAILED"
+          echo "sonic-cfggen: $$(sonic-cfggen --help 2>&1 | head -3 || echo BROKEN)"
+          echo "ip: $$(ip link show lo 2>&1 | head -1)"
+        '
 
         echo ">>> [verify-vs] Boot test..."
         CID=$$(docker run -d --privileged docker-sonic-vs:latest)
@@ -357,7 +361,20 @@ steps:
           fi
           sleep 5
         done
+        echo ">>> [verify-vs] === Service status ==="
         docker exec $$CID supervisorctl status 2>&1 || true
+        if [ "$$BOOTED" != "true" ]; then
+          echo ">>> [verify-vs] === Container logs (last 100 lines) ==="
+          docker logs $$CID 2>&1 | tail -100 || true
+          echo ">>> [verify-vs] === start.sh exit details ==="
+          docker exec $$CID cat /var/log/syslog 2>/dev/null | tail -50 || true
+          echo ">>> [verify-vs] === rsyslogd library check ==="
+          docker exec $$CID ldd /usr/sbin/rsyslogd 2>&1 | grep -i 'not found' || echo "All rsyslog libs found"
+          echo ">>> [verify-vs] === redis-server library check ==="
+          docker exec $$CID ldd /usr/bin/redis-server 2>&1 | grep -i 'not found' || echo "All redis libs found"
+          echo ">>> [verify-vs] === syncd library check ==="
+          docker exec $$CID ldd /usr/bin/syncd 2>&1 | grep -i 'not found' || echo "All syncd libs found"
+        fi
         docker stop $$CID 2>/dev/null; docker rm $$CID 2>/dev/null || true
         if [ "$$BOOTED" = "true" ]; then
           echo ">>> [verify-vs] PASS"
