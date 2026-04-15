@@ -353,6 +353,8 @@ slim_apt_layer(
         "@bookworm_libyang2_2.1.30-2_amd64//:data",
         "@bookworm_libcap2_1-2.66-4-p-deb12u2-p-b2_amd64//:data",
         "@bookworm_libreadline8_8.2-1.3_amd64//:data",
+        "@bookworm_libtinfo6_6.4-4_amd64//:data",  # libreadline8 transitive dep
+        "@bookworm_libncursesw6_6.4-4_amd64//:data",  # libreadline8 transitive dep
         "@bookworm_libpam0g_1.5.2-6-p-deb12u2_amd64//:data",
         # jq removed — now provided by vs_runtime_apt with all transitive deps
     ],

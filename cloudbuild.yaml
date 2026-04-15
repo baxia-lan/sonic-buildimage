@@ -175,8 +175,43 @@ steps:
     secretEnv: ['GITHUB_TOKEN']
     timeout: "60s"
 
-  # ─��� Step 6: Build kernel (OPTIONAL — Gate 3, may fail) ───────────────────────
+  # ── Step 6: Build orchagent chain (Gate 1 critical path) ──────────────────────
+  - id: "build-orchagent"
+    name: "ubuntu:22.04"
+    entrypoint: "bash"
+    env:
+      - "PATH=/workspace/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      - "HOME=/workspace/.home"
+    args:
+      - "-euo"
+      - "pipefail"
+      - "-c"
+      - |
+        echo ">>> [build-orchagent] Installing build dependencies..."
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -qq && apt-get install -y -qq \
+          curl git python3 build-essential bc bison flex \
+          libssl-dev libelf-dev fakeroot dpkg-dev >/dev/null 2>&1
+        echo ">>> [build-orchagent] Starting orchagent chain build..."
+        bazel --output_user_root=/workspace/.cache/bazel \
+          build //dockers/docker-orchagent:docker_orchagent \
+          --config=ci \
+          --spawn_strategy=local \
+          --strategy=CopyToDirectory=local \
+          2>&1
+
+        echo ""
+        echo ">>> [build-orchagent] === RESULTS ==="
+        DEB_COUNT=$$(find bazel-bin/src -name "*.deb" -size +0 2>/dev/null | wc -l)
+        echo "$$DEB_COUNT deb packages produced:"
+        find bazel-bin/src -name "*.deb" -size +0 2>/dev/null | sort
+        echo ">>> [build-orchagent] DONE"
+    waitFor: ["copy-build-files", "install-bazelisk"]  # parallel with kernel (no dep)
+    timeout: "3600s"
+
+  # ── Step 7: Build kernel (OPTIONAL — Gate 3, may fail) ──────────────────────
   # Non-fatal: kernel build failure doesn't block Gate 1 verification.
+  # Must run AFTER build-orchagent — both share the same Bazel output base.
   - id: "build-kernel"
     name: "ubuntu:22.04"
     entrypoint: "bash"
@@ -212,40 +247,6 @@ steps:
           echo ">>> [build-kernel] SUCCESS" || \
           echo ">>> [build-kernel] WARN: No kernel debs produced"
     waitFor: ["build-orchagent"]  # Must wait — same Bazel output base, lock contention
-    timeout: "3600s"
-
-  # ── Step 7: Build orchagent chain ────────────────────────────────────────────
-  - id: "build-orchagent"
-    name: "ubuntu:22.04"
-    entrypoint: "bash"
-    env:
-      - "PATH=/workspace/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-      - "HOME=/workspace/.home"
-    args:
-      - "-euo"
-      - "pipefail"
-      - "-c"
-      - |
-        echo ">>> [build-orchagent] Installing build dependencies..."
-        export DEBIAN_FRONTEND=noninteractive
-        apt-get update -qq && apt-get install -y -qq \
-          curl git python3 build-essential bc bison flex \
-          libssl-dev libelf-dev fakeroot dpkg-dev >/dev/null 2>&1
-        echo ">>> [build-orchagent] Starting orchagent chain build..."
-        bazel --output_user_root=/workspace/.cache/bazel \
-          build //dockers/docker-orchagent:docker_orchagent \
-          --config=ci \
-          --spawn_strategy=local \
-          --strategy=CopyToDirectory=local \
-          2>&1
-
-        echo ""
-        echo ">>> [build-orchagent] === RESULTS ==="
-        DEB_COUNT=$$(find bazel-bin/src -name "*.deb" -size +0 2>/dev/null | wc -l)
-        echo "$$DEB_COUNT deb packages produced:"
-        find bazel-bin/src -name "*.deb" -size +0 2>/dev/null | sort
-        echo ">>> [build-orchagent] DONE"
-    waitFor: ["copy-build-files", "install-bazelisk"]  # parallel with kernel (no dep)
     timeout: "3600s"
 
   # ── Step 7b: Build all service images (parallel with VS build) ──────────────
