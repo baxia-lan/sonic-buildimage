@@ -43,6 +43,9 @@ slim_apt_layer(
         # Redis
         "@bookworm_redis-server_5-7.0.15-1_deb12u6_amd64//:data",
         "@bookworm_redis-tools_5-7.0.15-1_deb12u6_amd64//:data",
+        # redis-server transitive dep — without libatomic1, redis-server
+        # exits immediately (FATAL) and start.sh aborts via set -e.
+        "@bookworm_libatomic1_12.2.0-14-p-deb12u1_amd64//:data",
         # Python
         "@bookworm_python3-protobuf_3.21.12-3_amd64//:data",
         "@bookworm_python3-netifaces_0.11.0-2-p-b1_amd64//:data",
