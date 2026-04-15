@@ -211,7 +211,7 @@ steps:
         ls -lh bazel-bin/src/sonic-linux-kernel/*.deb 2>/dev/null && \
           echo ">>> [build-kernel] SUCCESS" || \
           echo ">>> [build-kernel] WARN: No kernel debs produced"
-    waitFor: ["copy-build-files", "install-bazelisk"]
+    waitFor: ["build-orchagent"]  # Must wait — same Bazel output base, lock contention
     timeout: "3600s"
 
   # ── Step 7: Build orchagent chain ────────────────────────────────────────────
@@ -374,6 +374,10 @@ steps:
           docker exec $$CID ldd /usr/bin/redis-server 2>&1 | grep -i 'not found' || echo "All redis libs found"
           echo ">>> [verify-vs] === syncd library check ==="
           docker exec $$CID ldd /usr/bin/syncd 2>&1 | grep -i 'not found' || echo "All syncd libs found"
+          echo ">>> [verify-vs] === jq check ==="
+          docker exec $$CID jq --version 2>&1 || echo "jq: NOT FOUND"
+          echo ">>> [verify-vs] === supervisord log (syncd/orchagent lines) ==="
+          docker logs $$CID 2>&1 | grep -E 'syncd|orchagent|start\.sh' | tail -30 || true
         fi
         docker stop $$CID 2>/dev/null; docker rm $$CID 2>/dev/null || true
         if [ "$$BOOTED" = "true" ]; then

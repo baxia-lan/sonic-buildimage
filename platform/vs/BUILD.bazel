@@ -46,6 +46,12 @@ slim_apt_layer(
         # redis-server transitive dep — without libatomic1, redis-server
         # exits immediately (FATAL) and start.sh aborts via set -e.
         "@bookworm_libatomic1_12.2.0-14-p-deb12u1_amd64//:data",
+        # jq — used by syncd_init_common.sh and orchagent.sh to parse JSON
+        # from sonic-cfggen.  Without jq, syncd gets "Unknown ASIC type"
+        # and exits → start.sh dies via set -e.
+        "@bookworm_jq_1.6-2.1-p-deb12u1_amd64//:data",
+        "@bookworm_libjq1_1.6-2.1-p-deb12u1_amd64//:data",
+        "@bookworm_libonig5_6.9.8-1_amd64//:data",
         # Python
         "@bookworm_python3-protobuf_3.21.12-3_amd64//:data",
         "@bookworm_python3-netifaces_0.11.0-2-p-b1_amd64//:data",
@@ -348,7 +354,7 @@ slim_apt_layer(
         "@bookworm_libcap2_1-2.66-4-p-deb12u2-p-b2_amd64//:data",
         "@bookworm_libreadline8_8.2-1.3_amd64//:data",
         "@bookworm_libpam0g_1.5.2-6-p-deb12u2_amd64//:data",
-        "@bookworm_jq_1.6-2.1-p-deb12u1_amd64//:data",
+        # jq removed — now provided by vs_runtime_apt with all transitive deps
     ],
 )
 
