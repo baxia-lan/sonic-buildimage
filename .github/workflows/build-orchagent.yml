@@ -100,9 +100,16 @@ jobs:
           BOOTED=false
           for i in $(seq 1 36); do
             SVCCOUNT=$(docker exec $CID supervisorctl status 2>/dev/null | grep -c RUNNING || true)
-            if [ "$SVCCOUNT" -gt 5 ]; then
-              echo "PASS: $SVCCOUNT services RUNNING after $((i*5+5))s"
-              BOOTED=true; break
+            if [ "$SVCCOUNT" -gt 5 ] && [ "$BOOTED" != true ]; then
+              echo "PASS: $SVCCOUNT services RUNNING after $((i*5+5))s — waiting 10s more for full count"
+              BOOTED=true
+            fi
+            if [ "$BOOTED" = true ]; then
+              # Wait up to 30s more after threshold to capture full service count
+              sleep 10
+              FINAL=$(docker exec $CID supervisorctl status 2>/dev/null | grep -c RUNNING || true)
+              echo "Final count: $FINAL services RUNNING after $((i*5+15))s"
+              break
             fi
             [ $((i % 6)) -eq 0 ] && echo "  $((i*5+5))s: $SVCCOUNT RUNNING..."
             sleep 5
