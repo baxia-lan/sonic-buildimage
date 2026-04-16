@@ -40,6 +40,11 @@ options:
   dynamic_substitutions: true
   env:
     - "BAZELISK_HOME=/workspace/.cache/bazelisk"
+    # Cloud Build's $COMMIT_SHA / $BUILD_ID are YAML substitutions, not
+    # environment variables. Export them here so scripts invoked from a
+    # step (e.g. scripts/ci/post_step_failure.sh) can read them from env.
+    - "COMMIT_SHA=$COMMIT_SHA"
+    - "BUILD_ID=$BUILD_ID"
 
 timeout: "7200s"
 
