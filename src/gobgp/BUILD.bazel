@@ -1,33 +1,24 @@
-"""gobgp -- migrated from rules/gobgp.mk (Go package)."""
+"""gobgp -- NOT YET MIGRATED (Go package, rules/gobgp.mk).
+
+The previous stub genrule produced a zero-byte .deb with no-sandbox tag.
+This violated both the hermeticity constraint (no-sandbox) and the
+no-fake-completion rule (touch-only output is a stub, not a real build).
+
+gobgp requires a Go toolchain build. The correct migration path is:
+1. Use rules_go to build the gobgp binary from source
+2. Package with rules_pkg into a .deb
+3. Remove this placeholder when real build is ready
+
+Make owner: rules/gobgp.mk (preserved, untouched)
+"""
 
 package(default_visibility = ["//visibility:public"])
 
-genrule(
-    name = "gobgp_debs",
-    srcs = glob(
-        ["**/*"],
-        exclude = [
-            ".git/**",
-            "BUILD.bazel",
-        ],
-    ),
-    outs = ["gobgp_1.16_amd64.deb"],
-    cmd = " && ".join([
-        "set -euo pipefail",
-        "SRC_DIR=$$(cd $$(dirname $(location Makefile))/.. 2>/dev/null && pwd) || SRC_DIR=$$(pwd)",
-        "OUT_DIR=$$(cd $$(dirname $(OUTS)) && pwd)",
-        "touch $$OUT_DIR/gobgp_1.16_amd64.deb",
-    ]),
-    tags = [
-        "no-cache",
-        "requires-docker",
-        "no-sandbox",
-    ],
-    visibility = ["//visibility:public"],
-)
-
-alias(
+# Placeholder filegroup — no .deb is produced until real migration.
+# Downstream targets that depend on :gobgp will get an empty filegroup
+# instead of a fake .deb. This is honest: the package is not yet migrated.
+filegroup(
     name = "gobgp",
-    actual = ":gobgp_debs",
+    srcs = [],
     visibility = ["//visibility:public"],
 )
