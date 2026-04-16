@@ -16,6 +16,14 @@
 #     so build outputs persist across steps (each step is a fresh container)
 #   - Each ubuntu step installs its own apt deps (cheap, avoids volume bugs)
 #   - --config=ci pulls remote cache settings from .bazelrc
+#
+# CI integrity:
+#   This pipeline validates the checked-in repo state. It does NOT:
+#   - Rewrite submodule SHAs to different commits
+#   - Download BUILD.bazel or other tracked files from external repos
+#   - Mutate checked-in files with sed or similar tools
+#   If builds fail because submodule BUILD files are not committed,
+#   the fix is to commit those files, not to add CI workarounds.
 
 substitutions:
   _CACHE_BUCKET: "sonic-bazel-cache"
@@ -70,83 +78,19 @@ steps:
     waitFor: ["-"]
     timeout: "600s"
 
-  # ── Step 3: Align submodules to 202405 pinned commits ────────────────────────
-  - id: "align-submodules"
-    name: "gcr.io/cloud-builders/git"
-    entrypoint: "bash"
-    args:
-      - "-euo"
-      - "pipefail"
-      - "-c"
-      - |
-        echo ">>> [align-submodules] Pinning submodules to 202405 commits..."
-        for mod in sonic-swss-common sonic-sairedis sonic-swss sonic-dash-api sonic-linux-kernel sonic-stp sonic-gnmi sonic-mgmt-common; do
-          if [ -d "src/$$mod" ]; then
-            cd "src/$$mod"
-            git remote add upstream "https://github.com/sonic-net/$$mod.git" 2>/dev/null || true
-            git fetch upstream --tags 2>/dev/null || true
-            cd ../..
-          fi
-        done
-        cd src/sonic-swss-common   && git checkout 36f40a1bae12a4ff28314eaa8223a6fe1b636492 && cd ../..
-        cd src/sonic-sairedis      && git checkout edd144b643b67c791c99bbca6920531102f2bf84 && cd ../..
-        cd src/sonic-sairedis/SAI  && git checkout 408d75b610cb6b8d90e21d3bbd7f84586ebd1e1e && cd ../../..
-        cd src/sonic-swss          && git checkout 6785d6620804cd0b32db7e8adb7e7dad99ae4a78 && cd ../..
-        cd src/sonic-dash-api      && git checkout 3f6709001e8574743ecf1a44f4cc3eb26b6329d6 && cd ../..
-        cd src/sonic-linux-kernel  && git checkout feaf559f38133c9fa649a468c5e589641c77de76 && cd ../..
-        echo ">>> [align-submodules] All submodules pinned"
-    waitFor: ["init-submodules"]
-    timeout: "300s"
-
-  # ── Step 4: Copy BUILD.bazel into submodules from forks ──────────────────────
-  # MUST run AFTER align: git checkout reverts BUILD.bazel, so we re-download.
-  - id: "copy-build-files"
-    name: "gcr.io/cloud-builders/curl"
-    entrypoint: "bash"
-    args:
-      - "-euo"
-      - "pipefail"
-      - "-c"
-      - |
-        echo ">>> [copy-build-files] Downloading BUILD.bazel from baxia-lan forks..."
-        GITHUB_BASE="https://raw.githubusercontent.com/baxia-lan"
-        DOWNLOADED=0
-        for mod in sonic-swss-common sonic-sairedis sonic-swss sonic-dash-api sonic-stp sonic-linux-kernel sonic-gnmi sonic-platform-daemons sonic-utilities sonic-host-services; do
-          if [ -d "src/$$mod" ]; then
-            for f in BUILD.bazel MODULE.bazel BUILD.bazel.hermetic config.h; do
-              if curl -fsSL "$${GITHUB_BASE}/$${mod}/claude/$${f}?t=$$(date +%s)" \
-                  -o "src/$$mod/$$f" 2>/dev/null; then
-                echo "  + src/$$mod/$$f"
-                DOWNLOADED=$$((DOWNLOADED + 1))
-              fi
-            done
-          fi
-        done
-        echo ">>> [copy-build-files] Downloaded $$DOWNLOADED files"
-        # Copy overlay files for submodules without forks
-        for overlay in build/overlays/*/; do
-          TARGET=$$(basename "$$overlay" | sed 's/^platform-/platform\//; s/^swss-common-/src\/sonic-swss-common\//')
-          if [ -d "$$TARGET" ]; then
-            cp "$$overlay"* "$$TARGET/" 2>/dev/null || true
-            echo "  + $$TARGET overlay copied"
-          fi
-        done
-        # Enable remote caching and reproducibility:
-        # 1. Remove no-cache tags — all deb builds use pinned snapshot.debian.org
-        #    + sha256-pinned Docker images, so outputs are safe to cache.
-        # 2. Set SOURCE_DATE_EPOCH=0 instead of unsetting — makes .deb outputs
-        #    deterministic (Debian reproducible builds support).
-        echo ">>> [copy-build-files] Enabling reproducible builds + remote caching..."
-        find src -name BUILD.bazel -exec sed -i \
-          -e 's/, "no-cache"//g' \
-          -e 's/"no-cache", //g' \
-          -e 's/"no-cache"//g' \
-          -e 's/unset SOURCE_DATE_EPOCH/export SOURCE_DATE_EPOCH=0/g' \
-          {} +
-        echo ">>> [copy-build-files] Kernel BUILD.bazel first line:"
-        head -1 src/sonic-linux-kernel/BUILD.bazel 2>/dev/null || echo "(not found)"
-    waitFor: ["align-submodules"]
-    timeout: "300s"
+  # ── Steps 3-4 REMOVED (CI integrity) ──────────────────────────────────────────
+  # Previously, "align-submodules" rewrote submodule SHAs to hardcoded commits
+  # and "copy-build-files" downloaded BUILD.bazel/MODULE.bazel/config.h from
+  # external GitHub forks at CI time. Both steps violated CI integrity:
+  #   - CI must validate checked-in repo state, not synthesize a different repo
+  #   - Tracked files must not be downloaded from external sources during CI
+  #   - BUILD files must not be mutated with sed during CI
+  #
+  # To make CI green for targets that depend on submodule BUILD files:
+  #   1. Commit BUILD.bazel into the submodule forks at a recorded SHA, OR
+  #   2. Update submodule gitlinks to point to fork SHAs that include BUILD files, OR
+  #   3. Track BUILD overlays in build/overlays/ in this repo
+  # Do NOT restore the download/mutation workaround.
 
   # ── Step 5: GitHub pending status ────────────────────────────────────────────
   - id: "github-status-pending"
@@ -206,12 +150,12 @@ steps:
         echo "$$DEB_COUNT deb packages produced:"
         find bazel-bin/src -name "*.deb" -size +0 2>/dev/null | sort
         echo ">>> [build-orchagent] DONE"
-    waitFor: ["copy-build-files", "install-bazelisk"]  # parallel with kernel (no dep)
+    waitFor: ["init-submodules", "install-bazelisk"]
     timeout: "3600s"
 
-  # ── Step 7: Build kernel (OPTIONAL — Gate 3, may fail) ──────────────────────
-  # Non-fatal: kernel build failure doesn't block Gate 1 verification.
-  # Must run AFTER build-orchagent — both share the same Bazel output base.
+  # ── Step 7: Build kernel (Gate 3 dependency) ─────────────────────────────────
+  # Requires //src/sonic-linux-kernel:linux_kernel_debs BUILD to be checked in.
+  # If it is not committed, this step will fail honestly. Do not swallow failures.
   - id: "build-kernel"
     name: "ubuntu:22.04"
     entrypoint: "bash"
@@ -219,9 +163,10 @@ steps:
       - "PATH=/workspace/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
       - "HOME=/workspace/.home"
     args:
+      - "-euo"
+      - "pipefail"
       - "-c"
       - |
-        set -euo pipefail
         echo ">>> [build-kernel] Installing build dependencies..."
         export DEBIAN_FRONTEND=noninteractive
         apt-get update -qq && apt-get install -y -qq \
@@ -239,14 +184,14 @@ steps:
           build //src/sonic-linux-kernel:linux_kernel_debs \
           --config=ci \
           --spawn_strategy=local \
-          2>&1 || { echo ">>> [build-kernel] Build failed (Gate 3, non-fatal)"; exit 0; }
+          2>&1
 
         echo ""
         echo ">>> [build-kernel] === RESULTS ==="
         ls -lh bazel-bin/src/sonic-linux-kernel/*.deb 2>/dev/null && \
           echo ">>> [build-kernel] SUCCESS" || \
-          echo ">>> [build-kernel] WARN: No kernel debs produced"
-    waitFor: ["build-orchagent"]  # Must wait — same Bazel output base, lock contention
+          { echo ">>> [build-kernel] FAIL: No kernel debs produced"; exit 1; }
+    waitFor: ["build-orchagent"]
     timeout: "3600s"
 
   # ── Step 7b: Build all service images (parallel with VS build) ──────────────
@@ -608,9 +553,9 @@ steps:
     waitFor: ["verify-docker-sonic-vs"]
     timeout: "3600s"
 
-  # ── Step 10: Build sonic-broadcom.bin (OPTIONAL — Gate 3, may fail) ──────────
-  # Non-fatal: uses || true so pipeline continues even if broadcom build fails.
-  # This step runs in parallel with docker-sonic-vs (both depend on orchagent).
+  # ── Step 10: Build sonic-broadcom.bin (Gate 3 dependency) ────────────────────
+  # Requires kernel BUILD and all broadcom deps to be checked in.
+  # If they are not committed, this step will fail honestly.
   - id: "build-broadcom-bin"
     name: "ubuntu:22.04"
     entrypoint: "bash"
@@ -618,6 +563,8 @@ steps:
       - "PATH=/workspace/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
       - "HOME=/workspace/.home"
     args:
+      - "-euo"
+      - "pipefail"
       - "-c"
       - |
         echo ">>> [build-broadcom-bin] Installing build dependencies..."
@@ -630,20 +577,17 @@ steps:
           --config=ci \
           --spawn_strategy=local \
           --strategy=CopyToDirectory=local \
-          2>&1 || { echo ">>> [build-broadcom-bin] Build failed (Gate 3 not ready, non-fatal)"; exit 0; }
+          2>&1
 
         echo ""
         echo ">>> [build-broadcom-bin] === RESULTS ==="
         if [ -f bazel-bin/platform/broadcom/sonic_broadcom_bin.bin ]; then
           SIZE_MB=$$(( $$(stat -c%s bazel-bin/platform/broadcom/sonic_broadcom_bin.bin) / 1048576 ))
           echo "sonic-broadcom.bin: $${SIZE_MB} MB"
-          if [ "$$SIZE_MB" -gt 700 ]; then
-            echo ">>> [build-broadcom-bin] WARN: exceeds 700 MB budget"
-          else
-            echo ">>> [build-broadcom-bin] PASS: within 700 MB budget"
-          fi
+          echo ">>> [build-broadcom-bin] SUCCESS"
         else
-          echo ">>> [build-broadcom-bin] WARN: no .bin produced (Gate 3 in progress)"
+          echo ">>> [build-broadcom-bin] FAIL: no .bin produced"
+          exit 1
         fi
     waitFor: ["build-orchagent"]
     timeout: "3600s"
@@ -695,8 +639,18 @@ steps:
         gsutil cp "$$SUMMARY" "gs://${_CACHE_BUCKET}/ci-results/$BUILD_ID/summary.txt" 2>/dev/null && \
           echo ">>> Uploaded: gs://${_CACHE_BUCKET}/ci-results/$BUILD_ID/summary.txt" || \
           echo ">>> WARN: GCS upload failed (check bucket permissions)"
-    # Only wait for Gate 1 steps (kernel + broadcom are Gate 3, may fail)
-    waitFor: ["build-orchagent", "verify-docker-sonic-vs"]
+    # Wait for all gate-relevant steps before uploading summary.
+    # If any step fails, Cloud Build cancels this step (honest failure).
+    waitFor:
+      - "build-orchagent"
+      - "verify-docker-sonic-vs"
+      - "pytest-vs"
+      - "swss-common-unit-tests"
+      - "sairedis-unit-tests"
+      - "swss-mock-tests"
+      - "build-kernel"
+      - "build-service-images"
+      - "build-broadcom-bin"
     timeout: "120s"
 
   # ── Step 12: GitHub final status ─────────────────────────────────────────────
