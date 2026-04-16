@@ -468,12 +468,16 @@ steps:
                 libhiredis-dev libzmq3-dev libboost-dev libboost-serialization-dev \
                 libprotobuf-dev protobuf-compiler pkg-config \
                 libyang2-dev nlohmann-json3-dev uuid-dev \
-                python3-dev swig autoconf automake libtool >/dev/null 2>&1
+                python3-dev swig autoconf automake libtool \
+                git m4 >/dev/null 2>&1
               dpkg --force-overwrite --force-depends -i /debs/*.deb 2>&1 || true
               apt-get install -f -y -qq 2>/dev/null || true
               ldconfig
               redis-server --daemonize yes --bind 127.0.0.1
               cp -a /src /tmp/swss-common-test && cd /tmp/swss-common-test
+              find . -name .git -type f -delete 2>/dev/null || true; rm -rf .git
+              git config --global user.email build@sonic && git config --global user.name sonic
+              git init -q && git add -A . && git commit -qm init 2>/dev/null || true
               ./autogen.sh 2>&1 | tail -3
               ./configure --enable-tests 2>&1 | tail -5
               make -j$$(nproc) tests/tests 2>&1 | tail -10
@@ -521,7 +525,8 @@ steps:
                 libhiredis-dev libzmq3-dev libboost-dev libboost-serialization-dev \
                 libprotobuf-dev protobuf-compiler pkg-config libyang2-dev nlohmann-json3-dev \
                 uuid-dev python3-dev swig autoconf automake libtool \
-                perl aspell aspell-en libjansson-dev libteam-dev libjemalloc-dev >/dev/null 2>&1
+                perl aspell aspell-en libjansson-dev libteam-dev libjemalloc-dev \
+                git m4 >/dev/null 2>&1
               dpkg --force-overwrite --force-depends -i /debs/*.deb 2>&1 || true
               apt-get install -f -y -qq 2>/dev/null || true; ldconfig
               redis-server --daemonize yes --bind 127.0.0.1
@@ -574,7 +579,8 @@ steps:
                 libhiredis-dev libzmq3-dev libboost-dev libboost-serialization-dev \
                 libprotobuf-dev protobuf-compiler pkg-config libyang2-dev nlohmann-json3-dev \
                 uuid-dev python3-dev swig autoconf automake libtool \
-                libjansson-dev libteam-dev libjemalloc-dev >/dev/null 2>&1
+                libjansson-dev libteam-dev libjemalloc-dev \
+                git m4 >/dev/null 2>&1
               dpkg --force-overwrite --force-depends -i /debs/*.deb 2>&1 || true
               apt-get install -f -y -qq 2>/dev/null || true; ldconfig
               redis-server --daemonize yes --bind 127.0.0.1
