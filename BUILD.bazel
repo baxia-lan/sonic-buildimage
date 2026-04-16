@@ -3,6 +3,13 @@
 load("@buildifier_prebuilt//:rules.bzl", "buildifier", "buildifier_test")
 load("//:sonic_image.bzl", "sonic_platform_docker", "sonic_platform_image")
 
+# Top-level repo config files exposed so acceptance/cloud_build.sh (a
+# sandboxed sh_test) can find them in its runfiles.
+exports_files([
+    "cloudbuild.yaml",
+    ".bazelrc",
+])
+
 # ── Platform-aware top-level targets ─────────────────────────────────────────
 # Usage: bazel build //:sonic_image --platforms=//platforms:broadcom_amd64
 sonic_platform_image(

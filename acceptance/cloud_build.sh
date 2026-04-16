@@ -9,11 +9,22 @@
 #   These require a real Cloud Build run and manual inspection.
 set -euo pipefail
 
+# Resolve the workspace root whether run from `bazel test` (runfiles) or
+# from a plain shell in the repo. Under bazel, TEST_SRCDIR points into
+# the runfiles tree; otherwise fall back to $PWD.
+if [ -n "${TEST_SRCDIR:-}" ]; then
+  WS="${TEST_SRCDIR}/_main"
+  [ -d "$WS" ] || WS="${TEST_SRCDIR}/$(ls "${TEST_SRCDIR}" | head -1)"
+else
+  WS="${BUILD_WORKSPACE_DIRECTORY:-$PWD}"
+fi
+cd "$WS"
+
 echo "=== Gate 2: Cloud Build (ADVISORY — config checks only) ==="
 
 # Step 1: Verify cloudbuild.yaml is valid
 echo "Step 1: Validating cloudbuild.yaml..."
-[ -f cloudbuild.yaml ] || { echo "FAIL: cloudbuild.yaml not found"; exit 1; }
+[ -f cloudbuild.yaml ] || { echo "FAIL: cloudbuild.yaml not found in $WS"; exit 1; }
 python3 -c "import yaml; yaml.safe_load(open('cloudbuild.yaml'))" 2>/dev/null || \
 python3 -c "
 import json, re

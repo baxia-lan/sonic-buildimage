@@ -40,6 +40,10 @@ sh_test(
     name = "cloud_build",
     srcs = ["cloud_build.sh"],
     timeout = "long",
+    data = [
+        "//:.bazelrc",
+        "//:cloudbuild.yaml",
+    ],
     tags = ["gate-advisory"],
 )
 
