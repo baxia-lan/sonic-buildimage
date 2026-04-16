@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # Gate 1: docker-sonic-vs.gz — build, load, boot, pytest
 # This test FAILS if any step fails. No continue-on-error.
+#
+# Maturity: RUNNABLE
+#   - //platform/vs:docker_sonic_vs_tarball exists and is buildable
+#   - Requires submodule BUILD files to be present (currently not all are
+#     checked in — some depend on external fork overlays)
+#   - Docker and privileged container access required
 set -euo pipefail
 
 echo "=== Gate 1: docker-sonic-vs.gz ==="

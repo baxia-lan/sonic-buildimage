@@ -3,39 +3,78 @@
 These are NOT unit tests. Each gate verifies an end-to-end acceptance
 criterion. All gates must pass before the migration is declared complete.
 
-Run all: bazel test //acceptance:all
-Run one: bazel test //acceptance:vs_pytest
+Run one:            bazel test //acceptance:vs_pytest
+Run runnable only:  bazel test //acceptance:runnable_gates
+
+Gate maturity levels (tags):
+  gate-runnable  — all referenced labels exist, script can execute
+  gate-partial   — some referenced labels are phantom or blocked
+  gate-advisory  — config/structure checks only, no runtime gate
+
+There is intentionally no `//acceptance:all` target. Running every gate
+indiscriminately would mix runnable checks with partial/advisory ones and
+obscure which gates really passed. Use the explicit gate label instead.
+
+Passing a gate does NOT authorize deleting the original Make system.
 """
 
 package(default_visibility = ["//visibility:public"])
 
 # ── Gate 1: docker-sonic-vs.gz + full pytest ──────────────────────────────────
+# Maturity: RUNNABLE — //platform/vs:docker_sonic_vs_tarball exists.
+# Requires docker, privileged mode, and submodule BUILD files present.
 sh_test(
     name = "vs_pytest",
     srcs = ["vs_pytest.sh"],
     timeout = "eternal",
-    tags = ["requires-docker"],
+    tags = [
+        "gate-runnable",
+        "requires-docker",
+    ],
 )
 
 # ── Gate 2: Cloud Build verification ─────────────────────────────────────────
+# Maturity: ADVISORY — checks CI config structure only.
+# Cannot verify actual build success, cache hit rate, or GitHub status.
 sh_test(
     name = "cloud_build",
     srcs = ["cloud_build.sh"],
     timeout = "long",
+    tags = ["gate-advisory"],
 )
 
 # ── Gate 3: sonic-broadcom.bin ────────────────────────────────────────────────
+# Maturity: PARTIAL — //platform/broadcom:sonic_broadcom_bin exists, but:
+#   - Kernel BUILD (//src/sonic-linux-kernel) not checked in
+#   - //src/sonic-swss-common:swss_common_test does not exist
+#   - //src/sonic-sairedis:sairedis_test does not exist
 sh_test(
     name = "broadcom_bin",
     srcs = ["broadcom_bin.sh"],
     timeout = "eternal",
-    tags = ["requires-docker"],
+    tags = [
+        "gate-partial",
+        "requires-docker",
+    ],
 )
 
 # ── Gate 4: sonic-alpinevs.img.gz ─────────────────────────────────────────────
+# Maturity: PARTIAL — build/test targets exist at //build/overlays/platform-alpinevs
+# but dependency test labels (swss_common_test, sairedis_test) do not exist.
 sh_test(
     name = "alpinevs",
     srcs = ["alpinevs.sh"],
     timeout = "eternal",
-    tags = ["requires-docker"],
+    tags = [
+        "gate-partial",
+        "requires-docker",
+    ],
+)
+
+# Aggregate of runnable gates only. Partial/advisory gates are intentionally
+# excluded so this alias cannot be used to claim completion from half-ready
+# acceptance coverage.
+test_suite(
+    name = "runnable_gates",
+    tests = [":vs_pytest"],
 )
