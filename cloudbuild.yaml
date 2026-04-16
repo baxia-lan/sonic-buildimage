@@ -127,29 +127,41 @@ steps:
       - "PATH=/workspace/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
       - "HOME=/workspace/.home"
     args:
-      - "-euo"
-      - "pipefail"
       - "-c"
       - |
-        echo ">>> [build-orchagent] Installing build dependencies..."
-        export DEBIAN_FRONTEND=noninteractive
-        apt-get update -qq && apt-get install -y -qq \
-          curl git python3 build-essential bc bison flex \
-          libssl-dev libelf-dev fakeroot dpkg-dev >/dev/null 2>&1
-        echo ">>> [build-orchagent] Starting orchagent chain build..."
-        bazel --output_user_root=/workspace/.cache/bazel \
-          build //dockers/docker-orchagent:docker_orchagent \
-          --config=ci \
-          --spawn_strategy=local \
-          --strategy=CopyToDirectory=local \
-          2>&1
+        STEP=build-orchagent
+        mkdir -p /workspace/ci-logs
+        LOG=/workspace/ci-logs/$$STEP.log
+        (
+          set -euo pipefail
+          echo ">>> [build-orchagent] Installing build dependencies..."
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq && apt-get install -y -qq \
+            curl git python3 build-essential bc bison flex \
+            libssl-dev libelf-dev fakeroot dpkg-dev >/dev/null 2>&1
+          echo ">>> [build-orchagent] Starting orchagent chain build..."
+          bazel --output_user_root=/workspace/.cache/bazel \
+            build //dockers/docker-orchagent:docker_orchagent \
+            --config=ci \
+            --spawn_strategy=local \
+            --strategy=CopyToDirectory=local \
+            2>&1
 
-        echo ""
-        echo ">>> [build-orchagent] === RESULTS ==="
-        DEB_COUNT=$$(find bazel-bin/src -name "*.deb" -size +0 2>/dev/null | wc -l)
-        echo "$$DEB_COUNT deb packages produced:"
-        find bazel-bin/src -name "*.deb" -size +0 2>/dev/null | sort
-        echo ">>> [build-orchagent] DONE"
+          echo ""
+          echo ">>> [build-orchagent] === RESULTS ==="
+          DEB_COUNT=$$(find bazel-bin/src -name "*.deb" -size +0 2>/dev/null | wc -l)
+          echo "$$DEB_COUNT deb packages produced:"
+          find bazel-bin/src -name "*.deb" -size +0 2>/dev/null | sort
+          echo ">>> [build-orchagent] DONE"
+        ) 2>&1 | tee "$$LOG"
+        RC=$${PIPESTATUS[0]}
+        if [ "$$RC" -ne 0 ] && [ -n "$${GITHUB_TOKEN:-}" ] && [ -f scripts/ci/post_step_failure.py ]; then
+          command -v python3 >/dev/null 2>&1 || \
+            (apt-get install -y -qq python3 >/dev/null 2>&1 || apk add --no-cache python3 >/dev/null 2>&1) || true
+          python3 scripts/ci/post_step_failure.py "$$STEP" "$$LOG" "$$RC" || true
+        fi
+        exit $$RC
+    secretEnv: ['GITHUB_TOKEN']
     waitFor: ["init-submodules", "install-bazelisk"]
     timeout: "3600s"
 
@@ -163,34 +175,46 @@ steps:
       - "PATH=/workspace/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
       - "HOME=/workspace/.home"
     args:
-      - "-euo"
-      - "pipefail"
       - "-c"
       - |
-        echo ">>> [build-kernel] Installing build dependencies..."
-        export DEBIAN_FRONTEND=noninteractive
-        apt-get update -qq && apt-get install -y -qq \
-          curl git python3 build-essential bc bison flex \
-          libssl-dev libelf-dev cpio kmod rsync dwarves \
-          fakeroot dpkg-dev >/dev/null 2>&1
-        mkdir -p /workspace/.home
-        echo ">>> [build-kernel] Disk: $$(df -h / | tail -1 | awk '{print $$4}') free, CPUs: $$(nproc)"
+        STEP=build-kernel
+        mkdir -p /workspace/ci-logs
+        LOG=/workspace/ci-logs/$$STEP.log
+        (
+          set -euo pipefail
+          echo ">>> [build-kernel] Installing build dependencies..."
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq && apt-get install -y -qq \
+            curl git python3 build-essential bc bison flex \
+            libssl-dev libelf-dev cpio kmod rsync dwarves \
+            fakeroot dpkg-dev >/dev/null 2>&1
+          mkdir -p /workspace/.home
+          echo ">>> [build-kernel] Disk: $$(df -h / | tail -1 | awk '{print $$4}') free, CPUs: $$(nproc)"
 
-        echo ">>> [build-kernel] Bazel version:"
-        bazel --output_user_root=/workspace/.cache/bazel version 2>&1 | head -3
+          echo ">>> [build-kernel] Bazel version:"
+          bazel --output_user_root=/workspace/.cache/bazel version 2>&1 | head -3
 
-        echo ">>> [build-kernel] Starting kernel build (--config=ci + remote cache)..."
-        bazel --output_user_root=/workspace/.cache/bazel \
-          build //src/sonic-linux-kernel:linux_kernel_debs \
-          --config=ci \
-          --spawn_strategy=local \
-          2>&1
+          echo ">>> [build-kernel] Starting kernel build (--config=ci + remote cache)..."
+          bazel --output_user_root=/workspace/.cache/bazel \
+            build //src/sonic-linux-kernel:linux_kernel_debs \
+            --config=ci \
+            --spawn_strategy=local \
+            2>&1
 
-        echo ""
-        echo ">>> [build-kernel] === RESULTS ==="
-        ls -lh bazel-bin/src/sonic-linux-kernel/*.deb 2>/dev/null && \
-          echo ">>> [build-kernel] SUCCESS" || \
-          { echo ">>> [build-kernel] FAIL: No kernel debs produced"; exit 1; }
+          echo ""
+          echo ">>> [build-kernel] === RESULTS ==="
+          ls -lh bazel-bin/src/sonic-linux-kernel/*.deb 2>/dev/null && \
+            echo ">>> [build-kernel] SUCCESS" || \
+            { echo ">>> [build-kernel] FAIL: No kernel debs produced"; exit 1; }
+        ) 2>&1 | tee "$$LOG"
+        RC=$${PIPESTATUS[0]}
+        if [ "$$RC" -ne 0 ] && [ -n "$${GITHUB_TOKEN:-}" ] && [ -f scripts/ci/post_step_failure.py ]; then
+          command -v python3 >/dev/null 2>&1 || \
+            (apt-get install -y -qq python3 >/dev/null 2>&1 || apk add --no-cache python3 >/dev/null 2>&1) || true
+          python3 scripts/ci/post_step_failure.py "$$STEP" "$$LOG" "$$RC" || true
+        fi
+        exit $$RC
+    secretEnv: ['GITHUB_TOKEN']
     waitFor: ["build-orchagent"]
     timeout: "3600s"
 
@@ -202,30 +226,42 @@ steps:
       - "PATH=/workspace/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
       - "HOME=/workspace/.home"
     args:
-      - "-euo"
-      - "pipefail"
       - "-c"
       - |
-        echo ">>> [build-service-images] Installing build dependencies..."
-        export DEBIAN_FRONTEND=noninteractive
-        apt-get update -qq && apt-get install -y -qq \
-          curl git python3 build-essential fakeroot dpkg-dev >/dev/null 2>&1
-        echo ">>> [build-service-images] Building all service docker images..."
-        bazel --output_user_root=/workspace/.cache/bazel \
-          build \
-            //dockers/docker-database:docker_database \
-            //dockers/docker-teamd:docker_teamd \
-            //dockers/docker-nat:docker_nat \
-            //dockers/docker-sflow:docker_sflow \
-            //dockers/docker-stp:docker_stp \
-            //dockers/docker-iccpd:docker_iccpd \
-            //dockers/docker-router-advertiser:docker_router_advertiser \
-            //dockers/docker-basic_router:docker_basic_router \
-          --config=ci \
-          --spawn_strategy=local \
-          --strategy=CopyToDirectory=local \
-          2>&1
-        echo ">>> [build-service-images] DONE"
+        STEP=build-service-images
+        mkdir -p /workspace/ci-logs
+        LOG=/workspace/ci-logs/$$STEP.log
+        (
+          set -euo pipefail
+          echo ">>> [build-service-images] Installing build dependencies..."
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq && apt-get install -y -qq \
+            curl git python3 build-essential fakeroot dpkg-dev >/dev/null 2>&1
+          echo ">>> [build-service-images] Building all service docker images..."
+          bazel --output_user_root=/workspace/.cache/bazel \
+            build \
+              //dockers/docker-database:docker_database \
+              //dockers/docker-teamd:docker_teamd \
+              //dockers/docker-nat:docker_nat \
+              //dockers/docker-sflow:docker_sflow \
+              //dockers/docker-stp:docker_stp \
+              //dockers/docker-iccpd:docker_iccpd \
+              //dockers/docker-router-advertiser:docker_router_advertiser \
+              //dockers/docker-basic_router:docker_basic_router \
+            --config=ci \
+            --spawn_strategy=local \
+            --strategy=CopyToDirectory=local \
+            2>&1
+          echo ">>> [build-service-images] DONE"
+        ) 2>&1 | tee "$$LOG"
+        RC=$${PIPESTATUS[0]}
+        if [ "$$RC" -ne 0 ] && [ -n "$${GITHUB_TOKEN:-}" ] && [ -f scripts/ci/post_step_failure.py ]; then
+          command -v python3 >/dev/null 2>&1 || \
+            (apt-get install -y -qq python3 >/dev/null 2>&1 || apk add --no-cache python3 >/dev/null 2>&1) || true
+          python3 scripts/ci/post_step_failure.py "$$STEP" "$$LOG" "$$RC" || true
+        fi
+        exit $$RC
+    secretEnv: ['GITHUB_TOKEN']
     waitFor: ["build-orchagent"]
     timeout: "3600s"
 
@@ -237,28 +273,40 @@ steps:
       - "PATH=/workspace/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
       - "HOME=/workspace/.home"
     args:
-      - "-euo"
-      - "pipefail"
       - "-c"
       - |
-        echo ">>> [build-docker-sonic-vs] Installing build dependencies..."
-        export DEBIAN_FRONTEND=noninteractive
-        apt-get update -qq && apt-get install -y -qq \
-          curl git python3 build-essential fakeroot dpkg-dev >/dev/null 2>&1
-        echo ">>> [build-docker-sonic-vs] Starting build..."
-        bazel --output_user_root=/workspace/.cache/bazel \
-          build //platform/vs:docker_sonic_vs_tarball \
-          --config=ci \
-          --spawn_strategy=local \
-          --strategy=CopyToDirectory=local \
-          --check_direct_dependencies=off \
-          2>&1
+        STEP=build-docker-sonic-vs
+        mkdir -p /workspace/ci-logs
+        LOG=/workspace/ci-logs/$$STEP.log
+        (
+          set -euo pipefail
+          echo ">>> [build-docker-sonic-vs] Installing build dependencies..."
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq && apt-get install -y -qq \
+            curl git python3 build-essential fakeroot dpkg-dev >/dev/null 2>&1
+          echo ">>> [build-docker-sonic-vs] Starting build..."
+          bazel --output_user_root=/workspace/.cache/bazel \
+            build //platform/vs:docker_sonic_vs_tarball \
+            --config=ci \
+            --spawn_strategy=local \
+            --strategy=CopyToDirectory=local \
+            --check_direct_dependencies=off \
+            2>&1
 
-        echo ""
-        echo ">>> [build-docker-sonic-vs] === RESULTS ==="
-        ls -lh bazel-bin/platform/vs/docker_sonic_vs_tarball* 2>/dev/null && \
-          echo ">>> [build-docker-sonic-vs] SUCCESS" || \
-          echo ">>> [build-docker-sonic-vs] WARN: No tarball produced"
+          echo ""
+          echo ">>> [build-docker-sonic-vs] === RESULTS ==="
+          ls -lh bazel-bin/platform/vs/docker_sonic_vs_tarball* 2>/dev/null && \
+            echo ">>> [build-docker-sonic-vs] SUCCESS" || \
+            echo ">>> [build-docker-sonic-vs] WARN: No tarball produced"
+        ) 2>&1 | tee "$$LOG"
+        RC=$${PIPESTATUS[0]}
+        if [ "$$RC" -ne 0 ] && [ -n "$${GITHUB_TOKEN:-}" ] && [ -f scripts/ci/post_step_failure.py ]; then
+          command -v python3 >/dev/null 2>&1 || \
+            (apt-get install -y -qq python3 >/dev/null 2>&1 || apk add --no-cache python3 >/dev/null 2>&1) || true
+          python3 scripts/ci/post_step_failure.py "$$STEP" "$$LOG" "$$RC" || true
+        fi
+        exit $$RC
+    secretEnv: ['GITHUB_TOKEN']
     waitFor: ["build-orchagent"]
     timeout: "3600s"
 
@@ -267,71 +315,83 @@ steps:
     name: "gcr.io/cloud-builders/docker"
     entrypoint: "bash"
     args:
-      - "-euo"
-      - "pipefail"
       - "-c"
       - |
-        echo ">>> [verify-vs] Loading docker-sonic-vs image..."
-        bash bazel-bin/platform/vs/docker_sonic_vs_tarball.sh
-        docker tag sonic/docker_sonic_vs:latest docker-sonic-vs:latest
-        docker images docker-sonic-vs
+        STEP=verify-docker-sonic-vs
+        mkdir -p /workspace/ci-logs
+        LOG=/workspace/ci-logs/$$STEP.log
+        (
+          set -euo pipefail
+          echo ">>> [verify-vs] Loading docker-sonic-vs image..."
+          bash bazel-bin/platform/vs/docker_sonic_vs_tarball.sh
+          docker tag sonic/docker_sonic_vs:latest docker-sonic-vs:latest
+          docker images docker-sonic-vs
 
-        echo ">>> [verify-vs] Quick content check..."
-        docker run --rm --entrypoint /bin/bash docker-sonic-vs:latest -c '
-          python3 -c "from swsscommon import swsscommon; print(\"swsscommon: OK\")" 2>&1 || echo "swsscommon: FAILED"
-          echo "sonic-cfggen: $$(sonic-cfggen --help 2>&1 | head -3 || echo BROKEN)"
-          echo "ip: $$(ip link show lo 2>&1 | head -1)"
-        '
+          echo ">>> [verify-vs] Quick content check..."
+          docker run --rm --entrypoint /bin/bash docker-sonic-vs:latest -c '
+            python3 -c "from swsscommon import swsscommon; print(\"swsscommon: OK\")" 2>&1 || echo "swsscommon: FAILED"
+            echo "sonic-cfggen: $$(sonic-cfggen --help 2>&1 | head -3 || echo BROKEN)"
+            echo "ip: $$(ip link show lo 2>&1 | head -1)"
+          '
 
-        echo ">>> [verify-vs] Boot test..."
-        CID=$$(docker run -d --privileged docker-sonic-vs:latest)
-        sleep 5
-        CSTATE=$$(docker inspect -f '{{.State.Status}}' $$CID 2>/dev/null || echo "unknown")
-        echo "Container state after 5s: $$CSTATE"
-        if [ "$$CSTATE" != "running" ]; then
-          echo "FATAL: Container not running"
-          docker logs $$CID 2>&1 | tail -30
-          docker rm $$CID 2>/dev/null || true
-          exit 1
-        fi
-
-        echo ">>> [verify-vs] Waiting 120s for services..."
-        BOOTED=false
-        for i in $$(seq 1 24); do
-          SVCCOUNT=$$(docker exec $$CID supervisorctl status 2>/dev/null | grep -c RUNNING || true)
-          echo "  $${i}x5s: $$SVCCOUNT services RUNNING"
-          if [ "$$SVCCOUNT" -gt 5 ]; then
-            echo ">>> [verify-vs] Services booted: $$SVCCOUNT RUNNING"
-            BOOTED=true
-            break
-          fi
+          echo ">>> [verify-vs] Boot test..."
+          CID=$$(docker run -d --privileged docker-sonic-vs:latest)
           sleep 5
-        done
-        echo ">>> [verify-vs] === Service status ==="
-        docker exec $$CID supervisorctl status 2>&1 || true
-        if [ "$$BOOTED" != "true" ]; then
-          echo ">>> [verify-vs] === Container logs (last 100 lines) ==="
-          docker logs $$CID 2>&1 | tail -100 || true
-          echo ">>> [verify-vs] === start.sh exit details ==="
-          docker exec $$CID cat /var/log/syslog 2>/dev/null | tail -50 || true
-          echo ">>> [verify-vs] === rsyslogd library check ==="
-          docker exec $$CID ldd /usr/sbin/rsyslogd 2>&1 | grep -i 'not found' || echo "All rsyslog libs found"
-          echo ">>> [verify-vs] === redis-server library check ==="
-          docker exec $$CID ldd /usr/bin/redis-server 2>&1 | grep -i 'not found' || echo "All redis libs found"
-          echo ">>> [verify-vs] === syncd library check ==="
-          docker exec $$CID ldd /usr/bin/syncd 2>&1 | grep -i 'not found' || echo "All syncd libs found"
-          echo ">>> [verify-vs] === jq check ==="
-          docker exec $$CID jq --version 2>&1 || echo "jq: NOT FOUND"
-          echo ">>> [verify-vs] === supervisord log (syncd/orchagent lines) ==="
-          docker logs $$CID 2>&1 | grep -E 'syncd|orchagent|start\.sh' | tail -30 || true
+          CSTATE=$$(docker inspect -f '{{.State.Status}}' $$CID 2>/dev/null || echo "unknown")
+          echo "Container state after 5s: $$CSTATE"
+          if [ "$$CSTATE" != "running" ]; then
+            echo "FATAL: Container not running"
+            docker logs $$CID 2>&1 | tail -30
+            docker rm $$CID 2>/dev/null || true
+            exit 1
+          fi
+
+          echo ">>> [verify-vs] Waiting 120s for services..."
+          BOOTED=false
+          for i in $$(seq 1 24); do
+            SVCCOUNT=$$(docker exec $$CID supervisorctl status 2>/dev/null | grep -c RUNNING || true)
+            echo "  $${i}x5s: $$SVCCOUNT services RUNNING"
+            if [ "$$SVCCOUNT" -gt 5 ]; then
+              echo ">>> [verify-vs] Services booted: $$SVCCOUNT RUNNING"
+              BOOTED=true
+              break
+            fi
+            sleep 5
+          done
+          echo ">>> [verify-vs] === Service status ==="
+          docker exec $$CID supervisorctl status 2>&1 || true
+          if [ "$$BOOTED" != "true" ]; then
+            echo ">>> [verify-vs] === Container logs (last 100 lines) ==="
+            docker logs $$CID 2>&1 | tail -100 || true
+            echo ">>> [verify-vs] === start.sh exit details ==="
+            docker exec $$CID cat /var/log/syslog 2>/dev/null | tail -50 || true
+            echo ">>> [verify-vs] === rsyslogd library check ==="
+            docker exec $$CID ldd /usr/sbin/rsyslogd 2>&1 | grep -i 'not found' || echo "All rsyslog libs found"
+            echo ">>> [verify-vs] === redis-server library check ==="
+            docker exec $$CID ldd /usr/bin/redis-server 2>&1 | grep -i 'not found' || echo "All redis libs found"
+            echo ">>> [verify-vs] === syncd library check ==="
+            docker exec $$CID ldd /usr/bin/syncd 2>&1 | grep -i 'not found' || echo "All syncd libs found"
+            echo ">>> [verify-vs] === jq check ==="
+            docker exec $$CID jq --version 2>&1 || echo "jq: NOT FOUND"
+            echo ">>> [verify-vs] === supervisord log (syncd/orchagent lines) ==="
+            docker logs $$CID 2>&1 | grep -E 'syncd|orchagent|start\.sh' | tail -30 || true
+          fi
+          docker stop $$CID 2>/dev/null; docker rm $$CID 2>/dev/null || true
+          if [ "$$BOOTED" = "true" ]; then
+            echo ">>> [verify-vs] PASS"
+          else
+            echo ">>> [verify-vs] FAIL: Fewer than 6 services reached RUNNING"
+            exit 1
+          fi
+        ) 2>&1 | tee "$$LOG"
+        RC=$${PIPESTATUS[0]}
+        if [ "$$RC" -ne 0 ] && [ -n "$${GITHUB_TOKEN:-}" ] && [ -f scripts/ci/post_step_failure.py ]; then
+          command -v python3 >/dev/null 2>&1 || \
+            (apt-get install -y -qq python3 >/dev/null 2>&1 || apk add --no-cache python3 >/dev/null 2>&1) || true
+          python3 scripts/ci/post_step_failure.py "$$STEP" "$$LOG" "$$RC" || true
         fi
-        docker stop $$CID 2>/dev/null; docker rm $$CID 2>/dev/null || true
-        if [ "$$BOOTED" = "true" ]; then
-          echo ">>> [verify-vs] PASS"
-        else
-          echo ">>> [verify-vs] FAIL: Fewer than 6 services reached RUNNING"
-          exit 1
-        fi
+        exit $$RC
+    secretEnv: ['GITHUB_TOKEN']
     waitFor: ["build-docker-sonic-vs"]
     timeout: "600s"
 
@@ -340,45 +400,57 @@ steps:
     name: "gcr.io/cloud-builders/docker"
     entrypoint: "bash"
     args:
-      - "-euo"
-      - "pipefail"
       - "-c"
       - |
-        echo ">>> [swss-common-tests] Running swss-common C++ unit tests..."
-        echo ">>> [swss-common-tests] Finding debs..."
-        STAGING=$$(mktemp -d)
-        find . -path "*/sonic-swss-common/*.deb" -size +0 2>/dev/null | while read f; do
-          cp "$$f" "$$STAGING/" 2>/dev/null || true
-        done
-        echo ">>> [swss-common-tests] Found $$(ls $$STAGING/*.deb 2>/dev/null | wc -l) debs"
+        STEP=swss-common-unit-tests
+        mkdir -p /workspace/ci-logs
+        LOG=/workspace/ci-logs/$$STEP.log
+        (
+          set -euo pipefail
+          echo ">>> [swss-common-tests] Running swss-common C++ unit tests..."
+          echo ">>> [swss-common-tests] Finding debs..."
+          STAGING=$$(mktemp -d)
+          find . -path "*/sonic-swss-common/*.deb" -size +0 2>/dev/null | while read f; do
+            cp "$$f" "$$STAGING/" 2>/dev/null || true
+          done
+          echo ">>> [swss-common-tests] Found $$(ls $$STAGING/*.deb 2>/dev/null | wc -l) debs"
 
-        docker run --rm --platform linux/amd64 \
-          -v "$$STAGING:/debs:ro" \
-          -v "$$(pwd)/src/sonic-swss-common:/src:ro" \
-          -e DEBIAN_FRONTEND=noninteractive \
-          debian:bookworm-slim bash -c '
-            set -euo pipefail
-            apt-get update -qq
-            apt-get install -y -qq --no-install-recommends \
-              redis-server build-essential cmake \
-              libgtest-dev libgmock-dev \
-              libnl-3-dev libnl-genl-3-dev libnl-route-3-dev libnl-nf-3-dev \
-              libhiredis-dev libzmq3-dev libboost-dev libboost-serialization-dev \
-              libprotobuf-dev protobuf-compiler pkg-config \
-              libyang2-dev nlohmann-json3-dev uuid-dev \
-              python3-dev swig autoconf automake libtool >/dev/null 2>&1
-            dpkg --force-overwrite --force-depends -i /debs/*.deb 2>&1 || true
-            apt-get install -f -y -qq 2>/dev/null || true
-            ldconfig
-            redis-server --daemonize yes --bind 127.0.0.1
-            cp -a /src /tmp/swss-common-test && cd /tmp/swss-common-test
-            ./autogen.sh 2>&1 | tail -3
-            ./configure --enable-tests 2>&1 | tail -5
-            make -j$$(nproc) tests/tests 2>&1 | tail -10
-            echo ">>> Running GTest..."
-            ./tests/tests --gtest_output=xml:/tmp/test-results.xml 2>&1
-          '
-        echo ">>> [swss-common-tests] DONE"
+          docker run --rm --platform linux/amd64 \
+            -v "$$STAGING:/debs:ro" \
+            -v "$$(pwd)/src/sonic-swss-common:/src:ro" \
+            -e DEBIAN_FRONTEND=noninteractive \
+            debian:bookworm-slim bash -c '
+              set -euo pipefail
+              apt-get update -qq
+              apt-get install -y -qq --no-install-recommends \
+                redis-server build-essential cmake \
+                libgtest-dev libgmock-dev \
+                libnl-3-dev libnl-genl-3-dev libnl-route-3-dev libnl-nf-3-dev \
+                libhiredis-dev libzmq3-dev libboost-dev libboost-serialization-dev \
+                libprotobuf-dev protobuf-compiler pkg-config \
+                libyang2-dev nlohmann-json3-dev uuid-dev \
+                python3-dev swig autoconf automake libtool >/dev/null 2>&1
+              dpkg --force-overwrite --force-depends -i /debs/*.deb 2>&1 || true
+              apt-get install -f -y -qq 2>/dev/null || true
+              ldconfig
+              redis-server --daemonize yes --bind 127.0.0.1
+              cp -a /src /tmp/swss-common-test && cd /tmp/swss-common-test
+              ./autogen.sh 2>&1 | tail -3
+              ./configure --enable-tests 2>&1 | tail -5
+              make -j$$(nproc) tests/tests 2>&1 | tail -10
+              echo ">>> Running GTest..."
+              ./tests/tests --gtest_output=xml:/tmp/test-results.xml 2>&1
+            '
+          echo ">>> [swss-common-tests] DONE"
+        ) 2>&1 | tee "$$LOG"
+        RC=$${PIPESTATUS[0]}
+        if [ "$$RC" -ne 0 ] && [ -n "$${GITHUB_TOKEN:-}" ] && [ -f scripts/ci/post_step_failure.py ]; then
+          command -v python3 >/dev/null 2>&1 || \
+            (apt-get install -y -qq python3 >/dev/null 2>&1 || apk add --no-cache python3 >/dev/null 2>&1) || true
+          python3 scripts/ci/post_step_failure.py "$$STEP" "$$LOG" "$$RC" || true
+        fi
+        exit $$RC
+    secretEnv: ['GITHUB_TOKEN']
     waitFor: ["build-orchagent"]
     timeout: "1800s"
 
@@ -387,40 +459,52 @@ steps:
     name: "gcr.io/cloud-builders/docker"
     entrypoint: "bash"
     args:
-      - "-euo"
-      - "pipefail"
       - "-c"
       - |
-        echo ">>> [sairedis-tests] Running sairedis C++ unit tests..."
-        STAGING=$$(mktemp -d)
-        find . -path "*/bazel-bin/*/*.deb" -size +0 2>/dev/null | while read f; do cp "$$f" "$$STAGING/"; done
-        docker run --rm --platform linux/amd64 \
-          -v "$$STAGING:/debs:ro" \
-          -v "$$(pwd)/src/sonic-sairedis:/src:ro" \
-          -e DEBIAN_FRONTEND=noninteractive \
-          debian:bookworm-slim bash -c '
-            set -euo pipefail
-            apt-get update -qq
-            apt-get install -y -qq --no-install-recommends \
-              redis-server build-essential cmake libgtest-dev libgmock-dev \
-              libnl-3-dev libnl-genl-3-dev libnl-route-3-dev libnl-nf-3-dev \
-              libhiredis-dev libzmq3-dev libboost-dev libboost-serialization-dev \
-              libprotobuf-dev protobuf-compiler pkg-config libyang2-dev nlohmann-json3-dev \
-              uuid-dev python3-dev swig autoconf automake libtool \
-              perl aspell aspell-en libjansson-dev libteam-dev libjemalloc-dev >/dev/null 2>&1
-            dpkg --force-overwrite --force-depends -i /debs/*.deb 2>&1 || true
-            apt-get install -f -y -qq 2>/dev/null || true; ldconfig
-            redis-server --daemonize yes --bind 127.0.0.1
-            cp -a /src /tmp/sairedis-test && cd /tmp/sairedis-test
-            find . -name .git -type f -delete 2>/dev/null || true; rm -rf .git
-            git config --global user.email build@sonic && git config --global user.name sonic
-            git init -q && git add -A . && git commit -qm init 2>/dev/null || true
-            ./autogen.sh 2>&1 | tail -3
-            ./configure --with-sai=vs --enable-tests 2>&1 | tail -5
-            make -j$$(nproc) 2>&1 | tail -20
-            cd tests && ./tests --gtest_output=xml:/tmp/sairedis-results.xml 2>&1
-          '
-        echo ">>> [sairedis-tests] DONE"
+        STEP=sairedis-unit-tests
+        mkdir -p /workspace/ci-logs
+        LOG=/workspace/ci-logs/$$STEP.log
+        (
+          set -euo pipefail
+          echo ">>> [sairedis-tests] Running sairedis C++ unit tests..."
+          STAGING=$$(mktemp -d)
+          find . -path "*/bazel-bin/*/*.deb" -size +0 2>/dev/null | while read f; do cp "$$f" "$$STAGING/"; done
+          docker run --rm --platform linux/amd64 \
+            -v "$$STAGING:/debs:ro" \
+            -v "$$(pwd)/src/sonic-sairedis:/src:ro" \
+            -e DEBIAN_FRONTEND=noninteractive \
+            debian:bookworm-slim bash -c '
+              set -euo pipefail
+              apt-get update -qq
+              apt-get install -y -qq --no-install-recommends \
+                redis-server build-essential cmake libgtest-dev libgmock-dev \
+                libnl-3-dev libnl-genl-3-dev libnl-route-3-dev libnl-nf-3-dev \
+                libhiredis-dev libzmq3-dev libboost-dev libboost-serialization-dev \
+                libprotobuf-dev protobuf-compiler pkg-config libyang2-dev nlohmann-json3-dev \
+                uuid-dev python3-dev swig autoconf automake libtool \
+                perl aspell aspell-en libjansson-dev libteam-dev libjemalloc-dev >/dev/null 2>&1
+              dpkg --force-overwrite --force-depends -i /debs/*.deb 2>&1 || true
+              apt-get install -f -y -qq 2>/dev/null || true; ldconfig
+              redis-server --daemonize yes --bind 127.0.0.1
+              cp -a /src /tmp/sairedis-test && cd /tmp/sairedis-test
+              find . -name .git -type f -delete 2>/dev/null || true; rm -rf .git
+              git config --global user.email build@sonic && git config --global user.name sonic
+              git init -q && git add -A . && git commit -qm init 2>/dev/null || true
+              ./autogen.sh 2>&1 | tail -3
+              ./configure --with-sai=vs --enable-tests 2>&1 | tail -5
+              make -j$$(nproc) 2>&1 | tail -20
+              cd tests && ./tests --gtest_output=xml:/tmp/sairedis-results.xml 2>&1
+            '
+          echo ">>> [sairedis-tests] DONE"
+        ) 2>&1 | tee "$$LOG"
+        RC=$${PIPESTATUS[0]}
+        if [ "$$RC" -ne 0 ] && [ -n "$${GITHUB_TOKEN:-}" ] && [ -f scripts/ci/post_step_failure.py ]; then
+          command -v python3 >/dev/null 2>&1 || \
+            (apt-get install -y -qq python3 >/dev/null 2>&1 || apk add --no-cache python3 >/dev/null 2>&1) || true
+          python3 scripts/ci/post_step_failure.py "$$STEP" "$$LOG" "$$RC" || true
+        fi
+        exit $$RC
+    secretEnv: ['GITHUB_TOKEN']
     waitFor: ["build-orchagent"]
     timeout: "1800s"
 
@@ -429,43 +513,55 @@ steps:
     name: "gcr.io/cloud-builders/docker"
     entrypoint: "bash"
     args:
-      - "-euo"
-      - "pipefail"
       - "-c"
       - |
-        echo ">>> [swss-mock-tests] Running 6 GTest binaries..."
-        STAGING=$$(mktemp -d)
-        find . -path "*/bazel-bin/*/*.deb" -size +0 2>/dev/null | while read f; do cp "$$f" "$$STAGING/"; done
-        docker run --rm --platform linux/amd64 \
-          -v "$$STAGING:/debs:ro" \
-          -v "$$(pwd)/src/sonic-swss:/src:ro" \
-          -e DEBIAN_FRONTEND=noninteractive \
-          debian:bookworm-slim bash -c '
-            set -euo pipefail
-            apt-get update -qq
-            apt-get install -y -qq --no-install-recommends \
-              redis-server build-essential cmake libgtest-dev libgmock-dev \
-              libnl-3-dev libnl-genl-3-dev libnl-route-3-dev libnl-nf-3-dev \
-              libhiredis-dev libzmq3-dev libboost-dev libboost-serialization-dev \
-              libprotobuf-dev protobuf-compiler pkg-config libyang2-dev nlohmann-json3-dev \
-              uuid-dev python3-dev swig autoconf automake libtool \
-              libjansson-dev libteam-dev libjemalloc-dev >/dev/null 2>&1
-            dpkg --force-overwrite --force-depends -i /debs/*.deb 2>&1 || true
-            apt-get install -f -y -qq 2>/dev/null || true; ldconfig
-            redis-server --daemonize yes --bind 127.0.0.1
-            cp -a /src /tmp/swss-test && cd /tmp/swss-test
-            find . -name .git -type f -delete 2>/dev/null || true; rm -rf .git
-            git config --global user.email build@sonic && git config --global user.name sonic
-            git init -q && git add -A . && git commit -qm init 2>/dev/null || true
-            ./autogen.sh 2>&1 | tail -3 && ./configure --enable-tests 2>&1 | tail -5
-            cd tests/mock_tests && make -j$$(nproc) 2>&1 | tail -20
-            FAILED=0
-            for t in tests tests_intfmgrd tests_teammgrd tests_portsyncd tests_fpmsyncd tests_response_publisher; do
-              [ -f "./$$t" ] && { echo ">>> Running $$t"; ./$$t 2>&1 || FAILED=1; } || true
-            done
-            [ $$FAILED -eq 0 ] && echo "ALL PASSED" || { echo "SOME FAILED"; exit 1; }
-          '
-        echo ">>> [swss-mock-tests] DONE"
+        STEP=swss-mock-tests
+        mkdir -p /workspace/ci-logs
+        LOG=/workspace/ci-logs/$$STEP.log
+        (
+          set -euo pipefail
+          echo ">>> [swss-mock-tests] Running 6 GTest binaries..."
+          STAGING=$$(mktemp -d)
+          find . -path "*/bazel-bin/*/*.deb" -size +0 2>/dev/null | while read f; do cp "$$f" "$$STAGING/"; done
+          docker run --rm --platform linux/amd64 \
+            -v "$$STAGING:/debs:ro" \
+            -v "$$(pwd)/src/sonic-swss:/src:ro" \
+            -e DEBIAN_FRONTEND=noninteractive \
+            debian:bookworm-slim bash -c '
+              set -euo pipefail
+              apt-get update -qq
+              apt-get install -y -qq --no-install-recommends \
+                redis-server build-essential cmake libgtest-dev libgmock-dev \
+                libnl-3-dev libnl-genl-3-dev libnl-route-3-dev libnl-nf-3-dev \
+                libhiredis-dev libzmq3-dev libboost-dev libboost-serialization-dev \
+                libprotobuf-dev protobuf-compiler pkg-config libyang2-dev nlohmann-json3-dev \
+                uuid-dev python3-dev swig autoconf automake libtool \
+                libjansson-dev libteam-dev libjemalloc-dev >/dev/null 2>&1
+              dpkg --force-overwrite --force-depends -i /debs/*.deb 2>&1 || true
+              apt-get install -f -y -qq 2>/dev/null || true; ldconfig
+              redis-server --daemonize yes --bind 127.0.0.1
+              cp -a /src /tmp/swss-test && cd /tmp/swss-test
+              find . -name .git -type f -delete 2>/dev/null || true; rm -rf .git
+              git config --global user.email build@sonic && git config --global user.name sonic
+              git init -q && git add -A . && git commit -qm init 2>/dev/null || true
+              ./autogen.sh 2>&1 | tail -3 && ./configure --enable-tests 2>&1 | tail -5
+              cd tests/mock_tests && make -j$$(nproc) 2>&1 | tail -20
+              FAILED=0
+              for t in tests tests_intfmgrd tests_teammgrd tests_portsyncd tests_fpmsyncd tests_response_publisher; do
+                [ -f "./$$t" ] && { echo ">>> Running $$t"; ./$$t 2>&1 || FAILED=1; } || true
+              done
+              [ $$FAILED -eq 0 ] && echo "ALL PASSED" || { echo "SOME FAILED"; exit 1; }
+            '
+          echo ">>> [swss-mock-tests] DONE"
+        ) 2>&1 | tee "$$LOG"
+        RC=$${PIPESTATUS[0]}
+        if [ "$$RC" -ne 0 ] && [ -n "$${GITHUB_TOKEN:-}" ] && [ -f scripts/ci/post_step_failure.py ]; then
+          command -v python3 >/dev/null 2>&1 || \
+            (apt-get install -y -qq python3 >/dev/null 2>&1 || apk add --no-cache python3 >/dev/null 2>&1) || true
+          python3 scripts/ci/post_step_failure.py "$$STEP" "$$LOG" "$$RC" || true
+        fi
+        exit $$RC
+    secretEnv: ['GITHUB_TOKEN']
     waitFor: ["build-orchagent"]
     timeout: "2400s"
 
@@ -478,78 +574,90 @@ steps:
     name: "gcr.io/cloud-builders/docker"
     entrypoint: "bash"
     args:
-      - "-euo"
-      - "pipefail"
       - "-c"
       - |
-        echo ">>> [pytest-vs] Checking for tarball..."
-        if [ ! -f bazel-bin/platform/vs/docker_sonic_vs_tarball.sh ]; then
-          echo ">>> [pytest-vs] FAIL: docker_sonic_vs_tarball not built"
-          exit 1
+        STEP=pytest-vs
+        mkdir -p /workspace/ci-logs
+        LOG=/workspace/ci-logs/$$STEP.log
+        (
+          set -euo pipefail
+          echo ">>> [pytest-vs] Checking for tarball..."
+          if [ ! -f bazel-bin/platform/vs/docker_sonic_vs_tarball.sh ]; then
+            echo ">>> [pytest-vs] FAIL: docker_sonic_vs_tarball not built"
+            exit 1
+          fi
+
+          echo ">>> [pytest-vs] Loading docker-sonic-vs image..."
+          bash bazel-bin/platform/vs/docker_sonic_vs_tarball.sh
+          docker tag sonic/docker_sonic_vs:latest docker-sonic-vs:latest
+
+          echo ">>> [pytest-vs] Verifying swss-common debs..."
+          ls -lh bazel-bin/src/sonic-swss-common/*.deb
+
+          DEBS_DIR=$$(realpath bazel-bin/src/sonic-swss-common)
+          TESTS_DIR=$$(realpath src/sonic-swss/tests)
+
+          mkdir -p /var/run/redis-vs
+
+          echo ">>> [pytest-vs] Running pytest inside bookworm container..."
+          docker run --rm --privileged \
+            --pid=host \
+            --network=host \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v /var/run/redis-vs:/var/run/redis-vs \
+            -v /var/run/netns:/var/run/netns \
+            -v /lib/modules:/lib/modules:ro \
+            -v "$$DEBS_DIR:/debs:ro" \
+            -v "$$TESTS_DIR:/tests" \
+            -e DEBIAN_FRONTEND=noninteractive \
+            debian:bookworm-slim bash -c '
+              set -euo pipefail
+
+              echo "--- Install runtime dependencies ---"
+              apt-get update -qq
+              apt-get install -y -qq --no-install-recommends \
+                python3 python3-pip python3-dev \
+                docker.io iproute2 util-linux kmod ethtool procps \
+                libhiredis0.14 libzmq5 \
+                libnl-3-200 libnl-genl-3-200 libnl-route-3-200 libnl-nf-3-200 \
+                libboost-serialization1.74.0 libyang2 libprotobuf32 \
+                libssl3 libjemalloc2 libjansson4 uuid-runtime
+
+              echo "--- Install swss-common debs ---"
+              dpkg --force-overwrite --force-depends -i \
+                /debs/libswsscommon_1.0.0_amd64.deb \
+                /debs/python3-swsscommon_1.0.0_amd64.deb
+              ldconfig
+
+              echo "--- Verify swsscommon ---"
+              python3 -c "from swsscommon import swsscommon; print(\"swsscommon: OK\")"
+
+              echo "--- Install pytest ---"
+              pip3 install --break-system-packages pytest pytest-timeout docker redis
+
+              echo "--- Patch conftest.py: make modprobe team non-fatal ---"
+              sed -i \
+                -e "s/if subprocess.check_call.*modprobe.*team.*/subprocess.call([\"\/sbin\/modprobe\", \"team\"])  # patched: non-fatal/" \
+                -e "/Cannot install kernel team module/d" \
+                /tests/conftest.py
+
+              echo "--- Run VS pytest suite ---"
+              cd /tests
+              pytest --imgname=docker-sonic-vs:latest -v \
+                test_port.py test_acl.py test_route.py test_vlan.py test_crm.py \
+                test_interface.py test_neighbor.py test_nhg.py test_fdb.py \
+                -x --timeout=600
+            '
+          echo ">>> [pytest-vs] ALL TESTS PASSED"
+        ) 2>&1 | tee "$$LOG"
+        RC=$${PIPESTATUS[0]}
+        if [ "$$RC" -ne 0 ] && [ -n "$${GITHUB_TOKEN:-}" ] && [ -f scripts/ci/post_step_failure.py ]; then
+          command -v python3 >/dev/null 2>&1 || \
+            (apt-get install -y -qq python3 >/dev/null 2>&1 || apk add --no-cache python3 >/dev/null 2>&1) || true
+          python3 scripts/ci/post_step_failure.py "$$STEP" "$$LOG" "$$RC" || true
         fi
-
-        echo ">>> [pytest-vs] Loading docker-sonic-vs image..."
-        bash bazel-bin/platform/vs/docker_sonic_vs_tarball.sh
-        docker tag sonic/docker_sonic_vs:latest docker-sonic-vs:latest
-
-        echo ">>> [pytest-vs] Verifying swss-common debs..."
-        ls -lh bazel-bin/src/sonic-swss-common/*.deb
-
-        DEBS_DIR=$$(realpath bazel-bin/src/sonic-swss-common)
-        TESTS_DIR=$$(realpath src/sonic-swss/tests)
-
-        mkdir -p /var/run/redis-vs
-
-        echo ">>> [pytest-vs] Running pytest inside bookworm container..."
-        docker run --rm --privileged \
-          --pid=host \
-          --network=host \
-          -v /var/run/docker.sock:/var/run/docker.sock \
-          -v /var/run/redis-vs:/var/run/redis-vs \
-          -v /var/run/netns:/var/run/netns \
-          -v /lib/modules:/lib/modules:ro \
-          -v "$$DEBS_DIR:/debs:ro" \
-          -v "$$TESTS_DIR:/tests" \
-          -e DEBIAN_FRONTEND=noninteractive \
-          debian:bookworm-slim bash -c '
-            set -euo pipefail
-
-            echo "--- Install runtime dependencies ---"
-            apt-get update -qq
-            apt-get install -y -qq --no-install-recommends \
-              python3 python3-pip python3-dev \
-              docker.io iproute2 util-linux kmod ethtool procps \
-              libhiredis0.14 libzmq5 \
-              libnl-3-200 libnl-genl-3-200 libnl-route-3-200 libnl-nf-3-200 \
-              libboost-serialization1.74.0 libyang2 libprotobuf32 \
-              libssl3 libjemalloc2 libjansson4 uuid-runtime
-
-            echo "--- Install swss-common debs ---"
-            dpkg --force-overwrite --force-depends -i \
-              /debs/libswsscommon_1.0.0_amd64.deb \
-              /debs/python3-swsscommon_1.0.0_amd64.deb
-            ldconfig
-
-            echo "--- Verify swsscommon ---"
-            python3 -c "from swsscommon import swsscommon; print(\"swsscommon: OK\")"
-
-            echo "--- Install pytest ---"
-            pip3 install --break-system-packages pytest pytest-timeout docker redis
-
-            echo "--- Patch conftest.py: make modprobe team non-fatal ---"
-            sed -i \
-              -e "s/if subprocess.check_call.*modprobe.*team.*/subprocess.call([\"\/sbin\/modprobe\", \"team\"])  # patched: non-fatal/" \
-              -e "/Cannot install kernel team module/d" \
-              /tests/conftest.py
-
-            echo "--- Run VS pytest suite ---"
-            cd /tests
-            pytest --imgname=docker-sonic-vs:latest -v \
-              test_port.py test_acl.py test_route.py test_vlan.py test_crm.py \
-              test_interface.py test_neighbor.py test_nhg.py test_fdb.py \
-              -x --timeout=600
-          '
-        echo ">>> [pytest-vs] ALL TESTS PASSED"
+        exit $$RC
+    secretEnv: ['GITHUB_TOKEN']
     waitFor: ["verify-docker-sonic-vs"]
     timeout: "3600s"
 
@@ -563,32 +671,44 @@ steps:
       - "PATH=/workspace/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
       - "HOME=/workspace/.home"
     args:
-      - "-euo"
-      - "pipefail"
       - "-c"
       - |
-        echo ">>> [build-broadcom-bin] Installing build dependencies..."
-        export DEBIAN_FRONTEND=noninteractive
-        apt-get update -qq && apt-get install -y -qq \
-          curl git python3 build-essential fakeroot dpkg-dev >/dev/null 2>&1
-        echo ">>> [build-broadcom-bin] Starting build..."
-        bazel --output_user_root=/workspace/.cache/bazel \
-          build //platform/broadcom:sonic_broadcom_bin \
-          --config=ci \
-          --spawn_strategy=local \
-          --strategy=CopyToDirectory=local \
-          2>&1
+        STEP=build-broadcom-bin
+        mkdir -p /workspace/ci-logs
+        LOG=/workspace/ci-logs/$$STEP.log
+        (
+          set -euo pipefail
+          echo ">>> [build-broadcom-bin] Installing build dependencies..."
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq && apt-get install -y -qq \
+            curl git python3 build-essential fakeroot dpkg-dev >/dev/null 2>&1
+          echo ">>> [build-broadcom-bin] Starting build..."
+          bazel --output_user_root=/workspace/.cache/bazel \
+            build //platform/broadcom:sonic_broadcom_bin \
+            --config=ci \
+            --spawn_strategy=local \
+            --strategy=CopyToDirectory=local \
+            2>&1
 
-        echo ""
-        echo ">>> [build-broadcom-bin] === RESULTS ==="
-        if [ -f bazel-bin/platform/broadcom/sonic_broadcom_bin.bin ]; then
-          SIZE_MB=$$(( $$(stat -c%s bazel-bin/platform/broadcom/sonic_broadcom_bin.bin) / 1048576 ))
-          echo "sonic-broadcom.bin: $${SIZE_MB} MB"
-          echo ">>> [build-broadcom-bin] SUCCESS"
-        else
-          echo ">>> [build-broadcom-bin] FAIL: no .bin produced"
-          exit 1
+          echo ""
+          echo ">>> [build-broadcom-bin] === RESULTS ==="
+          if [ -f bazel-bin/platform/broadcom/sonic_broadcom_bin.bin ]; then
+            SIZE_MB=$$(( $$(stat -c%s bazel-bin/platform/broadcom/sonic_broadcom_bin.bin) / 1048576 ))
+            echo "sonic-broadcom.bin: $${SIZE_MB} MB"
+            echo ">>> [build-broadcom-bin] SUCCESS"
+          else
+            echo ">>> [build-broadcom-bin] FAIL: no .bin produced"
+            exit 1
+          fi
+        ) 2>&1 | tee "$$LOG"
+        RC=$${PIPESTATUS[0]}
+        if [ "$$RC" -ne 0 ] && [ -n "$${GITHUB_TOKEN:-}" ] && [ -f scripts/ci/post_step_failure.py ]; then
+          command -v python3 >/dev/null 2>&1 || \
+            (apt-get install -y -qq python3 >/dev/null 2>&1 || apk add --no-cache python3 >/dev/null 2>&1) || true
+          python3 scripts/ci/post_step_failure.py "$$STEP" "$$LOG" "$$RC" || true
         fi
+        exit $$RC
+    secretEnv: ['GITHUB_TOKEN']
     waitFor: ["build-orchagent"]
     timeout: "3600s"
 
