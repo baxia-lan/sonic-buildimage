@@ -162,8 +162,12 @@ steps:
             libssl-dev libelf-dev fakeroot dpkg-dev >/dev/null 2>&1
           echo ">>> [build-orchagent] docker: $$(docker --version 2>&1 || echo MISSING)"
           echo ">>> [build-orchagent] Starting orchagent chain build..."
-          bazel --output_user_root=/workspace/.cache/bazel \
+          # Per-step output_user_root + symlink_prefix so parallel bazel
+          # steps don't contend on a shared output-base lock. Remote cache
+          # (GCS) is shared across steps so there's no redundant network I/O.
+          bazel --output_user_root=/workspace/.cache/bazel-orch \
             build //dockers/docker-orchagent:docker_orchagent \
+            --symlink_prefix=/workspace/bazel-orch- \
             --config=ci \
             --spawn_strategy=local \
             --strategy=CopyToDirectory=local \
@@ -173,9 +177,9 @@ steps:
 
           echo ""
           echo ">>> [build-orchagent] === RESULTS ==="
-          DEB_COUNT=$$(find bazel-bin/src -name "*.deb" -size +0 2>/dev/null | wc -l)
+          DEB_COUNT=$$(find /workspace/bazel-orch-bin/src -name "*.deb" -size +0 2>/dev/null | wc -l)
           echo "$$DEB_COUNT deb packages produced:"
-          find bazel-bin/src -name "*.deb" -size +0 2>/dev/null | sort
+          find /workspace/bazel-orch-bin/src -name "*.deb" -size +0 2>/dev/null | sort
           echo ">>> [build-orchagent] DONE"
         ) 2>&1 | tee "$$LOG"
         RC=$${PIPESTATUS[0]}
@@ -211,12 +215,13 @@ steps:
           mkdir -p /workspace/.home
           echo ">>> [build-kernel] Disk: $$(df -h / | tail -1 | awk '{print $$4}') free, CPUs: $$(nproc)"
 
-          echo ">>> [build-kernel] Bazel version:"
-          bazel --output_user_root=/workspace/.cache/bazel version 2>&1 | head -3
-
           echo ">>> [build-kernel] Starting kernel build (--config=ci + remote cache)..."
-          bazel --output_user_root=/workspace/.cache/bazel \
+          # Per-step output_user_root avoids shared-lock contention with
+          # other parallel bazel steps. Skipping `bazel version` (it does
+          # not block_for_lock and was failing fast on shared roots).
+          bazel --output_user_root=/workspace/.cache/bazel-krn \
             build //src/sonic-linux-kernel:linux_kernel_debs \
+            --symlink_prefix=/workspace/bazel-krn- \
             --config=ci \
             --spawn_strategy=local \
             --local_ram_resources=20000 \
@@ -225,7 +230,7 @@ steps:
 
           echo ""
           echo ">>> [build-kernel] === RESULTS ==="
-          ls -lh bazel-bin/src/sonic-linux-kernel/*.deb 2>/dev/null && \
+          ls -lh /workspace/bazel-krn-bin/src/sonic-linux-kernel/*.deb 2>/dev/null && \
             echo ">>> [build-kernel] SUCCESS" || \
             { echo ">>> [build-kernel] FAIL: No kernel debs produced"; exit 1; }
         ) 2>&1 | tee "$$LOG"
@@ -233,7 +238,7 @@ steps:
         bash scripts/ci/post_step_failure.sh "$$STEP" "$$LOG" "$$RC" || true
         exit $$RC
     secretEnv: ['GITHUB_TOKEN']
-    waitFor: ["build-docker-sonic-vs"]
+    waitFor: ["init-submodules", "install-bazelisk"]
     timeout: "3600s"
 
   # ── Step 7b: Build all service images (parallel with VS build) ──────────────
@@ -256,7 +261,9 @@ steps:
           apt-get update -qq && apt-get install -y -qq \
             curl git python3 build-essential fakeroot dpkg-dev >/dev/null 2>&1
           echo ">>> [build-service-images] Building all service docker images..."
-          bazel --output_user_root=/workspace/.cache/bazel \
+          # Per-step output_user_root so this runs in parallel with
+          # build-orchagent and build-kernel without bazel lock contention.
+          bazel --output_user_root=/workspace/.cache/bazel-svc \
             build \
               //dockers/docker-database:docker_database \
               //dockers/docker-teamd:docker_teamd \
@@ -266,6 +273,7 @@ steps:
               //dockers/docker-iccpd:docker_iccpd \
               //dockers/docker-router-advertiser:docker_router_advertiser \
               //dockers/docker-basic_router:docker_basic_router \
+            --symlink_prefix=/workspace/bazel-svc- \
             --config=ci \
             --spawn_strategy=local \
             --strategy=CopyToDirectory=local \
@@ -278,10 +286,10 @@ steps:
         bash scripts/ci/post_step_failure.sh "$$STEP" "$$LOG" "$$RC" || true
         exit $$RC
     secretEnv: ['GITHUB_TOKEN']
-    waitFor: ["build-orchagent"]
+    waitFor: ["init-submodules", "install-bazelisk"]
     timeout: "3600s"
 
-  # ── Step 8: Build docker-sonic-vs (serial after build-service-images to avoid bazel lock contention) ─
+  # ── Step 8: Build docker-sonic-vs (parallel; needs orchagent + service-images outputs) ─
   - id: "build-docker-sonic-vs"
     name: "gcr.io/cloud-builders/docker"
     entrypoint: "bash"
@@ -301,8 +309,12 @@ steps:
           apt-get update -qq && apt-get install -y -qq \
             curl git python3 build-essential fakeroot dpkg-dev >/dev/null 2>&1
           echo ">>> [build-docker-sonic-vs] Starting build..."
-          bazel --output_user_root=/workspace/.cache/bazel \
+          # Per-step output_user_root. Needs both build-orchagent
+          # (sonic-swss debs) and build-service-images (other service
+          # docker images) outputs via remote cache.
+          bazel --output_user_root=/workspace/.cache/bazel-vs \
             build //platform/vs:docker_sonic_vs_tarball \
+            --symlink_prefix=/workspace/bazel-vs- \
             --config=ci \
             --spawn_strategy=local \
             --strategy=CopyToDirectory=local \
@@ -313,7 +325,7 @@ steps:
 
           echo ""
           echo ">>> [build-docker-sonic-vs] === RESULTS ==="
-          ls -lh bazel-bin/platform/vs/docker_sonic_vs_tarball* 2>/dev/null && \
+          ls -lh /workspace/bazel-vs-bin/platform/vs/docker_sonic_vs_tarball* 2>/dev/null && \
             echo ">>> [build-docker-sonic-vs] SUCCESS" || \
             echo ">>> [build-docker-sonic-vs] WARN: No tarball produced"
         ) 2>&1 | tee "$$LOG"
@@ -321,7 +333,7 @@ steps:
         bash scripts/ci/post_step_failure.sh "$$STEP" "$$LOG" "$$RC" || true
         exit $$RC
     secretEnv: ['GITHUB_TOKEN']
-    waitFor: ["build-service-images"]
+    waitFor: ["build-orchagent", "build-service-images"]
     timeout: "3600s"
 
   # ── Step 8a: Load and verify docker-sonic-vs ─────────────────────────────────
@@ -337,7 +349,8 @@ steps:
         (
           set -euo pipefail
           echo ">>> [verify-vs] Loading docker-sonic-vs image..."
-          bash bazel-bin/platform/vs/docker_sonic_vs_tarball.sh
+          # build-docker-sonic-vs uses --symlink_prefix=/workspace/bazel-vs-
+          bash /workspace/bazel-vs-bin/platform/vs/docker_sonic_vs_tarball.sh
           docker tag sonic/docker_sonic_vs:latest docker-sonic-vs:latest
           docker images docker-sonic-vs
 
@@ -423,8 +436,12 @@ steps:
           # bind-mount; /tmp is step-container-only on Cloud Build DinD.
           mkdir -p /workspace/.ci-tmp/swss-common-tests
           STAGING=$$(mktemp -d -p /workspace/.ci-tmp/swss-common-tests)
-          find . -path "*/sonic-swss-common/*.deb" -size +0 2>/dev/null | while read f; do
-            cp "$$f" "$$STAGING/" 2>/dev/null || true
+          # build-orchagent produces swss-common debs; per-step symlink is
+          # /workspace/bazel-orch-bin. Check that + fallback full scan.
+          for d in /workspace/bazel-orch-bin /workspace/.cache/bazel-orch; do
+            find "$$d" -name "libswsscommon*.deb" -size +0 2>/dev/null | while read f; do cp "$$f" "$$STAGING/" 2>/dev/null || true; done
+            find "$$d" -name "python3-swsscommon*.deb" -size +0 2>/dev/null | while read f; do cp "$$f" "$$STAGING/" 2>/dev/null || true; done
+            find "$$d" -name "swss-common*.deb" -size +0 2>/dev/null | while read f; do cp "$$f" "$$STAGING/" 2>/dev/null || true; done
           done
           echo ">>> [swss-common-tests] Found $$(ls $$STAGING/*.deb 2>/dev/null | wc -l) debs"
 
@@ -478,7 +495,10 @@ steps:
           echo ">>> [sairedis-tests] Running sairedis C++ unit tests..."
           mkdir -p /workspace/.ci-tmp/sairedis-tests
           STAGING=$$(mktemp -d -p /workspace/.ci-tmp/sairedis-tests)
-          find . -path "*/bazel-bin/*/*.deb" -size +0 2>/dev/null | while read f; do cp "$$f" "$$STAGING/"; done
+          # Scan build-orchagent cache (produces sairedis transitively).
+          for d in /workspace/bazel-orch-bin /workspace/.cache/bazel-orch; do
+            find "$$d" -name "*.deb" -size +0 2>/dev/null | while read f; do cp "$$f" "$$STAGING/" 2>/dev/null || true; done
+          done
           docker run --rm --platform linux/amd64 \
             -v "$$STAGING:/debs:ro" \
             -v "$$(pwd)/src/sonic-sairedis:/src:ro" \
@@ -529,7 +549,9 @@ steps:
           echo ">>> [swss-mock-tests] Running 6 GTest binaries..."
           mkdir -p /workspace/.ci-tmp/swss-mock-tests
           STAGING=$$(mktemp -d -p /workspace/.ci-tmp/swss-mock-tests)
-          find . -path "*/bazel-bin/*/*.deb" -size +0 2>/dev/null | while read f; do cp "$$f" "$$STAGING/"; done
+          for d in /workspace/bazel-orch-bin /workspace/.cache/bazel-orch; do
+            find "$$d" -name "*.deb" -size +0 2>/dev/null | while read f; do cp "$$f" "$$STAGING/" 2>/dev/null || true; done
+          done
           docker run --rm --platform linux/amd64 \
             -v "$$STAGING:/debs:ro" \
             -v "$$(pwd)/src/sonic-swss:/src:ro" \
@@ -585,19 +607,26 @@ steps:
         (
           set -euo pipefail
           echo ">>> [pytest-vs] Checking for tarball..."
-          if [ ! -f bazel-bin/platform/vs/docker_sonic_vs_tarball.sh ]; then
+          # build-docker-sonic-vs uses --symlink_prefix=/workspace/bazel-vs-
+          if [ ! -f /workspace/bazel-vs-bin/platform/vs/docker_sonic_vs_tarball.sh ]; then
             echo ">>> [pytest-vs] FAIL: docker_sonic_vs_tarball not built"
             exit 1
           fi
 
           echo ">>> [pytest-vs] Loading docker-sonic-vs image..."
-          bash bazel-bin/platform/vs/docker_sonic_vs_tarball.sh
+          bash /workspace/bazel-vs-bin/platform/vs/docker_sonic_vs_tarball.sh
           docker tag sonic/docker_sonic_vs:latest docker-sonic-vs:latest
 
           echo ">>> [pytest-vs] Verifying swss-common debs..."
-          ls -lh bazel-bin/src/sonic-swss-common/*.deb
+          # swss-common debs built by build-orchagent.
+          SWSS_COMMON_DIR="/workspace/bazel-orch-bin/src/sonic-swss-common"
+          if [ ! -d "$$SWSS_COMMON_DIR" ]; then
+            # Fallback: scan orchagent cache dir directly
+            SWSS_COMMON_DIR=$$(dirname "$$(find /workspace/.cache/bazel-orch -name 'libswsscommon*.deb' -size +0 2>/dev/null | head -1)")
+          fi
+          ls -lh "$$SWSS_COMMON_DIR"/*.deb
 
-          DEBS_DIR=$$(realpath bazel-bin/src/sonic-swss-common)
+          DEBS_DIR=$$(realpath "$$SWSS_COMMON_DIR")
           TESTS_DIR=$$(realpath src/sonic-swss/tests)
 
           mkdir -p /var/run/redis-vs
@@ -682,8 +711,12 @@ steps:
           apt-get update -qq && apt-get install -y -qq \
             curl git python3 build-essential fakeroot dpkg-dev >/dev/null 2>&1
           echo ">>> [build-broadcom-bin] Starting build..."
-          bazel --output_user_root=/workspace/.cache/bazel \
+          # Per-step output_user_root. Depends on build-kernel's outputs
+          # via GCS remote cache (shared) — kernel's debs are re-fetched
+          # rather than rebuilt from the previous step's local cache.
+          bazel --output_user_root=/workspace/.cache/bazel-brd \
             build //platform/broadcom:sonic_broadcom_bin \
+            --symlink_prefix=/workspace/bazel-brd- \
             --config=ci \
             --spawn_strategy=local \
             --strategy=CopyToDirectory=local \
@@ -693,8 +726,8 @@ steps:
 
           echo ""
           echo ">>> [build-broadcom-bin] === RESULTS ==="
-          if [ -f bazel-bin/platform/broadcom/sonic_broadcom_bin.bin ]; then
-            SIZE_MB=$$(( $$(stat -c%s bazel-bin/platform/broadcom/sonic_broadcom_bin.bin) / 1048576 ))
+          if [ -f /workspace/bazel-brd-bin/platform/broadcom/sonic_broadcom_bin.bin ]; then
+            SIZE_MB=$$(( $$(stat -c%s /workspace/bazel-brd-bin/platform/broadcom/sonic_broadcom_bin.bin) / 1048576 ))
             echo "sonic-broadcom.bin: $${SIZE_MB} MB"
             echo ">>> [build-broadcom-bin] SUCCESS"
           else
@@ -732,16 +765,16 @@ steps:
           echo "Console:   https://console.cloud.google.com/cloud-build/builds/$BUILD_ID?project=yilanji-sandbox-163694"
           echo ""
           echo "-- Kernel debs --"
-          ls -lh bazel-bin/src/sonic-linux-kernel/*.deb 2>/dev/null || echo "  NOT BUILT"
+          ls -lh /workspace/bazel-krn-bin/src/sonic-linux-kernel/*.deb 2>/dev/null || echo "  NOT BUILT"
           echo ""
           echo "-- Orchagent debs --"
-          find bazel-bin/src -name "*.deb" -size +0 -exec ls -lh {} \; 2>/dev/null || echo "  NOT BUILT"
+          find /workspace/bazel-orch-bin/src -name "*.deb" -size +0 -exec ls -lh {} \; 2>/dev/null || echo "  NOT BUILT"
           echo ""
           echo "-- docker-sonic-vs --"
-          ls -lh bazel-bin/platform/vs/docker_sonic_vs_tarball* 2>/dev/null || echo "  NOT BUILT"
+          ls -lh /workspace/bazel-vs-bin/platform/vs/docker_sonic_vs_tarball* 2>/dev/null || echo "  NOT BUILT"
           echo ""
           echo "-- sonic-broadcom.bin --"
-          ls -lh bazel-bin/platform/broadcom/sonic_broadcom_bin.bin 2>/dev/null || echo "  NOT BUILT"
+          ls -lh /workspace/bazel-brd-bin/platform/broadcom/sonic_broadcom_bin.bin 2>/dev/null || echo "  NOT BUILT"
           echo ""
           echo "-- Disk usage --"
           df -h / 2>/dev/null | tail -1 || echo "  N/A"
@@ -806,6 +839,6 @@ artifacts:
   objects:
     location: "gs://${_CACHE_BUCKET}/artifacts/$BUILD_ID/"
     paths:
-      - "bazel-bin/src/sonic-linux-kernel/*.deb"
-      - "bazel-bin/src/sonic-swss/swss_*.deb"
-      - "bazel-bin/platform/broadcom/sonic_broadcom_bin.bin"
+      - "bazel-krn-bin/src/sonic-linux-kernel/*.deb"
+      - "bazel-orch-bin/src/sonic-swss/swss_*.deb"
+      - "bazel-brd-bin/platform/broadcom/sonic_broadcom_bin.bin"
