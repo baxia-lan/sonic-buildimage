@@ -106,7 +106,7 @@ print(json.dumps({"body": body}))
   fi
 fi
 
-# POST to GitHub
+# Primary channel: commit comment with full log tail.
 HTTP_CODE=$(curl -sS -o /tmp/post-response.txt -w "%{http_code}" -X POST \
   -H "Authorization: token $GITHUB_TOKEN" \
   -H "Accept: application/vnd.github.v3+json" \
@@ -116,10 +116,45 @@ HTTP_CODE=$(curl -sS -o /tmp/post-response.txt -w "%{http_code}" -X POST \
   -d "$BODY" 2>&1)
 CURL_RC=$?
 if [ "$CURL_RC" -eq 0 ] && [ "$HTTP_CODE" = "201" ]; then
-  echo "[post-hook] posted OK (HTTP $HTTP_CODE)"
+  echo "[post-hook] commit comment posted OK (HTTP $HTTP_CODE)"
 else
-  echo "[post-hook] POST failed (curl_rc=$CURL_RC http_code=$HTTP_CODE)"
+  echo "[post-hook] commit comment POST failed (curl_rc=$CURL_RC http_code=$HTTP_CODE)"
   head -c 500 /tmp/post-response.txt 2>/dev/null || true
+  echo ""
+fi
+
+# Secondary channel: per-step commit status. The GITHUB_TOKEN scope known
+# to work for this repo is commit statuses (proven by github-status-pending).
+# Even if the commit comment POST above 403s due to scope limits, a status
+# update still reaches the GitHub surface and is visible via the statuses
+# API without authentication.
+if [ "$MODE" = "start" ]; then
+  STATUS_STATE="pending"
+  STATUS_DESC="started"
+else
+  if [ "$RC" -eq 0 ]; then
+    STATUS_STATE="success"
+    STATUS_DESC="passed"
+  else
+    STATUS_STATE="failure"
+    STATUS_DESC="rc=$RC"
+  fi
+fi
+STATUS_DESC="${STATUS_DESC}; comment_http=${HTTP_CODE}"
+[ ${#STATUS_DESC} -gt 130 ] && STATUS_DESC="${STATUS_DESC:0:130}"
+STATUS_BODY="{\"state\":\"$STATUS_STATE\",\"description\":\"$STATUS_DESC\",\"context\":\"cloud-build/$STEP\",\"target_url\":\"$CONSOLE_URL\"}"
+STATUS_HTTP=$(curl -sS -o /tmp/status-response.txt -w "%{http_code}" -X POST \
+  -H "Authorization: token $GITHUB_TOKEN" \
+  -H "Accept: application/vnd.github.v3+json" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: cloudbuild-post-step-failure" \
+  "https://api.github.com/repos/${REPO}/statuses/${COMMIT_SHA}" \
+  -d "$STATUS_BODY" 2>&1)
+if [ "$STATUS_HTTP" = "201" ]; then
+  echo "[post-hook] status posted OK (HTTP $STATUS_HTTP ctx=cloud-build/$STEP)"
+else
+  echo "[post-hook] status POST failed (http=$STATUS_HTTP)"
+  head -c 300 /tmp/status-response.txt 2>/dev/null || true
   echo ""
 fi
 exit 0
