@@ -32,14 +32,21 @@ genrule(
     cmd = """
 set -euo pipefail
 
+# Temp dirs must be under the Bazel execroot (inside /workspace on Cloud
+# Build, inside the user's home on local macOS) so that `docker run -v`
+# can see them from the host docker daemon. Plain `mktemp -d` creates in
+# /tmp, which is not shared across the DinD boundary on Cloud Build, so
+# the mounted /patches and /output come back empty.
+mkdir -p "$$PWD/.bazel-tmp"
+
 # Stage patches for Docker
-PATCH_DIR=$$(mktemp -d)
+PATCH_DIR=$$(mktemp -d -p "$$PWD/.bazel-tmp")
 for p in $(locations :patches); do
   cp "$$p" "$$PATCH_DIR/" 2>/dev/null || true
 done
 
 # Build debs in Docker, output to a temp dir
-STAGING=$$(mktemp -d)
+STAGING=$$(mktemp -d -p "$$PWD/.bazel-tmp")
 docker run --rm --platform linux/amd64 \
   -v "$$PATCH_DIR:/patches:ro" \
   -v "$$STAGING:/output" \

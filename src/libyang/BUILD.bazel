@@ -51,8 +51,12 @@ genrule(
     ],
     cmd = "\n".join([
         "# Resolve absolute paths before Docker invocation",
+        "# Temp dirs must be under the Bazel execroot (inside /workspace on",
+        "# Cloud Build) so `docker run -v` can see them from the host docker",
+        "# daemon. mktemp in /tmp is not shared across the DinD boundary.",
+        "mkdir -p \"$$PWD/.bazel-tmp\"",
         "PATCH_DIR=$$(cd $$(dirname $(location patch/series)) && pwd)",
-        "STAGING=$$(mktemp -d)",
+        "STAGING=$$(mktemp -d -p \"$$PWD/.bazel-tmp\")",
         "docker run --rm --platform linux/amd64 \\",
         "  -v \"$$PATCH_DIR:/patches:ro\" \\",
         "  -v \"$$STAGING:/output\" \\",
