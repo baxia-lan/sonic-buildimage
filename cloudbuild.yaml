@@ -46,7 +46,7 @@ options:
     - "COMMIT_SHA=$COMMIT_SHA"
     - "BUILD_ID=$BUILD_ID"
 
-timeout: "7200s"
+timeout: "10800s"
 
 steps:
   # ── Step 1: Install Bazelisk ─────────────────────────────────────────────────
@@ -233,7 +233,7 @@ steps:
         bash scripts/ci/post_step_failure.sh "$$STEP" "$$LOG" "$$RC" || true
         exit $$RC
     secretEnv: ['GITHUB_TOKEN']
-    waitFor: ["build-orchagent"]
+    waitFor: ["build-docker-sonic-vs"]
     timeout: "3600s"
 
   # ── Step 7b: Build all service images (parallel with VS build) ──────────────
@@ -281,7 +281,7 @@ steps:
     waitFor: ["build-orchagent"]
     timeout: "3600s"
 
-  # ── Step 8: Build docker-sonic-vs ────────────────────────────────────────────
+  # ── Step 8: Build docker-sonic-vs (serial after build-service-images to avoid bazel lock contention) ─
   - id: "build-docker-sonic-vs"
     name: "gcr.io/cloud-builders/docker"
     entrypoint: "bash"
@@ -321,7 +321,7 @@ steps:
         bash scripts/ci/post_step_failure.sh "$$STEP" "$$LOG" "$$RC" || true
         exit $$RC
     secretEnv: ['GITHUB_TOKEN']
-    waitFor: ["build-orchagent"]
+    waitFor: ["build-service-images"]
     timeout: "3600s"
 
   # ── Step 8a: Load and verify docker-sonic-vs ─────────────────────────────────
@@ -419,7 +419,10 @@ steps:
           set -euo pipefail
           echo ">>> [swss-common-tests] Running swss-common C++ unit tests..."
           echo ">>> [swss-common-tests] Finding debs..."
-          STAGING=$$(mktemp -d)
+          # Temp dir must live under /workspace for host docker daemon to
+          # bind-mount; /tmp is step-container-only on Cloud Build DinD.
+          mkdir -p /workspace/.ci-tmp/swss-common-tests
+          STAGING=$$(mktemp -d -p /workspace/.ci-tmp/swss-common-tests)
           find . -path "*/sonic-swss-common/*.deb" -size +0 2>/dev/null | while read f; do
             cp "$$f" "$$STAGING/" 2>/dev/null || true
           done
@@ -473,7 +476,8 @@ steps:
         (
           set -euo pipefail
           echo ">>> [sairedis-tests] Running sairedis C++ unit tests..."
-          STAGING=$$(mktemp -d)
+          mkdir -p /workspace/.ci-tmp/sairedis-tests
+          STAGING=$$(mktemp -d -p /workspace/.ci-tmp/sairedis-tests)
           find . -path "*/bazel-bin/*/*.deb" -size +0 2>/dev/null | while read f; do cp "$$f" "$$STAGING/"; done
           docker run --rm --platform linux/amd64 \
             -v "$$STAGING:/debs:ro" \
@@ -523,7 +527,8 @@ steps:
         (
           set -euo pipefail
           echo ">>> [swss-mock-tests] Running 6 GTest binaries..."
-          STAGING=$$(mktemp -d)
+          mkdir -p /workspace/.ci-tmp/swss-mock-tests
+          STAGING=$$(mktemp -d -p /workspace/.ci-tmp/swss-mock-tests)
           find . -path "*/bazel-bin/*/*.deb" -size +0 2>/dev/null | while read f; do cp "$$f" "$$STAGING/"; done
           docker run --rm --platform linux/amd64 \
             -v "$$STAGING:/debs:ro" \
@@ -701,7 +706,7 @@ steps:
         bash scripts/ci/post_step_failure.sh "$$STEP" "$$LOG" "$$RC" || true
         exit $$RC
     secretEnv: ['GITHUB_TOKEN']
-    waitFor: ["build-orchagent"]
+    waitFor: ["build-kernel"]
     timeout: "3600s"
 
   # ── Step 11: Upload results summary to GCS ───────────────────────────────────
