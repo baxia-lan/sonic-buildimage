@@ -143,7 +143,11 @@ if [ -z "$$DEBS" ]; then
 fi
 
 # Extract debs inside Docker (dpkg-deb needs Linux)
-DEB_DIR=$$(mktemp -d)
+# Temp dir must be under execroot so the host docker daemon on Cloud
+# Build (DinD) can see it through the workspace volume. /tmp is not
+# shared across the DinD boundary.
+mkdir -p "$$PWD/.bazel-tmp"
+DEB_DIR=$$(mktemp -d -p "$$PWD/.bazel-tmp")
 for deb in $$DEBS; do
   cp "$$deb" "$$DEB_DIR/" 2>/dev/null || true
 done
