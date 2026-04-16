@@ -22,8 +22,8 @@ deb_extract_layer(
 deb_extract_layer(
     name = "libsairedis_layer",
     debs = [
-        "//src/sonic-sairedis:sairedis",
-        "//src/sonic-sairedis:saimetadata",
+        "@sonic_sairedis//:sairedis",
+        "@sonic_sairedis//:saimetadata",
     ],
     size_budget_mb = 60,
 )

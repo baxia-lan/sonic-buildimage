@@ -107,7 +107,7 @@ pkg_tar(
 genrule(
     name = "fpm_frr_swss_layer",
     srcs = [
-        "//src/sonic-swss:swss_deb",
+        "@sonic_swss//:swss_deb",
         "//build/deb/sonic-swss-common:swss_common",
         "//build/deb/sonic-swss-common:python3_swsscommon",
     ],
