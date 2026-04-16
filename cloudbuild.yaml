@@ -165,8 +165,17 @@ steps:
           # Per-step output_user_root + symlink_prefix so parallel bazel
           # steps don't contend on a shared output-base lock. Remote cache
           # (GCS) is shared across steps so there's no redundant network I/O.
+          #
+          # Explicitly building the deb targets (swss_common_debs,
+          # sairedis_debs, swss_debs) promotes them to top-level outputs
+          # so --remote_download_toplevel materializes them on local disk
+          # for downstream unit-tests and pytest-vs to consume.
           bazel --output_user_root=/workspace/.cache/bazel-orch \
-            build //dockers/docker-orchagent:docker_orchagent \
+            build \
+              //dockers/docker-orchagent:docker_orchagent \
+              //src/sonic-swss-common:swss_common_debs \
+              //src/sonic-sairedis:sairedis_debs \
+              //src/sonic-swss:swss_debs \
             --symlink_prefix=/workspace/bazel-orch- \
             --config=ci \
             --spawn_strategy=local \
