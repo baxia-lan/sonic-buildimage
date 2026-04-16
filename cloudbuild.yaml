@@ -136,6 +136,8 @@ steps:
         STEP=build-orchagent
         mkdir -p /workspace/ci-logs
         LOG=/workspace/ci-logs/$$STEP.log
+        # Heartbeat: confirms step ran and GITHUB_TOKEN/COMMIT_SHA are wired.
+        bash scripts/ci/post_step_failure.sh --start "$$STEP" || true
         (
           set -euo pipefail
           echo ">>> [build-orchagent] Installing build dependencies..."
