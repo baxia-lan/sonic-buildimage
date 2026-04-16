@@ -136,7 +136,17 @@ steps:
         STEP=build-orchagent
         mkdir -p /workspace/ci-logs
         LOG=/workspace/ci-logs/$$STEP.log
-        # Heartbeat: confirms step ran and GITHUB_TOKEN/COMMIT_SHA are wired.
+        # INLINE heartbeat: proves the step started and the token can post
+        # statuses. Bypasses scripts/ci/post_step_failure.sh so a script bug
+        # cannot mask the signal.
+        curl -sS -o /tmp/hb-body.txt -w "HB_INLINE_HTTP=%{http_code}\n" -X POST \
+          -H "Authorization: token $$GITHUB_TOKEN" \
+          -H "Accept: application/vnd.github.v3+json" \
+          "https://api.github.com/repos/baxia-lan/sonic-buildimage/statuses/$COMMIT_SHA" \
+          -d "{\"state\":\"pending\",\"context\":\"cloud-build/build-orchagent/inline\",\"description\":\"inline heartbeat OK\",\"target_url\":\"https://console.cloud.google.com/cloud-build/builds/$BUILD_ID?project=yilanji-sandbox-163694\"}" \
+          || echo "HB_INLINE_CURL_FAILED"
+        cat /tmp/hb-body.txt 2>/dev/null || true
+        # Wrapper heartbeat: proves the wrapper script is reachable.
         bash scripts/ci/post_step_failure.sh --start "$$STEP" || true
         (
           set -euo pipefail
