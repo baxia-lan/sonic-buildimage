@@ -120,8 +120,12 @@ steps:
     timeout: "60s"
 
   # ── Step 6: Build orchagent chain (Gate 1 critical path) ──────────────────────
+  # Uses gcr.io/cloud-builders/docker because Bazel genrules in the dep closure
+  # (src/sonic-swss, src/sonic-sairedis, src/libyang, src/libnl3) shell out to
+  # `docker run` inside no-sandbox actions. Plain ubuntu:22.04 has no docker
+  # CLI and those genrules fail with "docker: command not found".
   - id: "build-orchagent"
-    name: "ubuntu:22.04"
+    name: "gcr.io/cloud-builders/docker"
     entrypoint: "bash"
     env:
       - "PATH=/workspace/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -139,12 +143,15 @@ steps:
           apt-get update -qq && apt-get install -y -qq \
             curl git python3 build-essential bc bison flex \
             libssl-dev libelf-dev fakeroot dpkg-dev >/dev/null 2>&1
+          echo ">>> [build-orchagent] docker: $$(docker --version 2>&1 || echo MISSING)"
           echo ">>> [build-orchagent] Starting orchagent chain build..."
           bazel --output_user_root=/workspace/.cache/bazel \
             build //dockers/docker-orchagent:docker_orchagent \
             --config=ci \
             --spawn_strategy=local \
             --strategy=CopyToDirectory=local \
+            --local_ram_resources=20000 \
+            --jobs=16 \
             2>&1
 
           echo ""
@@ -155,11 +162,7 @@ steps:
           echo ">>> [build-orchagent] DONE"
         ) 2>&1 | tee "$$LOG"
         RC=$${PIPESTATUS[0]}
-        if [ "$$RC" -ne 0 ] && [ -n "$${GITHUB_TOKEN:-}" ] && [ -f scripts/ci/post_step_failure.py ]; then
-          command -v python3 >/dev/null 2>&1 || \
-            (apt-get install -y -qq python3 >/dev/null 2>&1 || apk add --no-cache python3 >/dev/null 2>&1) || true
-          python3 scripts/ci/post_step_failure.py "$$STEP" "$$LOG" "$$RC" || true
-        fi
+        bash scripts/ci/post_step_failure.sh "$$STEP" "$$LOG" "$$RC" || true
         exit $$RC
     secretEnv: ['GITHUB_TOKEN']
     waitFor: ["init-submodules", "install-bazelisk"]
@@ -169,7 +172,7 @@ steps:
   # Requires //src/sonic-linux-kernel:linux_kernel_debs BUILD to be checked in.
   # If it is not committed, this step will fail honestly. Do not swallow failures.
   - id: "build-kernel"
-    name: "ubuntu:22.04"
+    name: "gcr.io/cloud-builders/docker"
     entrypoint: "bash"
     env:
       - "PATH=/workspace/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -199,6 +202,8 @@ steps:
             build //src/sonic-linux-kernel:linux_kernel_debs \
             --config=ci \
             --spawn_strategy=local \
+            --local_ram_resources=20000 \
+            --jobs=16 \
             2>&1
 
           echo ""
@@ -208,11 +213,7 @@ steps:
             { echo ">>> [build-kernel] FAIL: No kernel debs produced"; exit 1; }
         ) 2>&1 | tee "$$LOG"
         RC=$${PIPESTATUS[0]}
-        if [ "$$RC" -ne 0 ] && [ -n "$${GITHUB_TOKEN:-}" ] && [ -f scripts/ci/post_step_failure.py ]; then
-          command -v python3 >/dev/null 2>&1 || \
-            (apt-get install -y -qq python3 >/dev/null 2>&1 || apk add --no-cache python3 >/dev/null 2>&1) || true
-          python3 scripts/ci/post_step_failure.py "$$STEP" "$$LOG" "$$RC" || true
-        fi
+        bash scripts/ci/post_step_failure.sh "$$STEP" "$$LOG" "$$RC" || true
         exit $$RC
     secretEnv: ['GITHUB_TOKEN']
     waitFor: ["build-orchagent"]
@@ -220,7 +221,7 @@ steps:
 
   # ── Step 7b: Build all service images (parallel with VS build) ──────────────
   - id: "build-service-images"
-    name: "ubuntu:22.04"
+    name: "gcr.io/cloud-builders/docker"
     entrypoint: "bash"
     env:
       - "PATH=/workspace/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -251,15 +252,13 @@ steps:
             --config=ci \
             --spawn_strategy=local \
             --strategy=CopyToDirectory=local \
+            --local_ram_resources=20000 \
+            --jobs=16 \
             2>&1
           echo ">>> [build-service-images] DONE"
         ) 2>&1 | tee "$$LOG"
         RC=$${PIPESTATUS[0]}
-        if [ "$$RC" -ne 0 ] && [ -n "$${GITHUB_TOKEN:-}" ] && [ -f scripts/ci/post_step_failure.py ]; then
-          command -v python3 >/dev/null 2>&1 || \
-            (apt-get install -y -qq python3 >/dev/null 2>&1 || apk add --no-cache python3 >/dev/null 2>&1) || true
-          python3 scripts/ci/post_step_failure.py "$$STEP" "$$LOG" "$$RC" || true
-        fi
+        bash scripts/ci/post_step_failure.sh "$$STEP" "$$LOG" "$$RC" || true
         exit $$RC
     secretEnv: ['GITHUB_TOKEN']
     waitFor: ["build-orchagent"]
@@ -267,7 +266,7 @@ steps:
 
   # ── Step 8: Build docker-sonic-vs ────────────────────────────────────────────
   - id: "build-docker-sonic-vs"
-    name: "ubuntu:22.04"
+    name: "gcr.io/cloud-builders/docker"
     entrypoint: "bash"
     env:
       - "PATH=/workspace/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -291,6 +290,8 @@ steps:
             --spawn_strategy=local \
             --strategy=CopyToDirectory=local \
             --check_direct_dependencies=off \
+            --local_ram_resources=20000 \
+            --jobs=16 \
             2>&1
 
           echo ""
@@ -300,11 +301,7 @@ steps:
             echo ">>> [build-docker-sonic-vs] WARN: No tarball produced"
         ) 2>&1 | tee "$$LOG"
         RC=$${PIPESTATUS[0]}
-        if [ "$$RC" -ne 0 ] && [ -n "$${GITHUB_TOKEN:-}" ] && [ -f scripts/ci/post_step_failure.py ]; then
-          command -v python3 >/dev/null 2>&1 || \
-            (apt-get install -y -qq python3 >/dev/null 2>&1 || apk add --no-cache python3 >/dev/null 2>&1) || true
-          python3 scripts/ci/post_step_failure.py "$$STEP" "$$LOG" "$$RC" || true
-        fi
+        bash scripts/ci/post_step_failure.sh "$$STEP" "$$LOG" "$$RC" || true
         exit $$RC
     secretEnv: ['GITHUB_TOKEN']
     waitFor: ["build-orchagent"]
@@ -385,11 +382,7 @@ steps:
           fi
         ) 2>&1 | tee "$$LOG"
         RC=$${PIPESTATUS[0]}
-        if [ "$$RC" -ne 0 ] && [ -n "$${GITHUB_TOKEN:-}" ] && [ -f scripts/ci/post_step_failure.py ]; then
-          command -v python3 >/dev/null 2>&1 || \
-            (apt-get install -y -qq python3 >/dev/null 2>&1 || apk add --no-cache python3 >/dev/null 2>&1) || true
-          python3 scripts/ci/post_step_failure.py "$$STEP" "$$LOG" "$$RC" || true
-        fi
+        bash scripts/ci/post_step_failure.sh "$$STEP" "$$LOG" "$$RC" || true
         exit $$RC
     secretEnv: ['GITHUB_TOKEN']
     waitFor: ["build-docker-sonic-vs"]
@@ -444,11 +437,7 @@ steps:
           echo ">>> [swss-common-tests] DONE"
         ) 2>&1 | tee "$$LOG"
         RC=$${PIPESTATUS[0]}
-        if [ "$$RC" -ne 0 ] && [ -n "$${GITHUB_TOKEN:-}" ] && [ -f scripts/ci/post_step_failure.py ]; then
-          command -v python3 >/dev/null 2>&1 || \
-            (apt-get install -y -qq python3 >/dev/null 2>&1 || apk add --no-cache python3 >/dev/null 2>&1) || true
-          python3 scripts/ci/post_step_failure.py "$$STEP" "$$LOG" "$$RC" || true
-        fi
+        bash scripts/ci/post_step_failure.sh "$$STEP" "$$LOG" "$$RC" || true
         exit $$RC
     secretEnv: ['GITHUB_TOKEN']
     waitFor: ["build-orchagent"]
@@ -498,11 +487,7 @@ steps:
           echo ">>> [sairedis-tests] DONE"
         ) 2>&1 | tee "$$LOG"
         RC=$${PIPESTATUS[0]}
-        if [ "$$RC" -ne 0 ] && [ -n "$${GITHUB_TOKEN:-}" ] && [ -f scripts/ci/post_step_failure.py ]; then
-          command -v python3 >/dev/null 2>&1 || \
-            (apt-get install -y -qq python3 >/dev/null 2>&1 || apk add --no-cache python3 >/dev/null 2>&1) || true
-          python3 scripts/ci/post_step_failure.py "$$STEP" "$$LOG" "$$RC" || true
-        fi
+        bash scripts/ci/post_step_failure.sh "$$STEP" "$$LOG" "$$RC" || true
         exit $$RC
     secretEnv: ['GITHUB_TOKEN']
     waitFor: ["build-orchagent"]
@@ -555,11 +540,7 @@ steps:
           echo ">>> [swss-mock-tests] DONE"
         ) 2>&1 | tee "$$LOG"
         RC=$${PIPESTATUS[0]}
-        if [ "$$RC" -ne 0 ] && [ -n "$${GITHUB_TOKEN:-}" ] && [ -f scripts/ci/post_step_failure.py ]; then
-          command -v python3 >/dev/null 2>&1 || \
-            (apt-get install -y -qq python3 >/dev/null 2>&1 || apk add --no-cache python3 >/dev/null 2>&1) || true
-          python3 scripts/ci/post_step_failure.py "$$STEP" "$$LOG" "$$RC" || true
-        fi
+        bash scripts/ci/post_step_failure.sh "$$STEP" "$$LOG" "$$RC" || true
         exit $$RC
     secretEnv: ['GITHUB_TOKEN']
     waitFor: ["build-orchagent"]
@@ -651,11 +632,7 @@ steps:
           echo ">>> [pytest-vs] ALL TESTS PASSED"
         ) 2>&1 | tee "$$LOG"
         RC=$${PIPESTATUS[0]}
-        if [ "$$RC" -ne 0 ] && [ -n "$${GITHUB_TOKEN:-}" ] && [ -f scripts/ci/post_step_failure.py ]; then
-          command -v python3 >/dev/null 2>&1 || \
-            (apt-get install -y -qq python3 >/dev/null 2>&1 || apk add --no-cache python3 >/dev/null 2>&1) || true
-          python3 scripts/ci/post_step_failure.py "$$STEP" "$$LOG" "$$RC" || true
-        fi
+        bash scripts/ci/post_step_failure.sh "$$STEP" "$$LOG" "$$RC" || true
         exit $$RC
     secretEnv: ['GITHUB_TOKEN']
     waitFor: ["verify-docker-sonic-vs"]
@@ -665,7 +642,7 @@ steps:
   # Requires kernel BUILD and all broadcom deps to be checked in.
   # If they are not committed, this step will fail honestly.
   - id: "build-broadcom-bin"
-    name: "ubuntu:22.04"
+    name: "gcr.io/cloud-builders/docker"
     entrypoint: "bash"
     env:
       - "PATH=/workspace/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -688,6 +665,8 @@ steps:
             --config=ci \
             --spawn_strategy=local \
             --strategy=CopyToDirectory=local \
+            --local_ram_resources=20000 \
+            --jobs=16 \
             2>&1
 
           echo ""
@@ -702,11 +681,7 @@ steps:
           fi
         ) 2>&1 | tee "$$LOG"
         RC=$${PIPESTATUS[0]}
-        if [ "$$RC" -ne 0 ] && [ -n "$${GITHUB_TOKEN:-}" ] && [ -f scripts/ci/post_step_failure.py ]; then
-          command -v python3 >/dev/null 2>&1 || \
-            (apt-get install -y -qq python3 >/dev/null 2>&1 || apk add --no-cache python3 >/dev/null 2>&1) || true
-          python3 scripts/ci/post_step_failure.py "$$STEP" "$$LOG" "$$RC" || true
-        fi
+        bash scripts/ci/post_step_failure.sh "$$STEP" "$$LOG" "$$RC" || true
         exit $$RC
     secretEnv: ['GITHUB_TOKEN']
     waitFor: ["build-orchagent"]
