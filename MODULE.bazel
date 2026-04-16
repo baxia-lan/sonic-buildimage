@@ -131,38 +131,6 @@ _sysroot_repo(
     },
 )
 
-# ── Submodule overlays (BUILD files for git submodules) ─────────────────────
-# These repo rules expose submodule source directories to Bazel with BUILD
-# files from build/overlays/. After `git submodule update --init`, the source
-# lives in src/<mod>/ but has no BUILD.bazel (submodule forks own those files).
-# The overlay provides a BUILD while keeping the submodule source untouched.
-# Make rules in rules/*.mk remain present and unmodified.
-_new_local_repo = use_repo_rule("@bazel_tools//tools/build_defs/repo:local.bzl", "new_local_repository")
-
-_new_local_repo(
-    name = "sonic_sairedis",
-    build_file = "//build/overlays/sonic-sairedis:BUILD.overlay.bazel",
-    path = "src/sonic-sairedis",
-)
-
-_new_local_repo(
-    name = "sonic_swss",
-    build_file = "//build/overlays/sonic-swss:BUILD.overlay.bazel",
-    path = "src/sonic-swss",
-)
-
-_new_local_repo(
-    name = "sonic_dash_api",
-    build_file = "//build/overlays/sonic-dash-api:BUILD.overlay.bazel",
-    path = "src/sonic-dash-api",
-)
-
-_new_local_repo(
-    name = "sonic_stp",
-    build_file = "//build/overlays/sonic-stp:BUILD.overlay.bazel",
-    path = "src/sonic-stp",
-)
-
 # ── cppzmq headers — fetched at repository_rule time, NOT during build ────────
 _cppzmq = use_repo_rule("//rules/bazel/deb:cppzmq_repo.bzl", "cppzmq_headers")
 

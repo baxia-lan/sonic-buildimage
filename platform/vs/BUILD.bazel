@@ -94,16 +94,16 @@ deb_extract_layer(
         "//build/deb/sonic-swss-common:swss_common",
         "//build/deb/sonic-swss-common:python3_swsscommon",
         "//build/deb/sonic-swss-common:sonic_db_cli",
-        # Submodule packages via new_local_repository overlays (MODULE.bazel).
-        # Source: submodule after `git submodule update --init`
-        # BUILD: build/overlays/sonic-*/BUILD.overlay.bazel
+        # Submodule packages. BUILD files live inside each submodule fork at
+        # the SHA recorded in this repo's git-link, and come in after
+        # `git submodule update --init --recursive`.
         # Make owner: rules/sairedis.mk, rules/swss.mk, etc. (preserved)
-        "@sonic_sairedis//:sairedis",
-        "@sonic_sairedis//:saivs",
-        "@sonic_sairedis//:saimetadata",
-        "@sonic_swss//:swss_deb",
-        "@sonic_dash_api//:sonic_dash_api",
-        "@sonic_stp//:stp",
+        "//src/sonic-sairedis:sairedis",
+        "//src/sonic-sairedis:saivs",
+        "//src/sonic-sairedis:saimetadata",
+        "//src/sonic-swss:swss_deb",
+        "//src/sonic-dash-api:sonic_dash_api",
+        "//src/sonic-stp:stp",
         # libyang v1.0.73: provides python3-yang (import yang) + libyang.so + libyang-cpp.so
         # Required by sonic-cfggen → sonic_yang_cfg_generator → sonic_yang → import yang as ly
         "//src/libyang:libyang_debs",
@@ -552,8 +552,8 @@ sh_test(
     srcs = ["sairedis_tests.sh"],
     data = [
         "//build/deb/sonic-swss-common:swss_common",
-        "@sonic_sairedis//:sairedis",
-        "@sonic_dash_api//:sonic_dash_api",
+        "//src/sonic-sairedis:sairedis",
+        "//src/sonic-dash-api:sonic_dash_api",
     ],
     tags = [
         "manual",
@@ -569,8 +569,8 @@ sh_test(
     srcs = ["swss_mock_tests.sh"],
     data = [
         "//build/deb/sonic-swss-common:swss_common",
-        "@sonic_sairedis//:sairedis",
-        "@sonic_swss//:swss_deb",
+        "//src/sonic-sairedis:sairedis",
+        "//src/sonic-swss:swss_deb",
     ],
     tags = [
         "manual",

@@ -1,3 +1,0 @@
-# Marker BUILD for overlay directory.
-# The actual BUILD used by @sonic_sairedis is BUILD.overlay.bazel.
-exports_files(["BUILD.overlay.bazel"])
