@@ -495,12 +495,15 @@ steps:
           # bind-mount; /tmp is step-container-only on Cloud Build DinD.
           mkdir -p /workspace/.ci-tmp/swss-common-tests
           STAGING=$$(mktemp -d -p /workspace/.ci-tmp/swss-common-tests)
-          # build-orchagent produces swss-common debs; per-step symlink is
-          # /workspace/bazel-orch-bin. Check that + fallback full scan.
+          # Stage ALL debs produced by build-orchagent (swss-common + its
+          # transitive sonic-tagged deps: libnl3, libyang, sairedis, etc.).
+          # The swss-common deb hard-depends on libnl-3-200 (>= ...sonic1)
+          # which Debian's stock libnl3 does not satisfy. If only
+          # swss-common*.deb is staged, `apt-get install -f` then REMOVES
+          # libswsscommon to resolve dependencies, and the subsequent test
+          # link breaks. Evidence: build d9a5a49a on 33e881bba rc=2.
           for d in /workspace/bazel-orch-bin /workspace/.cache/bazel-orch; do
-            find "$$d" -name "libswsscommon*.deb" -size +0 2>/dev/null | while read f; do cp "$$f" "$$STAGING/" 2>/dev/null || true; done
-            find "$$d" -name "python3-swsscommon*.deb" -size +0 2>/dev/null | while read f; do cp "$$f" "$$STAGING/" 2>/dev/null || true; done
-            find "$$d" -name "swss-common*.deb" -size +0 2>/dev/null | while read f; do cp "$$f" "$$STAGING/" 2>/dev/null || true; done
+            find "$$d" -name "*.deb" -size +0 2>/dev/null | while read f; do cp "$$f" "$$STAGING/" 2>/dev/null || true; done
           done
           echo ">>> [swss-common-tests] Found $$(ls $$STAGING/*.deb 2>/dev/null | wc -l) debs"
 
