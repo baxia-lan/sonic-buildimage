@@ -392,7 +392,21 @@ steps:
         bash scripts/ci/post_step_failure.sh "$$STEP" "$$LOG" "$$RC" || true
         exit $$RC
     secretEnv: ['GITHUB_TOKEN']
-    waitFor: ["build-orchagent", "build-service-images"]
+    # Serialize after kernel + unit-tests complete to stay within the
+    # 28.8GB N1_HIGHCPU_32 envelope. This step needs 16GB JVM + 10GB
+    # action budget = ~26GB, leaving ~3GB for docker/system. Running
+    # concurrently with kernel (20GB action budget) or the unit-tests
+    # (each GTest compile uses 2-4GB) pushes the host into OOM. Evidence:
+    # build b2463731 on fdbbf0f25 INTERNAL_ERROR at 58m when orchagent
+    # completed (39m) and the 4 heavy concurrent steps (kernel + docker-vs
+    # + 3 unit-tests) ran together; same pattern on 5c55bf13b.
+    waitFor:
+      - "build-orchagent"
+      - "build-service-images"
+      - "build-kernel"
+      - "swss-common-unit-tests"
+      - "sairedis-unit-tests"
+      - "swss-mock-tests"
     timeout: "3600s"
 
   # ── Step 8a: Load and verify docker-sonic-vs ─────────────────────────────────
@@ -822,7 +836,10 @@ steps:
         bash scripts/ci/post_step_failure.sh "$$STEP" "$$LOG" "$$RC" || true
         exit $$RC
     secretEnv: ['GITHUB_TOKEN']
-    waitFor: ["build-kernel"]
+    # Serialize after build-docker-sonic-vs (same memory-envelope rationale).
+    # broadcom-bin also needs a bazel server + action RAM; running concurrently
+    # with docker-vs would push the 28.8GB machine into OOM.
+    waitFor: ["build-kernel", "build-docker-sonic-vs"]
     timeout: "3600s"
 
   # ── Step 11: Upload results summary to GCS ───────────────────────────────────
