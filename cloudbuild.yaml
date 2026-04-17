@@ -176,6 +176,7 @@ steps:
               //src/sonic-swss-common:swss_common_debs \
               //src/sonic-sairedis:sairedis_debs \
               //src/sonic-swss:swss_debs \
+              //src/sonic-dash-api:sonic_dash_api_debs \
             --symlink_prefix=/workspace/bazel-orch- \
             --config=ci \
             --spawn_strategy=local \
@@ -468,7 +469,7 @@ steps:
                 libhiredis-dev libzmq3-dev libboost-dev libboost-serialization-dev \
                 libprotobuf-dev protobuf-compiler pkg-config \
                 libyang2-dev nlohmann-json3-dev uuid-dev \
-                python3-dev swig autoconf automake libtool \
+                python3-dev swig autoconf automake libtool autoconf-archive \
                 git m4 >/dev/null 2>&1
               dpkg --force-overwrite --force-depends -i /debs/*.deb 2>&1 || true
               apt-get install -f -y -qq 2>/dev/null || true
@@ -479,7 +480,9 @@ steps:
               git config --global user.email build@sonic && git config --global user.name sonic
               git init -q && git add -A . && git commit -qm init 2>/dev/null || true
               ./autogen.sh 2>&1 | tail -3
-              ./configure --enable-tests 2>&1 | tail -5
+              # --disable-python2 because python2-dev is not installed; AX_CODE_COVERAGE
+              # and AX_ADD_AM_MACRO_STATIC come from autoconf-archive (added above).
+              ./configure --disable-python2 2>&1 | tail -5
               make -j$$(nproc) tests/tests 2>&1 | tail -10
               echo ">>> Running GTest..."
               ./tests/tests --gtest_output=xml:/tmp/test-results.xml 2>&1
@@ -524,7 +527,7 @@ steps:
                 libnl-3-dev libnl-genl-3-dev libnl-route-3-dev libnl-nf-3-dev \
                 libhiredis-dev libzmq3-dev libboost-dev libboost-serialization-dev \
                 libprotobuf-dev protobuf-compiler pkg-config libyang2-dev nlohmann-json3-dev \
-                uuid-dev python3-dev swig autoconf automake libtool \
+                uuid-dev python3-dev swig autoconf automake libtool autoconf-archive \
                 perl aspell aspell-en libjansson-dev libteam-dev libjemalloc-dev \
                 git m4 >/dev/null 2>&1
               dpkg --force-overwrite --force-depends -i /debs/*.deb 2>&1 || true
@@ -534,8 +537,12 @@ steps:
               find . -name .git -type f -delete 2>/dev/null || true; rm -rf .git
               git config --global user.email build@sonic && git config --global user.name sonic
               git init -q && git add -A . && git commit -qm init 2>/dev/null || true
+              for v in 1.10.0 1.11.0 1.12.0 1.13.0 1.14.0 1.15.0 1.16.0; do git tag v$$v 2>/dev/null || true; done
               ./autogen.sh 2>&1 | tail -3
-              ./configure --with-sai=vs --enable-tests 2>&1 | tail -5
+              # --disable-python2 because python2-dev is not installed;
+              # AX_CODE_COVERAGE/AX_PYTHON3_DEVEL/AX_ADD_AM_MACRO_STATIC come
+              # from autoconf-archive (added above).
+              ./configure --with-sai=vs --disable-python2 2>&1 | tail -5
               make -j$$(nproc) 2>&1 | tail -20
               cd tests && ./tests --gtest_output=xml:/tmp/sairedis-results.xml 2>&1
             '

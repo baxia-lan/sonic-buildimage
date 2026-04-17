@@ -8,6 +8,7 @@ load("//:sonic_image.bzl", "sonic_platform_docker", "sonic_platform_image")
 exports_files([
     "cloudbuild.yaml",
     ".bazelrc",
+    "Makefile",
 ])
 
 # ── Platform-aware top-level targets ─────────────────────────────────────────
