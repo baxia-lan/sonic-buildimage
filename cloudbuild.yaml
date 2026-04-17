@@ -743,6 +743,10 @@ steps:
           sed -e 's|^supervisorctl start teamsyncd$|& \|\| true|' \
               -e 's|^supervisorctl start teammgrd$|& \|\| true|' \
               /tmp/start.sh.orig > /tmp/start.sh.patched
+          # Preserve executable bit — docker cp copies source perms and
+          # sed default is 644. Without +x supervisord can't exec start.sh
+          # and reports program:start.sh FATAL.
+          chmod +x /tmp/start.sh.patched
           docker cp /tmp/start.sh.patched $$CID:/usr/bin/start.sh
           docker commit \
             --change 'ENTRYPOINT ["/usr/local/bin/supervisord"]' \
