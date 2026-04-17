@@ -223,7 +223,7 @@ steps:
           echo ">>> [build-kernel] Installing build dependencies..."
           export DEBIAN_FRONTEND=noninteractive
           # Do NOT suppress apt output: when apt fails we need the stderr
-          # in the failure comment (post_step_failure.sh tails $LOG).
+          # in the failure comment (post_step_failure.sh tails $$LOG).
           # Retry apt-get update once — the Ubuntu focal security mirror
           # (91.189.91.82) intermittently refuses connections from GCP.
           apt-get update || { sleep 5; apt-get update; }
