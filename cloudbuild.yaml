@@ -507,7 +507,7 @@ steps:
                 libprotobuf-dev protobuf-compiler pkg-config \
                 libyang2-dev nlohmann-json3-dev uuid-dev \
                 python3-dev swig autoconf automake libtool autoconf-archive \
-                git m4 >/dev/null 2>&1
+                git m4
               dpkg --force-overwrite --force-depends -i /debs/*.deb 2>&1 || true
               apt-get install -f -y -qq 2>/dev/null || true
               ldconfig
@@ -566,7 +566,8 @@ steps:
                 libprotobuf-dev protobuf-compiler pkg-config libyang2-dev nlohmann-json3-dev \
                 uuid-dev python3-dev swig autoconf automake libtool autoconf-archive \
                 perl aspell aspell-en libjansson-dev libteam-dev libjemalloc-dev \
-                git m4 >/dev/null 2>&1
+                doxygen graphviz \
+                git m4
               dpkg --force-overwrite --force-depends -i /debs/*.deb 2>&1 || true
               apt-get install -f -y -qq 2>/dev/null || true; ldconfig
               redis-server --daemonize yes --bind 127.0.0.1
@@ -624,7 +625,7 @@ steps:
                 libprotobuf-dev protobuf-compiler pkg-config libyang2-dev nlohmann-json3-dev \
                 uuid-dev python3-dev swig autoconf automake libtool \
                 libjansson-dev libteam-dev libjemalloc-dev \
-                git m4 >/dev/null 2>&1
+                git m4
               dpkg --force-overwrite --force-depends -i /debs/*.deb 2>&1 || true
               apt-get install -f -y -qq 2>/dev/null || true; ldconfig
               redis-server --daemonize yes --bind 127.0.0.1
