@@ -160,6 +160,12 @@ steps:
           # Do NOT suppress apt output; retry apt-get update once on
           # transient mirror failures (Ubuntu focal security mirror
           # intermittently refuses connections from GCP networks).
+          # Ubuntu focal archive.ubuntu.com / security.ubuntu.com are
+          # unreachable from Cloud Build's GCE network (all 9 mirror IPs
+          # time out). Swap to the regional GCE-hosted Ubuntu mirror
+          # before apt-get update. Evidence: build 1206896c-9130-4c5c on
+          # commit 0c875eff2 — every archive.ubuntu.com IP timed out.
+          sed -i 's|http://archive.ubuntu.com|http://us-central1.gce.archive.ubuntu.com|g; s|http://security.ubuntu.com|http://us-central1.gce.archive.ubuntu.com|g' /etc/apt/sources.list
           apt-get update || { sleep 5; apt-get update; }
           apt-get install -y -qq \
             curl git python3 build-essential bc bison flex \
@@ -226,6 +232,12 @@ steps:
           # in the failure comment (post_step_failure.sh tails $$LOG).
           # Retry apt-get update once — the Ubuntu focal security mirror
           # (91.189.91.82) intermittently refuses connections from GCP.
+          # Ubuntu focal archive.ubuntu.com / security.ubuntu.com are
+          # unreachable from Cloud Build's GCE network (all 9 mirror IPs
+          # time out). Swap to the regional GCE-hosted Ubuntu mirror
+          # before apt-get update. Evidence: build 1206896c-9130-4c5c on
+          # commit 0c875eff2 — every archive.ubuntu.com IP timed out.
+          sed -i 's|http://archive.ubuntu.com|http://us-central1.gce.archive.ubuntu.com|g; s|http://security.ubuntu.com|http://us-central1.gce.archive.ubuntu.com|g' /etc/apt/sources.list
           apt-get update || { sleep 5; apt-get update; }
           apt-get install -y -qq \
             curl git python3 build-essential bc bison flex \
@@ -278,6 +290,12 @@ steps:
           echo ">>> [build-service-images] Installing build dependencies..."
           export DEBIAN_FRONTEND=noninteractive
           # Do NOT suppress apt output; retry on transient mirror fails.
+          # Ubuntu focal archive.ubuntu.com / security.ubuntu.com are
+          # unreachable from Cloud Build's GCE network (all 9 mirror IPs
+          # time out). Swap to the regional GCE-hosted Ubuntu mirror
+          # before apt-get update. Evidence: build 1206896c-9130-4c5c on
+          # commit 0c875eff2 — every archive.ubuntu.com IP timed out.
+          sed -i 's|http://archive.ubuntu.com|http://us-central1.gce.archive.ubuntu.com|g; s|http://security.ubuntu.com|http://us-central1.gce.archive.ubuntu.com|g' /etc/apt/sources.list
           apt-get update || { sleep 5; apt-get update; }
           apt-get install -y -qq \
             curl git python3 build-essential fakeroot dpkg-dev
@@ -328,6 +346,12 @@ steps:
           echo ">>> [build-docker-sonic-vs] Installing build dependencies..."
           export DEBIAN_FRONTEND=noninteractive
           # Do NOT suppress apt output; retry on transient mirror fails.
+          # Ubuntu focal archive.ubuntu.com / security.ubuntu.com are
+          # unreachable from Cloud Build's GCE network (all 9 mirror IPs
+          # time out). Swap to the regional GCE-hosted Ubuntu mirror
+          # before apt-get update. Evidence: build 1206896c-9130-4c5c on
+          # commit 0c875eff2 — every archive.ubuntu.com IP timed out.
+          sed -i 's|http://archive.ubuntu.com|http://us-central1.gce.archive.ubuntu.com|g; s|http://security.ubuntu.com|http://us-central1.gce.archive.ubuntu.com|g' /etc/apt/sources.list
           apt-get update || { sleep 5; apt-get update; }
           apt-get install -y -qq \
             curl git python3 build-essential fakeroot dpkg-dev
@@ -744,6 +768,12 @@ steps:
           echo ">>> [build-broadcom-bin] Installing build dependencies..."
           export DEBIAN_FRONTEND=noninteractive
           # Do NOT suppress apt output; retry on transient mirror fails.
+          # Ubuntu focal archive.ubuntu.com / security.ubuntu.com are
+          # unreachable from Cloud Build's GCE network (all 9 mirror IPs
+          # time out). Swap to the regional GCE-hosted Ubuntu mirror
+          # before apt-get update. Evidence: build 1206896c-9130-4c5c on
+          # commit 0c875eff2 — every archive.ubuntu.com IP timed out.
+          sed -i 's|http://archive.ubuntu.com|http://us-central1.gce.archive.ubuntu.com|g; s|http://security.ubuntu.com|http://us-central1.gce.archive.ubuntu.com|g' /etc/apt/sources.list
           apt-get update || { sleep 5; apt-get update; }
           apt-get install -y -qq \
             curl git python3 build-essential fakeroot dpkg-dev
