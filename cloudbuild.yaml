@@ -46,7 +46,7 @@ options:
     - "COMMIT_SHA=$COMMIT_SHA"
     - "BUILD_ID=$BUILD_ID"
 
-timeout: "10800s"
+timeout: "14400s"
 
 steps:
   # ── Step 1: Install Bazelisk ─────────────────────────────────────────────────
@@ -270,7 +270,12 @@ steps:
         exit $$RC
     secretEnv: ['GITHUB_TOKEN']
     waitFor: ["init-submodules", "install-bazelisk"]
-    timeout: "3600s"
+    # 3600s (60m) was not enough: build-kernel hit TIMEOUT at exactly
+    # 1h0m1s on build 0e7f0ba6e, while building sonic-linux-kernel from
+    # source. Bump to 5400s (90m) to give a fresh kernel build room to
+    # complete; subsequent builds should hit the GCS remote cache and
+    # finish much faster.
+    timeout: "5400s"
 
   # ── Step 7b: Build all service images (parallel with VS build) ──────────────
   - id: "build-service-images"
