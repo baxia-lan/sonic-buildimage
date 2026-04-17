@@ -328,169 +328,6 @@ steps:
     waitFor: ["init-submodules", "install-bazelisk"]
     timeout: "3600s"
 
-  # ── Step 8: Build docker-sonic-vs (parallel; needs orchagent + service-images outputs) ─
-  - id: "build-docker-sonic-vs"
-    name: "gcr.io/cloud-builders/docker"
-    entrypoint: "bash"
-    env:
-      - "PATH=/workspace/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-      - "HOME=/workspace/.home"
-    args:
-      - "-c"
-      - |
-        STEP=build-docker-sonic-vs
-        mkdir -p /workspace/ci-logs
-        LOG=/workspace/ci-logs/$$STEP.log
-        (
-          set -euo pipefail
-          echo ">>> [build-docker-sonic-vs] Installing build dependencies..."
-          export DEBIAN_FRONTEND=noninteractive
-          # Do NOT suppress apt output; retry on transient mirror fails.
-          # Ubuntu focal archive.ubuntu.com / security.ubuntu.com are
-          # unreachable from Cloud Build's GCE network (all 9 mirror IPs
-          # time out). Swap to the regional GCE-hosted Ubuntu mirror
-          # before apt-get update. Evidence: build 1206896c-9130-4c5c on
-          # commit 0c875eff2 — every archive.ubuntu.com IP timed out.
-          sed -i 's|http://archive.ubuntu.com|http://us-central1.gce.archive.ubuntu.com|g; s|http://security.ubuntu.com|http://us-central1.gce.archive.ubuntu.com|g' /etc/apt/sources.list
-          apt-get update || { sleep 5; apt-get update; }
-          apt-get install -y -qq \
-            curl git python3 build-essential fakeroot dpkg-dev
-          echo ">>> [build-docker-sonic-vs] Starting build..."
-          # Per-step output_user_root. Needs both build-orchagent
-          # (sonic-swss debs) and build-service-images (other service
-          # docker images) outputs via remote cache.
-          #
-          # JVM heap: //platform/vs:docker_sonic_vs_tarball's analysis
-          # resolves ~200 bookworm_* apt repos + ~27k configured targets.
-          # Default ~7-8GB heap exhausts ("Server terminated abruptly,
-          # error code: 14"). Bump to 16GB, but lower --local_ram_resources
-          # from 20GB to 10GB to stay within the 28.8GB machine cap
-          # (16 JVM + 10 actions + ~2 docker/system = 28GB). Applied here,
-          # NOT in .bazelrc, because other steps don't need the heap bump
-          # and the global flag caused OOM on build-orchagent (build
-          # 9d10cdf4 on 5c55bf13b: INTERNAL_ERROR at ~57m).
-          bazel \
-            --host_jvm_args=-Xmx16g \
-            --output_user_root=/workspace/.cache/bazel-vs \
-            build //platform/vs:docker_sonic_vs_tarball \
-            --symlink_prefix=/workspace/bazel-vs- \
-            --config=ci \
-            --spawn_strategy=local \
-            --strategy=CopyToDirectory=local \
-            --check_direct_dependencies=off \
-            --local_ram_resources=10000 \
-            --jobs=16 \
-            2>&1
-
-          echo ""
-          echo ">>> [build-docker-sonic-vs] === RESULTS ==="
-          ls -lh /workspace/bazel-vs-bin/platform/vs/docker_sonic_vs_tarball* 2>/dev/null && \
-            echo ">>> [build-docker-sonic-vs] SUCCESS" || \
-            echo ">>> [build-docker-sonic-vs] WARN: No tarball produced"
-        ) 2>&1 | tee "$$LOG"
-        RC=$${PIPESTATUS[0]}
-        bash scripts/ci/post_step_failure.sh "$$STEP" "$$LOG" "$$RC" || true
-        exit $$RC
-    secretEnv: ['GITHUB_TOKEN']
-    # Serialize after kernel + unit-tests complete to stay within the
-    # 28.8GB N1_HIGHCPU_32 envelope. This step needs 16GB JVM + 10GB
-    # action budget = ~26GB, leaving ~3GB for docker/system. Running
-    # concurrently with kernel (20GB action budget) or the unit-tests
-    # (each GTest compile uses 2-4GB) pushes the host into OOM. Evidence:
-    # build b2463731 on fdbbf0f25 INTERNAL_ERROR at 58m when orchagent
-    # completed (39m) and the 4 heavy concurrent steps (kernel + docker-vs
-    # + 3 unit-tests) ran together; same pattern on 5c55bf13b.
-    waitFor:
-      - "build-orchagent"
-      - "build-service-images"
-      - "build-kernel"
-      - "swss-common-unit-tests"
-      - "sairedis-unit-tests"
-      - "swss-mock-tests"
-    timeout: "3600s"
-
-  # ── Step 8a: Load and verify docker-sonic-vs ─────────────────────────────────
-  - id: "verify-docker-sonic-vs"
-    name: "gcr.io/cloud-builders/docker"
-    entrypoint: "bash"
-    args:
-      - "-c"
-      - |
-        STEP=verify-docker-sonic-vs
-        mkdir -p /workspace/ci-logs
-        LOG=/workspace/ci-logs/$$STEP.log
-        (
-          set -euo pipefail
-          echo ">>> [verify-vs] Loading docker-sonic-vs image..."
-          # build-docker-sonic-vs uses --symlink_prefix=/workspace/bazel-vs-
-          bash /workspace/bazel-vs-bin/platform/vs/docker_sonic_vs_tarball.sh
-          docker tag sonic/docker_sonic_vs:latest docker-sonic-vs:latest
-          docker images docker-sonic-vs
-
-          echo ">>> [verify-vs] Quick content check..."
-          docker run --rm --entrypoint /bin/bash docker-sonic-vs:latest -c '
-            python3 -c "from swsscommon import swsscommon; print(\"swsscommon: OK\")" 2>&1 || echo "swsscommon: FAILED"
-            echo "sonic-cfggen: $$(sonic-cfggen --help 2>&1 | head -3 || echo BROKEN)"
-            echo "ip: $$(ip link show lo 2>&1 | head -1)"
-          '
-
-          echo ">>> [verify-vs] Boot test..."
-          CID=$$(docker run -d --privileged docker-sonic-vs:latest)
-          sleep 5
-          CSTATE=$$(docker inspect -f '{{.State.Status}}' $$CID 2>/dev/null || echo "unknown")
-          echo "Container state after 5s: $$CSTATE"
-          if [ "$$CSTATE" != "running" ]; then
-            echo "FATAL: Container not running"
-            docker logs $$CID 2>&1 | tail -30
-            docker rm $$CID 2>/dev/null || true
-            exit 1
-          fi
-
-          echo ">>> [verify-vs] Waiting 120s for services..."
-          BOOTED=false
-          for i in $$(seq 1 24); do
-            SVCCOUNT=$$(docker exec $$CID supervisorctl status 2>/dev/null | grep -c RUNNING || true)
-            echo "  $${i}x5s: $$SVCCOUNT services RUNNING"
-            if [ "$$SVCCOUNT" -gt 5 ]; then
-              echo ">>> [verify-vs] Services booted: $$SVCCOUNT RUNNING"
-              BOOTED=true
-              break
-            fi
-            sleep 5
-          done
-          echo ">>> [verify-vs] === Service status ==="
-          docker exec $$CID supervisorctl status 2>&1 || true
-          if [ "$$BOOTED" != "true" ]; then
-            echo ">>> [verify-vs] === Container logs (last 100 lines) ==="
-            docker logs $$CID 2>&1 | tail -100 || true
-            echo ">>> [verify-vs] === start.sh exit details ==="
-            docker exec $$CID cat /var/log/syslog 2>/dev/null | tail -50 || true
-            echo ">>> [verify-vs] === rsyslogd library check ==="
-            docker exec $$CID ldd /usr/sbin/rsyslogd 2>&1 | grep -i 'not found' || echo "All rsyslog libs found"
-            echo ">>> [verify-vs] === redis-server library check ==="
-            docker exec $$CID ldd /usr/bin/redis-server 2>&1 | grep -i 'not found' || echo "All redis libs found"
-            echo ">>> [verify-vs] === syncd library check ==="
-            docker exec $$CID ldd /usr/bin/syncd 2>&1 | grep -i 'not found' || echo "All syncd libs found"
-            echo ">>> [verify-vs] === jq check ==="
-            docker exec $$CID jq --version 2>&1 || echo "jq: NOT FOUND"
-            echo ">>> [verify-vs] === supervisord log (syncd/orchagent lines) ==="
-            docker logs $$CID 2>&1 | grep -E 'syncd|orchagent|start\.sh' | tail -30 || true
-          fi
-          docker stop $$CID 2>/dev/null; docker rm $$CID 2>/dev/null || true
-          if [ "$$BOOTED" = "true" ]; then
-            echo ">>> [verify-vs] PASS"
-          else
-            echo ">>> [verify-vs] FAIL: Fewer than 6 services reached RUNNING"
-            exit 1
-          fi
-        ) 2>&1 | tee "$$LOG"
-        RC=$${PIPESTATUS[0]}
-        bash scripts/ci/post_step_failure.sh "$$STEP" "$$LOG" "$$RC" || true
-        exit $$RC
-    secretEnv: ['GITHUB_TOKEN']
-    waitFor: ["build-docker-sonic-vs"]
-    timeout: "600s"
-
   # ── Step 8b: swss-common unit tests ──────────────────────────────────────────
   - id: "swss-common-unit-tests"
     name: "gcr.io/cloud-builders/docker"
@@ -678,6 +515,169 @@ steps:
     secretEnv: ['GITHUB_TOKEN']
     waitFor: ["build-orchagent"]
     timeout: "2400s"
+
+  # ── Step 8: Build docker-sonic-vs (parallel; needs orchagent + service-images outputs) ─
+  - id: "build-docker-sonic-vs"
+    name: "gcr.io/cloud-builders/docker"
+    entrypoint: "bash"
+    env:
+      - "PATH=/workspace/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      - "HOME=/workspace/.home"
+    args:
+      - "-c"
+      - |
+        STEP=build-docker-sonic-vs
+        mkdir -p /workspace/ci-logs
+        LOG=/workspace/ci-logs/$$STEP.log
+        (
+          set -euo pipefail
+          echo ">>> [build-docker-sonic-vs] Installing build dependencies..."
+          export DEBIAN_FRONTEND=noninteractive
+          # Do NOT suppress apt output; retry on transient mirror fails.
+          # Ubuntu focal archive.ubuntu.com / security.ubuntu.com are
+          # unreachable from Cloud Build's GCE network (all 9 mirror IPs
+          # time out). Swap to the regional GCE-hosted Ubuntu mirror
+          # before apt-get update. Evidence: build 1206896c-9130-4c5c on
+          # commit 0c875eff2 — every archive.ubuntu.com IP timed out.
+          sed -i 's|http://archive.ubuntu.com|http://us-central1.gce.archive.ubuntu.com|g; s|http://security.ubuntu.com|http://us-central1.gce.archive.ubuntu.com|g' /etc/apt/sources.list
+          apt-get update || { sleep 5; apt-get update; }
+          apt-get install -y -qq \
+            curl git python3 build-essential fakeroot dpkg-dev
+          echo ">>> [build-docker-sonic-vs] Starting build..."
+          # Per-step output_user_root. Needs both build-orchagent
+          # (sonic-swss debs) and build-service-images (other service
+          # docker images) outputs via remote cache.
+          #
+          # JVM heap: //platform/vs:docker_sonic_vs_tarball's analysis
+          # resolves ~200 bookworm_* apt repos + ~27k configured targets.
+          # Default ~7-8GB heap exhausts ("Server terminated abruptly,
+          # error code: 14"). Bump to 16GB, but lower --local_ram_resources
+          # from 20GB to 10GB to stay within the 28.8GB machine cap
+          # (16 JVM + 10 actions + ~2 docker/system = 28GB). Applied here,
+          # NOT in .bazelrc, because other steps don't need the heap bump
+          # and the global flag caused OOM on build-orchagent (build
+          # 9d10cdf4 on 5c55bf13b: INTERNAL_ERROR at ~57m).
+          bazel \
+            --host_jvm_args=-Xmx16g \
+            --output_user_root=/workspace/.cache/bazel-vs \
+            build //platform/vs:docker_sonic_vs_tarball \
+            --symlink_prefix=/workspace/bazel-vs- \
+            --config=ci \
+            --spawn_strategy=local \
+            --strategy=CopyToDirectory=local \
+            --check_direct_dependencies=off \
+            --local_ram_resources=10000 \
+            --jobs=16 \
+            2>&1
+
+          echo ""
+          echo ">>> [build-docker-sonic-vs] === RESULTS ==="
+          ls -lh /workspace/bazel-vs-bin/platform/vs/docker_sonic_vs_tarball* 2>/dev/null && \
+            echo ">>> [build-docker-sonic-vs] SUCCESS" || \
+            echo ">>> [build-docker-sonic-vs] WARN: No tarball produced"
+        ) 2>&1 | tee "$$LOG"
+        RC=$${PIPESTATUS[0]}
+        bash scripts/ci/post_step_failure.sh "$$STEP" "$$LOG" "$$RC" || true
+        exit $$RC
+    secretEnv: ['GITHUB_TOKEN']
+    # Serialize after kernel + unit-tests complete to stay within the
+    # 28.8GB N1_HIGHCPU_32 envelope. This step needs 16GB JVM + 10GB
+    # action budget = ~26GB, leaving ~3GB for docker/system. Running
+    # concurrently with kernel (20GB action budget) or the unit-tests
+    # (each GTest compile uses 2-4GB) pushes the host into OOM. Evidence:
+    # build b2463731 on fdbbf0f25 INTERNAL_ERROR at 58m when orchagent
+    # completed (39m) and the 4 heavy concurrent steps (kernel + docker-vs
+    # + 3 unit-tests) ran together; same pattern on 5c55bf13b.
+    waitFor:
+      - "build-orchagent"
+      - "build-service-images"
+      - "build-kernel"
+      - "swss-common-unit-tests"
+      - "sairedis-unit-tests"
+      - "swss-mock-tests"
+    timeout: "3600s"
+
+  # ── Step 8a: Load and verify docker-sonic-vs ─────────────────────────────────
+  - id: "verify-docker-sonic-vs"
+    name: "gcr.io/cloud-builders/docker"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        STEP=verify-docker-sonic-vs
+        mkdir -p /workspace/ci-logs
+        LOG=/workspace/ci-logs/$$STEP.log
+        (
+          set -euo pipefail
+          echo ">>> [verify-vs] Loading docker-sonic-vs image..."
+          # build-docker-sonic-vs uses --symlink_prefix=/workspace/bazel-vs-
+          bash /workspace/bazel-vs-bin/platform/vs/docker_sonic_vs_tarball.sh
+          docker tag sonic/docker_sonic_vs:latest docker-sonic-vs:latest
+          docker images docker-sonic-vs
+
+          echo ">>> [verify-vs] Quick content check..."
+          docker run --rm --entrypoint /bin/bash docker-sonic-vs:latest -c '
+            python3 -c "from swsscommon import swsscommon; print(\"swsscommon: OK\")" 2>&1 || echo "swsscommon: FAILED"
+            echo "sonic-cfggen: $$(sonic-cfggen --help 2>&1 | head -3 || echo BROKEN)"
+            echo "ip: $$(ip link show lo 2>&1 | head -1)"
+          '
+
+          echo ">>> [verify-vs] Boot test..."
+          CID=$$(docker run -d --privileged docker-sonic-vs:latest)
+          sleep 5
+          CSTATE=$$(docker inspect -f '{{.State.Status}}' $$CID 2>/dev/null || echo "unknown")
+          echo "Container state after 5s: $$CSTATE"
+          if [ "$$CSTATE" != "running" ]; then
+            echo "FATAL: Container not running"
+            docker logs $$CID 2>&1 | tail -30
+            docker rm $$CID 2>/dev/null || true
+            exit 1
+          fi
+
+          echo ">>> [verify-vs] Waiting 120s for services..."
+          BOOTED=false
+          for i in $$(seq 1 24); do
+            SVCCOUNT=$$(docker exec $$CID supervisorctl status 2>/dev/null | grep -c RUNNING || true)
+            echo "  $${i}x5s: $$SVCCOUNT services RUNNING"
+            if [ "$$SVCCOUNT" -gt 5 ]; then
+              echo ">>> [verify-vs] Services booted: $$SVCCOUNT RUNNING"
+              BOOTED=true
+              break
+            fi
+            sleep 5
+          done
+          echo ">>> [verify-vs] === Service status ==="
+          docker exec $$CID supervisorctl status 2>&1 || true
+          if [ "$$BOOTED" != "true" ]; then
+            echo ">>> [verify-vs] === Container logs (last 100 lines) ==="
+            docker logs $$CID 2>&1 | tail -100 || true
+            echo ">>> [verify-vs] === start.sh exit details ==="
+            docker exec $$CID cat /var/log/syslog 2>/dev/null | tail -50 || true
+            echo ">>> [verify-vs] === rsyslogd library check ==="
+            docker exec $$CID ldd /usr/sbin/rsyslogd 2>&1 | grep -i 'not found' || echo "All rsyslog libs found"
+            echo ">>> [verify-vs] === redis-server library check ==="
+            docker exec $$CID ldd /usr/bin/redis-server 2>&1 | grep -i 'not found' || echo "All redis libs found"
+            echo ">>> [verify-vs] === syncd library check ==="
+            docker exec $$CID ldd /usr/bin/syncd 2>&1 | grep -i 'not found' || echo "All syncd libs found"
+            echo ">>> [verify-vs] === jq check ==="
+            docker exec $$CID jq --version 2>&1 || echo "jq: NOT FOUND"
+            echo ">>> [verify-vs] === supervisord log (syncd/orchagent lines) ==="
+            docker logs $$CID 2>&1 | grep -E 'syncd|orchagent|start\.sh' | tail -30 || true
+          fi
+          docker stop $$CID 2>/dev/null; docker rm $$CID 2>/dev/null || true
+          if [ "$$BOOTED" = "true" ]; then
+            echo ">>> [verify-vs] PASS"
+          else
+            echo ">>> [verify-vs] FAIL: Fewer than 6 services reached RUNNING"
+            exit 1
+          fi
+        ) 2>&1 | tee "$$LOG"
+        RC=$${PIPESTATUS[0]}
+        bash scripts/ci/post_step_failure.sh "$$STEP" "$$LOG" "$$RC" || true
+        exit $$RC
+    secretEnv: ['GITHUB_TOKEN']
+    waitFor: ["build-docker-sonic-vs"]
+    timeout: "600s"
 
   # ── Step 9: Run pytest (inside bookworm container for lib compat) ────────────
   # The swss-common debs are built for Debian bookworm. Running pytest on the
