@@ -499,6 +499,7 @@ steps:
             find "$$d" -name "*.deb" -size +0 2>/dev/null | while read f; do cp "$$f" "$$STAGING/" 2>/dev/null || true; done
           done
           docker run --rm --platform linux/amd64 \
+            --ulimit nofile=65536:65536 \
             -v "$$STAGING:/debs:ro" \
             -v "$$(pwd)/src/sonic-swss:/src:ro" \
             -e DEBIAN_FRONTEND=noninteractive \
@@ -512,6 +513,7 @@ steps:
                 libprotobuf-dev protobuf-compiler pkg-config libyang2-dev nlohmann-json3-dev \
                 uuid-dev python3-dev swig autoconf automake libtool \
                 libjansson-dev libteam-dev libjemalloc-dev \
+                iproute2 \
                 git m4
               dpkg --force-overwrite --force-depends -i /debs/*.deb 2>&1 || true
               apt-get install -f -y -qq 2>/dev/null || true; ldconfig
