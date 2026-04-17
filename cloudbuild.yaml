@@ -396,10 +396,12 @@ steps:
         bash scripts/ci/post_step_failure.sh "$$STEP" "$$LOG" "$$RC" || true
         exit $$RC
     secretEnv: ['GITHUB_TOKEN']
-    waitFor: ["build-orchagent"]
+    # Serialize: wait for kernel so we don't compete with it for RAM.
+    # First in the unit-tests chain — sairedis and swss-mock wait for this.
+    waitFor: ["build-orchagent", "build-kernel"]
     timeout: "1800s"
 
-  # ── Step 8c: sairedis unit tests (parallel with VS build) ────────────────────
+  # ── Step 8c: sairedis unit tests (serialized after swss-common) ──────────────
   - id: "sairedis-unit-tests"
     name: "gcr.io/cloud-builders/docker"
     entrypoint: "bash"
@@ -456,10 +458,12 @@ steps:
         bash scripts/ci/post_step_failure.sh "$$STEP" "$$LOG" "$$RC" || true
         exit $$RC
     secretEnv: ['GITHUB_TOKEN']
-    waitFor: ["build-orchagent"]
+    # Serialize after swss-common-unit-tests so only one gcc compile chain
+    # runs at a time (each make -j$(nproc) is ~32 gcc processes ≈ 16-32GB).
+    waitFor: ["build-orchagent", "build-kernel", "swss-common-unit-tests"]
     timeout: "1800s"
 
-  # ── Step 8d: swss mock_tests (30 GTest, parallel with VS) ──────────────────
+  # ── Step 8d: swss mock_tests (serialized after sairedis) ───────────────────
   - id: "swss-mock-tests"
     name: "gcr.io/cloud-builders/docker"
     entrypoint: "bash"
@@ -513,7 +517,8 @@ steps:
         bash scripts/ci/post_step_failure.sh "$$STEP" "$$LOG" "$$RC" || true
         exit $$RC
     secretEnv: ['GITHUB_TOKEN']
-    waitFor: ["build-orchagent"]
+    # Final link in the unit-tests chain; docker-vs waits on this one.
+    waitFor: ["build-orchagent", "build-kernel", "sairedis-unit-tests"]
     timeout: "2400s"
 
   # ── Step 8: Build docker-sonic-vs (parallel; needs orchagent + service-images outputs) ─
