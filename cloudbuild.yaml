@@ -359,14 +359,26 @@ steps:
           # Per-step output_user_root. Needs both build-orchagent
           # (sonic-swss debs) and build-service-images (other service
           # docker images) outputs via remote cache.
-          bazel --output_user_root=/workspace/.cache/bazel-vs \
+          #
+          # JVM heap: //platform/vs:docker_sonic_vs_tarball's analysis
+          # resolves ~200 bookworm_* apt repos + ~27k configured targets.
+          # Default ~7-8GB heap exhausts ("Server terminated abruptly,
+          # error code: 14"). Bump to 16GB, but lower --local_ram_resources
+          # from 20GB to 10GB to stay within the 28.8GB machine cap
+          # (16 JVM + 10 actions + ~2 docker/system = 28GB). Applied here,
+          # NOT in .bazelrc, because other steps don't need the heap bump
+          # and the global flag caused OOM on build-orchagent (build
+          # 9d10cdf4 on 5c55bf13b: INTERNAL_ERROR at ~57m).
+          bazel \
+            --host_jvm_args=-Xmx16g \
+            --output_user_root=/workspace/.cache/bazel-vs \
             build //platform/vs:docker_sonic_vs_tarball \
             --symlink_prefix=/workspace/bazel-vs- \
             --config=ci \
             --spawn_strategy=local \
             --strategy=CopyToDirectory=local \
             --check_direct_dependencies=off \
-            --local_ram_resources=20000 \
+            --local_ram_resources=10000 \
             --jobs=16 \
             2>&1
 
