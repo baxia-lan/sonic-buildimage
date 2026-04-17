@@ -79,21 +79,34 @@ if [ "$MODE" = "start" ]; then
   fi
 else
   TAIL=""
+  ERR_EXCERPT=""
   if [ -n "$LOG" ] && [ -f "$LOG" ]; then
-    TAIL=$(tail -c 30000 "$LOG" 2>/dev/null || true)
+    TAIL=$(tail -c 60000 "$LOG" 2>/dev/null || true)
+    # Extract compile/link/runtime error signatures from the full log — the
+    # tail alone can miss the actual failure line when subsequent apt or
+    # cleanup output pushes it out. Up to 60 matching lines, deduplicated.
+    ERR_EXCERPT=$(grep -iE 'error:|undefined reference|fatal error|ld: cannot|no such file|permission denied|assertion|FAILED|segfault|exception|Killed' "$LOG" 2>/dev/null | awk '!seen[$0]++' | tail -60 || true)
   fi
   [ -z "$TAIL" ] && TAIL="(no log available)"
   if command -v python3 >/dev/null 2>&1; then
-    BODY=$(STEP="$STEP" RC="$RC" CONSOLE_URL="$CONSOLE_URL" TAIL="$TAIL" python3 -c '
+    BODY=$(STEP="$STEP" RC="$RC" CONSOLE_URL="$CONSOLE_URL" TAIL="$TAIL" ERR_EXCERPT="$ERR_EXCERPT" python3 -c '
 import json, os
 step = os.environ["STEP"]
 rc = os.environ["RC"]
 console = os.environ["CONSOLE_URL"]
 tail = os.environ["TAIL"]
+err_excerpt = os.environ["ERR_EXCERPT"]
+err_block = ""
+if err_excerpt.strip():
+    err_block = (
+        "<details open>\n<summary>Error signatures (grep from full log)</summary>\n\n"
+        "```\n" + err_excerpt + "\n```\n</details>\n\n"
+    )
 body = (
     "## Cloud Build step `" + step + "` FAILED (exit " + rc + ")\n\n"
     "[Full log in Cloud Build console](" + console + ")\n\n"
-    "<details>\n<summary>Last ~30 KB of step output</summary>\n\n"
+    + err_block +
+    "<details>\n<summary>Last ~60 KB of step output</summary>\n\n"
     "```\n" + tail + "\n```\n</details>\n"
 )
 print(json.dumps({"body": body}))

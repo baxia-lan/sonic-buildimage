@@ -391,7 +391,19 @@ steps:
               # --disable-python2 because python2-dev is not installed; AX_CODE_COVERAGE
               # and AX_ADD_AM_MACRO_STATIC come from autoconf-archive (added above).
               ./configure --disable-python2 2>&1 | tail -5
-              make -j$$(nproc) tests/tests 2>&1 | tail -10
+              # Capture full make output to a file so we can dump targeted
+              # diagnostics on failure (tail alone loses the actual error line
+              # when make produces thousands of subsequent noise lines).
+              if ! make -j$$(nproc) tests/tests > /tmp/make.log 2>&1; then
+                MKRC=$$?
+                echo "=== make tests/tests FAILED rc=$$MKRC ==="
+                echo "=== error signatures (grep) ==="
+                grep -iE "error:|undefined reference|fatal error|No such file|cannot find|ld: " /tmp/make.log | head -40 || true
+                echo "=== last 80 lines of make output ==="
+                tail -80 /tmp/make.log
+                exit $$MKRC
+              fi
+              tail -10 /tmp/make.log
               echo ">>> Running GTest..."
               ./tests/tests --gtest_output=xml:/tmp/test-results.xml 2>&1
             '
