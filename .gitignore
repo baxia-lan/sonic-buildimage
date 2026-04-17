@@ -125,7 +125,10 @@ MODULE.bazel.lock
 # Dev tools
 .vscode/
 .idea/
-.claude/
+# Claude Code config — track project-scoped hooks/rules/skills/agents/settings.
+# Ignore dev-local overrides and runtime state:
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
 
 # Debian mirror Sources
 sources.list.*

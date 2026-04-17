@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "defaultMode": "bypassPermissions",
+    "skipDangerousModePermissionPrompt": true
+  },
+  "sandbox": {
+    "enabled": true,
+    "failIfUnavailable": false,
+    "enableWeakerNestedSandbox": true,
+    "autoAllowBashIfSandboxed": true,
+    "excludedCommands": [
+      "git *",
+      "make *",
+      "bazel *",
+      "docker *",
+      "pytest *",
+      "python3 *"
+    ],
+    "allowUnsandboxedCommands": true,
+    "filesystem": {
+      "allowWrite": [
+        "./",
+        "./.claude",
+        "./.cache",
+        "./bazel-bin",
+        "./bazel-out",
+        "./bazel-testlogs",
+        "~/.cache",
+        "/tmp",
+        "/var/tmp"
+      ],
+      "denyRead": [
+        "~/.ssh",
+        "~/.aws",
+        "~/.config/gcloud",
+        "~/.gnupg"
+      ]
+    }
+  }
+}
