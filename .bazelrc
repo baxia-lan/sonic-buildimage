@@ -1,6 +1,16 @@
 # SONiC Buildimage — Bazel 8 flags
 # Hermetic build: no host tools, no network in build actions.
 
+# ── JVM heap ─────────────────────────────────────────────────────────────────
+# The apt extension from rules_distroless resolves ~200 bookworm_* repos at
+# analysis time. Combined with //platform/vs:docker_sonic_vs_tarball's 27k
+# configured targets, the default JVM heap (~7-8GB on 28.8GB Cloud Build
+# machines) exhausts and the server dies with "Server terminated abruptly
+# (error code: 14)". Bump max heap to 16GB to handle cold-start analysis.
+# Evidence: build-docker-sonic-vs failures on ef8fbe5e1 + 6d20c9f07, both
+# aborted during analysis immediately after the apt use_repo warning.
+startup --host_jvm_args=-Xmx16g
+
 # ── Local registry (submodule workspace boundary fix) ────────────────────────
 # Local registry must come first so submodule modules resolve locally.
 # BCR must be listed explicitly because --registry overrides the default.
