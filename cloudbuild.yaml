@@ -730,6 +730,18 @@ steps:
           bash /workspace/bazel-vs-bin/platform/vs/docker_sonic_vs_tarball.sh
           docker tag sonic/docker_sonic_vs:latest docker-sonic-vs:latest
 
+          echo ">>> [pytest-vs] Patching start.sh: don't fail set -e on team service starts (host lacks team kmod)..."
+          CID=$$(docker create docker-sonic-vs:latest /bin/false)
+          docker cp $$CID:/usr/bin/start.sh /tmp/start.sh.orig
+          sed -e 's|^supervisorctl start teamsyncd$|& \|\| true|' \
+              -e 's|^supervisorctl start teammgrd$|& \|\| true|' \
+              /tmp/start.sh.orig > /tmp/start.sh.patched
+          docker cp /tmp/start.sh.patched $$CID:/usr/bin/start.sh
+          docker commit $$CID docker-sonic-vs:latest >/dev/null
+          docker rm $$CID >/dev/null
+          echo "    teamsyncd/teammgrd starts in start.sh now non-fatal:"
+          grep "supervisorctl start team" /tmp/start.sh.patched
+
           echo ">>> [pytest-vs] Verifying swss-common debs..."
           # swss-common debs built by build-orchagent.
           SWSS_COMMON_DIR="/workspace/bazel-orch-bin/src/sonic-swss-common"
