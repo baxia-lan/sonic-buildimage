@@ -18,6 +18,17 @@
 common --registry=file://%workspace%/tools/bazel/registry
 common --registry=https://bcr.bazel.build
 
+# ── Repository-rule HTTP resilience ──────────────────────────────────────────
+# BCR → github.com archive fetches intermittently return 504 Gateway Timeout
+# at load phase (evidence: build 30396945 on 246ddc314 — rules_oci-v2.0.0
+# fetch from github.com/bazel-contrib/rules_oci/releases returned 504,
+# failing build-orchagent before any build action ran).
+# Retry transient HTTP errors on repository-rule downloads (BCR metadata,
+# http_archive, etc.) up to 6 times. Applies at Bazel-server level so every
+# command picks it up; no effect on in-sandbox network (still blocked).
+common --experimental_repository_downloader_retries=6
+common --http_timeout_scaling=2.0
+
 # ── Hermeticity ──────────────────────────────────────────────────────────────
 build --incompatible_strict_action_env=true
 build --sandbox_default_allow_network=false
