@@ -180,7 +180,8 @@ steps:
           # sairedis_debs, swss_debs) promotes them to top-level outputs
           # so --remote_download_toplevel materializes them on local disk
           # for downstream unit-tests and pytest-vs to consume.
-          bazel --output_user_root=/workspace/.cache/bazel-orch \
+          bash scripts/ci/bazel-retry.sh \
+            --output_user_root=/workspace/.cache/bazel-orch \
             build \
               //dockers/docker-orchagent:docker_orchagent \
               //src/sonic-swss-common:swss_common_debs \
@@ -250,7 +251,8 @@ steps:
           # Per-step output_user_root avoids shared-lock contention with
           # other parallel bazel steps. Skipping `bazel version` (it does
           # not block_for_lock and was failing fast on shared roots).
-          bazel --output_user_root=/workspace/.cache/bazel-krn \
+          bash scripts/ci/bazel-retry.sh \
+            --output_user_root=/workspace/.cache/bazel-krn \
             build //src/sonic-linux-kernel:linux_kernel_debs \
             --symlink_prefix=/workspace/bazel-krn- \
             --config=ci \
@@ -307,7 +309,8 @@ steps:
           echo ">>> [build-service-images] Building all service docker images..."
           # Per-step output_user_root so this runs in parallel with
           # build-orchagent and build-kernel without bazel lock contention.
-          bazel --output_user_root=/workspace/.cache/bazel-svc \
+          bash scripts/ci/bazel-retry.sh \
+            --output_user_root=/workspace/.cache/bazel-svc \
             build \
               //dockers/docker-database:docker_database \
               //dockers/docker-teamd:docker_teamd \
@@ -581,7 +584,7 @@ steps:
           # NOT in .bazelrc, because other steps don't need the heap bump
           # and the global flag caused OOM on build-orchagent (build
           # 9d10cdf4 on 5c55bf13b: INTERNAL_ERROR at ~57m).
-          bazel \
+          bash scripts/ci/bazel-retry.sh \
             --host_jvm_args=-Xmx16g \
             --output_user_root=/workspace/.cache/bazel-vs \
             build //platform/vs:docker_sonic_vs_tarball \
@@ -951,7 +954,8 @@ steps:
           # Per-step output_user_root. Depends on build-kernel's outputs
           # via GCS remote cache (shared) — kernel's debs are re-fetched
           # rather than rebuilt from the previous step's local cache.
-          bazel --output_user_root=/workspace/.cache/bazel-brd \
+          bash scripts/ci/bazel-retry.sh \
+            --output_user_root=/workspace/.cache/bazel-brd \
             build //platform/broadcom:sonic_broadcom_bin \
             --symlink_prefix=/workspace/bazel-brd- \
             --config=ci \
