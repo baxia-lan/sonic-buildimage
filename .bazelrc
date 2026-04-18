@@ -29,6 +29,21 @@ common --registry=https://bcr.bazel.build
 common --experimental_repository_downloader_retries=6
 common --http_timeout_scaling=2.0
 
+# Each Cloud Build step uses a separate --output_user_root
+# (/workspace/.cache/bazel-orch, bazel-kernel, bazel-vs, etc.) to avoid
+# cross-step lock contention on the output-base, but that also means
+# every step independently refetches every external archive — so any
+# github.com 504 in any step fails the whole build (evidence: build
+# 6cd2aafb on c6a6b1ff7 — build-orchagent succeeded fetching rules_oci,
+# then build-docker-sonic-vs 30min later tried to fetch rules_shell from
+# github releases and hit 504).
+# --repository_cache lives outside output_user_root and is documented
+# as safe for concurrent readers/writers, so pointing every Bazel step
+# at /workspace/.cache/bazel-repo means the first successful fetch of
+# any http_archive is shared across all downstream steps. Halves the
+# total number of github.com requests needed per build.
+common --repository_cache=/workspace/.cache/bazel-repo
+
 # ── Hermeticity ──────────────────────────────────────────────────────────────
 build --incompatible_strict_action_env=true
 build --sandbox_default_allow_network=false
