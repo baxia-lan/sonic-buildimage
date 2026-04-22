@@ -22,9 +22,11 @@
 - **Alpine VS**: Docker image pinned by digest; caching enabled.
 - **Cloud Build**: `repository_cache` shared across steps; step-level retry
   for transient GitHub 504s on repository-rule fetches.
-- **CI pytest-vs**: narrowed to `test_port`, `test_vlan`, `test_admin_status`,
-  `test_speed`. Flaky / unimplemented cases deselected with documented
-  reasons (`test_PortTpid`, `test_PortNotification`, `test_PortHostTxReadiness`).
+- **CI pytest-vs**: narrowed to 3 files — `test_port.py`, `test_admin_status.py`,
+  `test_speed.py` (18 tests collected, 6 deselected, **12 passing** — see
+  "pytest-vs coverage" section below). `test_vlan.py` is **not** in the current
+  invocation — it has a VLAN-create → ASIC_DB plumbing issue tracked as a
+  separate Gate 1 follow-up.
 - **Submodule BUILD overlays reverted**: fork BUILDs already live at pinned
   SHAs (commit `acc20af4a`); overlay logic removed.
 
@@ -32,6 +34,40 @@
 `@frr` 10.6.0 from `deb.frrouting.org`; source-built `//src/sonic-frr:frr_debs`
 exists but is not wired into the VS image. `dplane_fpm_sonic.so` is therefore
 still absent from the booted image.
+
+---
+
+## pytest-vs coverage (as of 2026-04-22)
+
+Authoritative source: `cloudbuild.yaml` step `pytest-vs`.
+
+**Selected files (3):** `test_port.py`, `test_admin_status.py`, `test_speed.py`.
+
+| File | Collected | Deselected | Running |
+|------|-----------|------------|---------|
+| `test_port.py` | 13 | 4 | 9 |
+| `test_admin_status.py` | 3 | 2 | 1 |
+| `test_speed.py` | 2 | 0 | 2 |
+| **Total** | **18** | **6** | **12** |
+
+**Deselected tests and why** (all documented inline in `cloudbuild.yaml`):
+
+| Test | Reason |
+|------|--------|
+| `test_PortTpid` | `SAI_PORT_ATTR_TPID` unsupported by vs SAI (asic 0 vs exp 37376) |
+| `test_PortNotification` | Port-up oper_status polls for "up" after 1s; veth stays "down" — sandbox timing flake |
+| `test_PortFec` | `SAI_PORT_ATTR_FEC_MODE` missing from asic_db attr set in vs SAI |
+| `test_PortFecForce` | Same as `test_PortFec` |
+| `test_PortChannelMemberAdminStatus` | PortChannel create goes through teamd; kernel `team` module not loadable in Cloud Build VM |
+| `test_PortHostTxReadiness` | `set_admin_status()` sleeps 1s before reading ASIC_DB; vs-SAI propagation occasionally exceeds 1s — same flake class as `test_PortNotification`. Not a migration regression. |
+
+**Coverage relative to sonic-swss**: sonic-swss ships **95 test files / 710 test
+functions**. Current CI runs **12 tests (~1.7%)**. Files not yet attempted in
+this CI lane: ACL, route, CRM, interface, neighbor, nhg, fdb, vlan, buffer, and
+many more.
+
+**Gate 1 acceptance criterion is the full sonic-swss pytest suite**, not this
+subset. Widening is the next major work item after the FRR blocker.
 
 ---
 

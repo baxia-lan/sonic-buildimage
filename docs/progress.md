@@ -6,7 +6,7 @@
 
 This document is a sharable snapshot of where the migration is and how it is being
 done. Engineering detail (gate-level blockers, root causes, file-by-file state)
-lives in [`handoff.md`](./handoff.md). Execution protocol lives in [`CLAUDE.md`](./CLAUDE.md).
+lives in [`handoff.md`](./handoff.md). Execution protocol lives in [`../CLAUDE.md`](../CLAUDE.md).
 
 ---
 
@@ -26,12 +26,12 @@ Reference implementation used for patterns:
 
 | Gate | Output | Current status |
 |------|--------|----------------|
-| 1 | `docker-sonic-vs.gz` | VS image boots under Bazel. CI narrowed `pytest-vs` to a known-passing subset; widening back to full sonic-swss suite is pending. FRR `dplane_fpm_sonic.so` is still the open blocker for full parity. |
+| 1 | `docker-sonic-vs.gz` | VS image boots under Bazel. CI runs **12 tests passing** (of 18 collected across `test_port.py` / `test_admin_status.py` / `test_speed.py` — 6 deselected with documented vs-SAI / env reasons). sonic-swss ships 710 tests total; widening is pending. FRR `dplane_fpm_sonic.so` is still the open blocker for full parity. |
 | 2 | Cloud Build CI | Green path on the primary CI (Cloud Build, 32 vCPU). Remote cache shared across steps. Step-level retry added for transient GitHub 504s. Commit-status posting still needs end-to-end verification. |
 | 3 | `sonic-broadcom.bin` | Hermetic broadcom build landed (kernel + SAI + service images, no stubs). Full acceptance test against a real `.bin` has not been run. |
 | 4 | `sonic-alpinevs.img.gz` | Alpine VS Docker image pinned, caching enabled. Acceptance test not yet attempted. |
 
-Acceptance criteria for each gate are defined in [`CLAUDE.md`](./CLAUDE.md).
+Acceptance criteria for each gate are defined in [`../CLAUDE.md`](../CLAUDE.md).
 
 ---
 
@@ -89,17 +89,34 @@ install-bazelisk ----------------------------------------+
 - **Alpine VS**: Docker image pinned by digest, caching enabled.
 - **Cloud Build resilience**: `repository_cache` shared across CB steps;
   step-level retry for transient 504s on `repository_rule` HTTP fetches.
-- **CI pytest-vs**: narrowed to `test_port`, `test_vlan`, `test_admin_status`,
-  `test_speed`. Flaky or unimplemented cases deselected with a documented
-  reason (`test_PortTpid` — SAI attr unimplemented in vs SAI;
-  `test_PortNotification`, `test_PortHostTxReadiness` — timing flake).
+- **CI pytest-vs**: 3 sonic-swss test files (`test_port.py`,
+  `test_admin_status.py`, `test_speed.py`), 18 tests collected, 6 deselected
+  with documented reasons, **12 passing**. `test_vlan.py` is *not* in the
+  current invocation (VLAN-create → ASIC_DB plumbing issue tracked separately).
 
 ---
 
+## pytest-vs — what is actually being verified
+
+| | Count |
+|---|---|
+| sonic-swss total test files | 95 |
+| sonic-swss total test functions | 710 |
+| Files in CI (`test_port` / `test_admin_status` / `test_speed`) | 3 |
+| Tests collected | 18 |
+| Deselected (vs-SAI gaps / env artifacts — see [`handoff.md`](./handoff.md)) | 6 |
+| **Passing on Cloud Build** | **12** |
+| Current coverage | ~1.7% of sonic-swss |
+
+Each deselection is inline-documented in `cloudbuild.yaml`. Files not yet
+attempted in this CI lane: ACL, route, CRM, interface, neighbor, nhg, fdb,
+vlan, buffer, and many more. Widening to the full sonic-swss suite is what
+Gate 1 acceptance actually requires.
+
 ## What is still open
 
-1. **Widen `pytest-vs` back toward the full sonic-swss suite.** Gate 1
-   acceptance requires the full suite, not the narrowed subset.
+1. **Widen `pytest-vs` toward the full sonic-swss suite.** Gate 1 acceptance
+   requires the full suite, not a 12-test subset.
 2. **FRR `dplane_fpm_sonic.so`.** Upstream `@frr` 10.6.0 (pulled from
    `deb.frrouting.org` in `MODULE.bazel`) lacks the SONiC-specific zebra
    module. `src/sonic-frr/BUILD.bazel` has the source-build wiring but is
@@ -135,7 +152,9 @@ make target/docker-sonic-vs.gz
 
 - Deep engineering state, blocker detail, ELF analysis, file-level ownership:
   [`handoff.md`](./handoff.md)
+- Bazel-migration focused README (architecture, how-to-build):
+  [`README_BAZEL.md`](./README_BAZEL.md)
 - Hard rules this repo follows for the migration:
-  [`CLAUDE.md`](./CLAUDE.md)
+  [`../CLAUDE.md`](../CLAUDE.md)
 - Upstream SONiC build instructions (Make system):
-  [`README.md`](./README.md)
+  [`../README.md`](../README.md)

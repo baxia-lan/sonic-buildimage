@@ -2,19 +2,24 @@
 
 > Make → Bazel (bzlmod) migration for [sonic-buildimage](https://github.com/sonic-net/sonic-buildimage).
 > Branch: `claude` on `baxia-lan/sonic-buildimage`.
+> Last updated: 2026-04-22. For a higher-level status overview see
+> [`progress.md`](./progress.md); for engineering detail see [`handoff.md`](./handoff.md).
 
-## Status
+## Status (2026-04-22)
 
 | Component | Status | Notes |
 |---|---|---|
-| Bazel infrastructure | ✅ Working | 8.5.1 + bzlmod, 202 BUILD.bazel |
-| Hermetic Debian packages | ✅ Working | 190 packages via rules_distroless |
-| C++ toolchain | ✅ Working | LLVM/Clang 18 + Bookworm sysroot |
-| .deb compilation | ✅ Working | 29 real packages from source |
-| Docker service images | �� Working | 9 hermetic + 1 with orchagent |
-| sonic-broadcom.bin | ✅ Working (local) | Stub kernel, real orchagent |
-| Linux kernel | ⏳ CI building | cpupower.install fix in progress |
-| Size reduction | ✅ 75% on base layer | 160 MB → 39 MB |
+| Bazel infrastructure | Working | 8.5.1 + bzlmod, 71 BUILD.bazel + 26 .bzl rules |
+| Hermetic Debian packages | Working | rules_distroless, all pins in `apt/bookworm.lock.json` |
+| C++ toolchain | Working | LLVM/Clang 18 + Bookworm sysroot |
+| .deb compilation | Working | Source-built packages via `deb_package_set` |
+| Docker service images | Working | 11-layer OCI assembly for `docker-sonic-vs` |
+| VS image boot | Working | 7+ services RUNNING under Bazel-built image |
+| `pytest-vs` on CI | 12 passing | 3 files, 18 collected, 6 deselected (see below) |
+| `sonic-broadcom.bin` | Hermetic build landed | Full acceptance run pending |
+| Linux kernel | Hermetic | Built from source on Cloud Build (32 vCPU) |
+| FRR source build | Not wired into VS image | `dplane_fpm_sonic.so` still absent — Gate 1 blocker |
+| Alpine VS image | Pinned + cached | Gate 4 acceptance not yet attempted |
 
 ## Architecture
 
@@ -241,10 +246,42 @@ This work is aligned with [Aspect Build's sonic-build-infra](https://github.com/
 | `docs/BUILD_SYSTEM.md` | Full build system documentation |
 | `docs/DEMO_TALKING_POINTS.md` | Presentation talking points |
 
-## Known Issues
+## pytest-vs — what is verified today
 
-1. **Kernel**: Builds on native amd64 CI only. `linux-cpupower.install` fix in progress.
-2. **macOS cross-compile**: LLVM sysroot linking fails on macOS (use Docker genrules instead).
-3. **Missing services**: FRR, SNMP, LLDP, gNMI images not yet building.
-4. **Broadcom SAI**: Proprietary SDK not included.
-5. **Tests**: deb_test rule exists but not wired for all packages.
+Authoritative source: `cloudbuild.yaml` step `pytest-vs` on the `claude` branch.
+
+| | Count |
+|---|---|
+| sonic-swss total test files | 95 |
+| sonic-swss total test functions | 710 |
+| Files in CI (`test_port.py`, `test_admin_status.py`, `test_speed.py`) | 3 |
+| Tests collected | 18 |
+| Deselected (vs-SAI gaps / env artifacts) | 6 |
+| **Passing on Cloud Build** | **12** |
+| Current coverage | ~1.7% of sonic-swss |
+
+Deselections (each inline-documented in `cloudbuild.yaml`):
+`test_PortTpid`, `test_PortNotification`, `test_PortFec`, `test_PortFecForce`,
+`test_PortChannelMemberAdminStatus`, `test_PortHostTxReadiness`.
+
+Reasons are vs-SAI coverage gaps (unimplemented attrs in the virtual ASIC) or
+Cloud Build VM environment artifacts (no loadable `team` kernel module) — not
+regressions from the Bazel migration. Widening to the full sonic-swss suite is
+a Gate 1 acceptance requirement that is not yet met.
+
+## Known issues
+
+1. **FRR `dplane_fpm_sonic.so`** (Gate 1 blocker): `MODULE.bazel` still pulls
+   upstream `@frr` 10.6.0 from `deb.frrouting.org`. Source-built
+   `//src/sonic-frr:frr_debs` exists but is not wired into the VS image, so
+   zebra can't load the SONiC-specific FPM module.
+2. **pytest-vs coverage**: 12 / 710 sonic-swss tests. Files not yet attempted
+   in this CI lane include ACL, route, CRM, interface, neighbor, nhg, fdb,
+   vlan, buffer.
+3. **Cloud Build commit-status posting**: end-to-end path not yet verified.
+4. **Gate 3 acceptance**: hermetic broadcom build landed but a real
+   `sonic-broadcom.bin` acceptance test has not been run.
+5. **Gate 4**: `sonic-alpinevs.img.gz` acceptance not yet started.
+6. **macOS cross-compile**: LLVM sysroot linking fails on macOS; Docker
+   genrule path is used instead locally.
+7. **Broadcom SAI**: proprietary SDK not included in the repo.

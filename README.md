@@ -11,8 +11,9 @@
 >
 > **Where to look:**
 >
-> - Project-progress snapshot → [`process.md`](./process.md)
-> - Engineering handoff (gates, blockers, file-level state) → [`handoff.md`](./handoff.md)
+> - Project-progress snapshot → [`docs/progress.md`](./docs/progress.md)
+> - Engineering handoff (gates, blockers, file-level state) → [`docs/handoff.md`](./docs/handoff.md)
+> - Bazel architecture and how to build → [`docs/README_BAZEL.md`](./docs/README_BAZEL.md)
 > - Execution protocol (rules this repo follows) → [`CLAUDE.md`](./CLAUDE.md)
 >
 > The upstream SONiC build instructions below still apply to the Make system.
