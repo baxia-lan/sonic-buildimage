@@ -1,3 +1,24 @@
+# SONiC buildimage — Make to Bazel migration fork
+
+> **Fork notice.** This is a work-in-progress fork of
+> [`sonic-net/sonic-buildimage`](https://github.com/sonic-net/sonic-buildimage)
+> (base branch: upstream `202405`). All migration work happens on the
+> [`claude`](https://github.com/baxia-lan/sonic-buildimage/tree/claude) branch.
+>
+> **Goal:** fully hermetic Bazel (`bzlmod`) builds alongside the original GNU
+> Make system. Make remains the source of truth during the transition. Nothing
+> upstream is removed.
+>
+> **Where to look:**
+>
+> - Project-progress snapshot → [`process.md`](./process.md)
+> - Engineering handoff (gates, blockers, file-level state) → [`handoff.md`](./handoff.md)
+> - Execution protocol (rules this repo follows) → [`CLAUDE.md`](./CLAUDE.md)
+>
+> The upstream SONiC build instructions below still apply to the Make system.
+
+---
+
 *master builds*:
 
 [![Broadcom](https://dev.azure.com/mssonic/build/_apis/build/status/broadcom/Azure.sonic-buildimage.official.broadcom?branchName=master&label=Broadcom)](https://dev.azure.com/mssonic/build/_build/latest?definitionId=138&branchName=master)

@@ -1,10 +1,37 @@
 # Handoff: SONiC Make-to-Bazel Migration
 
-**Date**: 2026-04-15
+**Date**: 2026-04-22
 **Branch**: `claude` on `baxia-lan/sonic-buildimage`
-**Total commits on branch**: 216
+**Total commits on branch**: 267
 **Base branch**: `master` (upstream 202405)
-**Last CI**: GH Actions #24440059170 SUCCESS (36m38s) — 7 services RUNNING
+**Last CI**: GH Actions #24440059170 SUCCESS (36m38s) — 7 services RUNNING. Cloud Build pytest-vs narrowed to passing subset; widening pending.
+
+---
+
+## Changes since 2026-04-15 (previous handoff snapshot)
+
+- **FRR layer hermeticity**: `usrmerge` fix applied to `frr_deb_repo` fetch rule
+  and `vs_frr_layer` genrule; missing runtime libs added (`libjson-c5`,
+  `libc-ares2`, `libbpf1`, `jq` + `libjq1` + `libonig5`, `libatomic1`,
+  `libprotobuf-c1`).
+- **FRR deps fetch path**: Docker-based genrule replaced with a
+  `repository_rule` so the fetch happens at `bazel fetch` time, not inside a
+  build action.
+- **Broadcom**: fully hermetic broadcom build landed — all service images, no
+  stubs (commit `3cc953227`).
+- **Alpine VS**: Docker image pinned by digest; caching enabled.
+- **Cloud Build**: `repository_cache` shared across steps; step-level retry
+  for transient GitHub 504s on repository-rule fetches.
+- **CI pytest-vs**: narrowed to `test_port`, `test_vlan`, `test_admin_status`,
+  `test_speed`. Flaky / unimplemented cases deselected with documented
+  reasons (`test_PortTpid`, `test_PortNotification`, `test_PortHostTxReadiness`).
+- **Submodule BUILD overlays reverted**: fork BUILDs already live at pinned
+  SHAs (commit `acc20af4a`); overlay logic removed.
+
+**Still open — Gate 1 blocker unchanged.** `MODULE.bazel` still pulls upstream
+`@frr` 10.6.0 from `deb.frrouting.org`; source-built `//src/sonic-frr:frr_debs`
+exists but is not wired into the VS image. `dplane_fpm_sonic.so` is therefore
+still absent from the booted image.
 
 ---
 
